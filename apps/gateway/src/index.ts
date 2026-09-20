@@ -34,6 +34,7 @@ import { emailRouter } from "@modules/email";
 import { channelsRouter } from "@modules/channels";
 import { observabilityRouter } from "@modules/observability/observability.routes";
 import { templatesRouter } from "@modules/templates";
+import { opportunitiesRouter } from "@modules/opportunities";
 import { setupSwagger } from "@shared/infra/swagger";
 
 class Application {
@@ -150,6 +151,7 @@ class Application {
     router.use("/channels", channelsRouter);
     router.use("/observability", observabilityRouter);
     router.use("/templates", templatesRouter);
+    router.use("/opportunities", opportunitiesRouter);
 
     // Public config endpoint
     router.get("/config", (req, res) => {

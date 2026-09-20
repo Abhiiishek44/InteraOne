@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { ContactDetailsCard } from "../components/contact-details-card";
 import { Button } from "@/shared/ui/button";
@@ -37,9 +37,14 @@ import {
   usePendingConflicts,
   useResolveConflict,
   useDeleteContacts,
-  useBulkAddTags
+  useBulkAddTags,
+  useCreateContact,
 } from "../hooks/use-contacts";
-import type { ContactListItem, Contact } from "../types/types";
+import type {
+  ContactListItem,
+  Contact,
+  ContactWritePayload,
+} from "../types/types";
 import { usePagination } from "@/shared/hooks/usePagination";
 import {
   Pagination,
@@ -73,11 +78,6 @@ const FILTER_CONVERSATIONS = [
   { value: "10+", label: "10+ conversations" },
 ];
 
-
-
-
-
-
 const toContactViewModel = (item: ContactListItem): Contact => ({
   id: item.id,
   name: item.name,
@@ -85,6 +85,13 @@ const toContactViewModel = (item: ContactListItem): Contact => ({
   phone: item.phone,
   company: item.company,
   tags: item.tags || [],
+  lifecycleStage: item.lifecycleStage || "new",
+  leadStatus: item.leadStatus || "needs_review",
+  owner: item.owner || null,
+  acquisitionSource: item.acquisitionSource || "unknown",
+  preferredChannel: item.preferredChannel || null,
+  nextFollowUpAt: item.nextFollowUpAt || null,
+  lastContactedAt: item.lastContactedAt || null,
   lastActivity: item.lastActivity,
   createdAt: item.createdAt,
   isOnline: false,
@@ -94,14 +101,14 @@ const toContactViewModel = (item: ContactListItem): Contact => ({
     item.conversations && item.conversations.length > 0
       ? item.conversations
       : [
-        {
-          id: `conv-${item.id}`,
-          status: "open",
-          lastMessage: "Conversation context is still syncing.",
-          channel: "widget",
-          updatedAt: item.updatedAt,
-        },
-      ],
+          {
+            id: `conv-${item.id}`,
+            status: "open",
+            lastMessage: "Conversation context is still syncing.",
+            channel: "widget",
+            updatedAt: item.updatedAt,
+          },
+        ],
   insights: {
     summary:
       item.insights?.summary ||
@@ -137,40 +144,40 @@ const isRecentlyActive = (iso: string) => {
 export function ContactsPage() {
   const navigate = useNavigate();
   const [isConflictSheetOpen, setIsConflictSheetOpen] = useState(false);
-  const [focusedConflictContactId, setFocusedConflictContactId] = useState<string | null>(null);
+  const [focusedConflictContactId, setFocusedConflictContactId] = useState<
+    string | null
+  >(null);
   const [selectedContactId, setSelectedContactId] = useState<string>("");
   const [searchValue, setSearchValue] = useState("");
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [activityFilter, setActivityFilter] = useState<string>("all");
   const [conversationFilter, setConversationFilter] = useState<string>("all");
+  const [lifecycleFilter, setLifecycleFilter] = useState<string>("all");
+  const [leadStatusFilter, setLeadStatusFilter] = useState<string>("all");
   const [sortValue, setSortValue] = useState("recent");
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isBulkTagDialogOpen, setIsBulkTagDialogOpen] = useState(false);
   const [bulkTagsInput, setBulkTagsInput] = useState("");
 
-  const { data: rawContacts = [], isLoading: isLoadingContacts, error: loadErrorData } = useContacts();
+  const {
+    data: rawContacts = [],
+    isLoading: isLoadingContacts,
+    error: loadErrorData,
+  } = useContacts();
   const { data: conflicts = [] } = usePendingConflicts();
 
   const resolveConflictMutation = useResolveConflict();
   const deleteContactsMutation = useDeleteContacts();
   const bulkAddTagsMutation = useBulkAddTags();
+  const createContactMutation = useCreateContact();
 
   const loadError = loadErrorData ? loadErrorData.message : "";
 
-  const [addedContacts, setAddedContacts] = useState<Contact[]>([]);
-  const contacts = useMemo(() => {
-    const mapped = rawContacts.map(toContactViewModel);
-    return [...addedContacts, ...mapped];
-  }, [rawContacts, addedContacts]);
-
-  useEffect(() => {
-    if (contacts.length > 0 && !selectedContactId) {
-      setSelectedContactId(contacts[0].id);
-    }
-  }, [contacts, selectedContactId]);
-
-  const selectedContact = contacts.find((contact) => contact.id === selectedContactId);
+  const contacts = useMemo(
+    () => rawContacts.map(toContactViewModel),
+    [rawContacts],
+  );
 
   const filteredContacts = useMemo(() => {
     const query = searchValue.trim().toLowerCase();
@@ -184,14 +191,21 @@ export function ContactsPage() {
 
       const tagMatch =
         tagFilters.length === 0 ||
-        contact.tags.some((tag) => tagFilters.includes(tag));
+        contact.tags.some((tag) =>
+          tagFilters.some(
+            (filterTag) => filterTag.toLowerCase() === tag.toLowerCase(),
+          ),
+        );
 
       const activityMatch = (() => {
         if (activityFilter === "all") return true;
         if (!contact.lastActivity) return false;
         const lastActivity = new Date(contact.lastActivity).getTime();
         if (isNaN(lastActivity)) return false;
-        const hours = Math.max(0, (Date.now() - lastActivity) / (1000 * 60 * 60));
+        const hours = Math.max(
+          0,
+          (Date.now() - lastActivity) / (1000 * 60 * 60),
+        );
         if (activityFilter === "24h") return hours <= 24;
         if (activityFilter === "7d") return hours <= 24 * 7;
         if (activityFilter === "30d") return hours <= 24 * 30;
@@ -203,20 +217,40 @@ export function ContactsPage() {
         if (conversationFilter === "all") return true;
         if (conversationFilter === "1-2") return contact.conversationCount <= 2;
         if (conversationFilter === "3-10")
-          return contact.conversationCount >= 3 && contact.conversationCount <= 10;
-        if (conversationFilter === "10+") return contact.conversationCount >= 10;
+          return (
+            contact.conversationCount >= 3 && contact.conversationCount <= 10
+          );
+        if (conversationFilter === "10+")
+          return contact.conversationCount >= 10;
         return true;
       })();
 
-      return matchesSearch && tagMatch && activityMatch && conversationMatch;
+      const lifecycleMatch =
+        lifecycleFilter === "all" || contact.lifecycleStage === lifecycleFilter;
+      const leadStatusMatch =
+        leadStatusFilter === "all" || contact.leadStatus === leadStatusFilter;
+
+      return (
+        matchesSearch &&
+        tagMatch &&
+        activityMatch &&
+        conversationMatch &&
+        lifecycleMatch &&
+        leadStatusMatch
+      );
     });
 
     result = [...result].sort((a, b) => {
       if (sortValue === "name") return a.name.localeCompare(b.name);
-      if (sortValue === "conversations") return b.conversationCount - a.conversationCount;
+      if (sortValue === "conversations")
+        return b.conversationCount - a.conversationCount;
       if (sortValue === "created")
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      return new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime();
+        return (
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+      return (
+        new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime()
+      );
     });
 
     return result;
@@ -226,8 +260,32 @@ export function ContactsPage() {
     tagFilters,
     activityFilter,
     conversationFilter,
+    lifecycleFilter,
+    leadStatusFilter,
     sortValue,
   ]);
+
+  const fallbackContactId = filteredContacts[0]?.id || "";
+  const persistedSelectedContact = contacts.find(
+    (contact) => contact.id === selectedContactId,
+  );
+  const effectiveSelectedContactId = persistedSelectedContact
+    ? selectedContactId
+    : fallbackContactId;
+  const selectedContact = contacts.find(
+    (contact) => contact.id === effectiveSelectedContactId,
+  );
+  const selectedIsOutsideFilters = Boolean(
+    persistedSelectedContact &&
+    !filteredContacts.some((contact) => contact.id === selectedContactId),
+  );
+  const displayedContacts = useMemo(
+    () =>
+      selectedIsOutsideFilters && selectedContact
+        ? [selectedContact, ...filteredContacts]
+        : filteredContacts,
+    [filteredContacts, selectedContact, selectedIsOutsideFilters],
+  );
 
   const {
     currentItems: paginatedContacts,
@@ -240,7 +298,16 @@ export function ContactsPage() {
     startItem,
     endItem,
     totalItems,
-  } = usePagination(filteredContacts, 10, [searchValue, tagFilters, activityFilter, conversationFilter, sortValue]);
+  } = usePagination(displayedContacts, 10, [
+    searchValue,
+    tagFilters,
+    activityFilter,
+    conversationFilter,
+    lifecycleFilter,
+    leadStatusFilter,
+    sortValue,
+    selectedIsOutsideFilters,
+  ]);
 
   const toggleBulkSelect = (id: string) => {
     setSelectedContacts((prev) =>
@@ -249,44 +316,55 @@ export function ContactsPage() {
   };
 
   const toggleSelectAll = () => {
-    if (selectedContacts.length === filteredContacts.length) {
-      setSelectedContacts([]);
+    const allFilteredSelected = filteredContacts.every((contact) =>
+      selectedContacts.includes(contact.id),
+    );
+    if (allFilteredSelected) {
+      const filteredIds = new Set(
+        filteredContacts.map((contact) => contact.id),
+      );
+      setSelectedContacts((current) =>
+        current.filter((contactId) => !filteredIds.has(contactId)),
+      );
     } else {
-      setSelectedContacts(filteredContacts.map((contact) => contact.id));
+      setSelectedContacts((current) => [
+        ...new Set([
+          ...current,
+          ...filteredContacts.map((contact) => contact.id),
+        ]),
+      ]);
     }
   };
 
-  const handleAddContact = (payload: {
-    name: string;
-    email?: string;
-    phone?: string;
-    company?: string;
-    tags: string[];
-  }) => {
-    const newContact: Contact = {
-      id: `c-${Date.now()}`,
-      name: payload.name,
-      email: payload.email,
-      phone: payload.phone,
-      company: payload.company,
-      tags: payload.tags,
-      lastActivity: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-      isOnline: false,
-      conversationCount: 0,
-      notes: [],
-      conversations: [],
-      insights: {
-        summary: "No insights yet. Start a conversation to generate AI context.",
-        sentiment: "neutral",
-        topics: [],
-      },
-      conflicts: [],
-    };
-
-    setAddedContacts((prev) => [newContact, ...prev]);
-    setSelectedContactId(newContact.id);
+  const handleAddContact = async (
+    payload: ContactWritePayload & { name: string; tags: string[] },
+  ) => {
+    try {
+      const created = await createContactMutation.mutateAsync(payload);
+      const createdId = created?._id || created?.id;
+      if (createdId) setSelectedContactId(createdId);
+    } catch (err) {
+      throw err instanceof Error ? err : new Error("Failed to create contact");
+    }
   };
+
+  const clearFilters = () => {
+    setSearchValue("");
+    setTagFilters([]);
+    setActivityFilter("all");
+    setConversationFilter("all");
+    setLifecycleFilter("all");
+    setLeadStatusFilter("all");
+  };
+
+  const hasActiveFilters = Boolean(
+    searchValue.trim() ||
+    tagFilters.length > 0 ||
+    activityFilter !== "all" ||
+    conversationFilter !== "all" ||
+    lifecycleFilter !== "all" ||
+    leadStatusFilter !== "all",
+  );
 
   const handleBulkDelete = async () => {
     if (selectedContacts.length === 0) return;
@@ -302,10 +380,16 @@ export function ContactsPage() {
 
   const handleBulkAddTags = async () => {
     if (selectedContacts.length === 0) return;
-    const tagsToAdd = bulkTagsInput.split(",").map((t) => t.trim()).filter(Boolean);
+    const tagsToAdd = bulkTagsInput
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
     if (tagsToAdd.length === 0) return;
     try {
-      await bulkAddTagsMutation.mutateAsync({ ids: selectedContacts, tags: tagsToAdd });
+      await bulkAddTagsMutation.mutateAsync({
+        ids: selectedContacts,
+        tags: tagsToAdd,
+      });
       setSelectedContacts([]);
       setBulkTagsInput("");
       setIsBulkTagDialogOpen(false);
@@ -317,7 +401,16 @@ export function ContactsPage() {
   const handleBulkExport = () => {
     if (selectedContacts.length === 0) return;
     const selected = contacts.filter((c) => selectedContacts.includes(c.id));
-    const headers = ["Name", "Email", "Phone", "Company", "Tags", "Conversation Count", "Last Activity", "Created At"];
+    const headers = [
+      "Name",
+      "Email",
+      "Phone",
+      "Company",
+      "Tags",
+      "Conversation Count",
+      "Last Activity",
+      "Created At",
+    ];
     const csvRows = [headers.join(",")];
 
     for (const c of selected) {
@@ -345,7 +438,10 @@ export function ContactsPage() {
     document.body.removeChild(link);
   };
 
-  const handleResolveConflict = async (conflictId: string, action: "apply" | "dismiss") => {
+  const handleResolveConflict = async (
+    conflictId: string,
+    action: "apply" | "dismiss",
+  ) => {
     try {
       await resolveConflictMutation.mutateAsync({ conflictId, action });
     } catch (err) {
@@ -355,11 +451,15 @@ export function ContactsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4" data-tour-id="page-contacts-heading">
+      <div
+        className="flex flex-wrap items-center justify-between gap-4"
+        data-tour-id="page-contacts-heading"
+      >
         <div>
           <h1 className="text-2xl font-bold">Contacts</h1>
           <p className="text-muted-foreground">
-            Manage customer profiles, tags, and conversation context in one workspace.
+            Manage customer profiles, tags, and conversation context in one
+            workspace.
           </p>
           <p className="text-xs text-muted-foreground mt-1">
             {isLoadingContacts
@@ -369,7 +469,10 @@ export function ContactsPage() {
                 : "Live contact data is synced from your organization database."}
           </p>
         </div>
-        <div className="flex items-center gap-2" data-tour-id="page-contacts-primary-action">
+        <div
+          className="flex items-center gap-2"
+          data-tour-id="page-contacts-primary-action"
+        >
           <ContactDialog
             mode="create"
             onSubmit={handleAddContact}
@@ -384,15 +487,56 @@ export function ContactsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr_360px] gap-6">
-        <Card className="h-full" data-tour-id="page-contacts-filters">
+      <div className="space-y-6">
+        <Card data-tour-id="page-contacts-filters">
           <CardHeader className="border-b">
             <CardTitle className="flex items-center gap-2 text-base">
               <SlidersHorizontal className="h-4 w-4" />
               Filters
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+            <div className="space-y-3">
+              <Label>Lifecycle stage</Label>
+              <Select
+                value={lifecycleFilter}
+                onValueChange={setLifecycleFilter}
+              >
+                <SelectTrigger className="cursor-pointer">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All stages</SelectItem>
+                  <SelectItem value="new">New</SelectItem>
+                  <SelectItem value="qualified">Qualified</SelectItem>
+                  <SelectItem value="opportunity">Opportunity</SelectItem>
+                  <SelectItem value="customer">Customer</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                  <SelectItem value="lost">Lost</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-3">
+              <Label>Lead status</Label>
+              <Select
+                value={leadStatusFilter}
+                onValueChange={setLeadStatusFilter}
+              >
+                <SelectTrigger className="cursor-pointer">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  <SelectItem value="needs_review">Needs review</SelectItem>
+                  <SelectItem value="contacted">Contacted</SelectItem>
+                  <SelectItem value="follow_up">Follow-up</SelectItem>
+                  <SelectItem value="converted">Converted</SelectItem>
+                  <SelectItem value="unqualified">Unqualified</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="space-y-3">
               <Label>Tags</Label>
               <div className="flex flex-wrap gap-2">
@@ -406,10 +550,11 @@ export function ContactsPage() {
                           : [...prev, tag],
                       )
                     }
-                    className={`rounded-full border px-3 py-1 text-xs transition-colors cursor-pointer ${tagFilters.includes(tag)
-                      ? "bg-primary text-primary-foreground border-transparent"
-                      : "text-muted-foreground hover:bg-muted"
-                      }`}
+                    className={`rounded-full border px-3 py-1 text-xs transition-colors cursor-pointer ${
+                      tagFilters.includes(tag)
+                        ? "bg-primary text-primary-foreground border-transparent"
+                        : "text-muted-foreground hover:bg-muted"
+                    }`}
                   >
                     {tag}
                   </button>
@@ -419,10 +564,7 @@ export function ContactsPage() {
 
             <div className="space-y-3">
               <Label>Last activity</Label>
-              <Select
-                value={activityFilter}
-                onValueChange={setActivityFilter}
-              >
+              <Select value={activityFilter} onValueChange={setActivityFilter}>
                 <SelectTrigger className="cursor-pointer">
                   <SelectValue placeholder="Select range" />
                 </SelectTrigger>
@@ -457,15 +599,12 @@ export function ContactsPage() {
               </Select>
             </div>
 
-            <div className="pt-2 space-y-2">
+            <div className="flex items-end">
               <Button
                 variant="outline"
                 className="w-full cursor-pointer"
-                onClick={() => {
-                  setTagFilters([]);
-                  setActivityFilter("all");
-                  setConversationFilter("all");
-                }}
+                onClick={clearFilters}
+                disabled={!hasActiveFilters}
               >
                 Clear filters
               </Button>
@@ -473,246 +612,350 @@ export function ContactsPage() {
           </CardContent>
         </Card>
 
-        <Card className="h-full" data-tour-id="page-contacts-list">
-          <CardHeader className="border-b space-y-4">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2 text-base font-semibold">
-                <Users className="h-4 w-4" />
-                {totalItems} contacts
-              </div>
-              <Select value={sortValue} onValueChange={setSortValue}>
-                <SelectTrigger className="w-52 cursor-pointer">
-                  <SelectValue placeholder="Sort by" />
-                </SelectTrigger>
-                <SelectContent>
-                  {SORT_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="relative" data-tour-id="page-contacts-search">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by name, email, phone, or company"
-                value={searchValue}
-                onChange={(event) => setSearchValue(event.target.value)}
-                className="pl-10 cursor-text"
-              />
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {conflicts.length > 0 && (
-              <button
-                onClick={() => {
-                  setFocusedConflictContactId(null);
-                  setIsConflictSheetOpen(true);
-                }}
-                className="w-full bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-lg p-3 flex items-center justify-between text-sm text-amber-800 dark:text-amber-300 hover:bg-amber-100/50 dark:hover:bg-amber-950/30 transition-colors cursor-pointer font-medium"
-              >
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-500" />
-                  <span>{conflicts.length} Pending Profile Conflicts</span>
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
+          <Card className="min-w-0" data-tour-id="page-contacts-list">
+            <CardHeader className="border-b space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2 text-base font-semibold">
+                  <Users className="h-4 w-4" />
+                  {filteredContacts.length} contacts
                 </div>
-                <span className="text-xs underline">Review conflicts</span>
-              </button>
-            )}
-
-            {selectedContacts.length > 0 && (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-border p-3">
-                <div className="text-sm text-muted-foreground">
-                  {selectedContacts.length} contacts selected
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setIsBulkTagDialogOpen(true)} className="cursor-pointer">
-                    Add tags
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleBulkExport} className="cursor-pointer">
-                    Export
-                  </Button>
-                  <Button variant="destructive" size="sm" onClick={() => setIsDeleteDialogOpen(true)} className="cursor-pointer">
-                    Delete
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={
-                    filteredContacts.length > 0 &&
-                    selectedContacts.length === filteredContacts.length
-                  }
-                  onChange={toggleSelectAll}
-                  className="accent-primary cursor-pointer"
-                />
-                Select all
-              </label>
-              <span>Showing {startItem}-{endItem} of {totalItems} results</span>
-            </div>
-
-            <div className="flex flex-col gap-1">
-              {paginatedContacts.map((contact) => {
-                const isActive = contact.id === selectedContactId;
-                const isSelected = selectedContacts.includes(contact.id);
-                return (
-                  <button
-                    key={contact.id}
-                    onClick={() => {
-                      setSelectedContactId(contact.id);
-                      toggleBulkSelect(contact.id);
-                    }}
-                    className={`w-full text-left py-3.5 px-4 rounded-lg transition-all cursor-pointer border-l-4 select-none ${
-                      isActive
-                        ? "bg-primary/[0.04] border-l-primary shadow-xs"
-                        : isSelected
-                        ? "bg-primary/[0.015] border-l-transparent"
-                        : "hover:bg-muted/30 border-l-transparent"
-                    }`}
-                  >
-                  <div className="flex items-start gap-4">
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedContacts.includes(contact.id)}
-                        onChange={(event) => {
-                          event.stopPropagation();
-                          toggleBulkSelect(contact.id);
-                        }}
-                        className="accent-primary cursor-pointer"
-                      />
-                      <div className="relative">
-                        <div className="h-10 w-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-semibold">
-                          {contact.name
-                            .split(" ")
-                            .map((part) => part[0])
-                            .join("")
-                            .slice(0, 2)
-                            .toUpperCase()}
-                        </div>
-                        <span
-                          className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background ${contact.isOnline
-                            ? "bg-emerald-500"
-                            : isRecentlyActive(contact.lastActivity)
-                              ? "bg-amber-400"
-                              : "bg-muted"
-                            }`}
-                          title={contact.isOnline ? "Online" : "Recently active"}
-                        />
-                      </div>
-                    </div>
-                    <div className="flex-1 grid grid-cols-1 md:grid-cols-[1.2fr_1fr_1fr] gap-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold text-foreground">
-                            {contact.name}
-                          </h3>
-                          {contact.conflicts && contact.conflicts.length > 0 && (
-                            <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-500 border-amber-500/20 text-[10px] py-0 px-1 font-medium flex items-center gap-0.5">
-                              <AlertTriangle className="h-3 w-3" />
-                              Conflict
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          {contact.email || contact.phone || "No contact info"}
-                        </p>
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        <div className="font-medium text-foreground">
-                          {contact.company || "Independent"}
-                        </div>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {contact.tags.slice(0, 3).map((tag) => (
-                            <Badge key={tag} variant="secondary" className="text-xs">
-                              {tag}
-                            </Badge>
-                          ))}
-                          {contact.tags.length > 3 && (
-                            <span className="text-xs text-muted-foreground">
-                              +{contact.tags.length - 3}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4" />
-                          <span>{formatRelative(contact.lastActivity)}</span>
-                        </div>
-                        <div className="flex items-center gap-2 mt-1">
-                          <MessagesSquare className="h-4 w-4" />
-                          <span>{contact.conversationCount} conversations</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-            {totalPages > 1 && (
-              <div className="pt-4 border-t border-border">
-                <Pagination>
-                  <PaginationContent>
-                    <PaginationItem className="cursor-pointer">
-                      <PaginationPrevious
-                        onClick={(e) => { e.preventDefault(); goPrev(); }}
-                        className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
-                      />
-                    </PaginationItem>
-                    {pageNumbers.map((page, idx) => (
-                      <PaginationItem key={idx} className="cursor-pointer">
-                        {page === "..." ? (
-                          <PaginationEllipsis />
-                        ) : (
-                          <PaginationLink
-                            isActive={page === currentPage}
-                            onClick={(e) => { e.preventDefault(); goToPage(page as number); }}
-                          >
-                            {page}
-                          </PaginationLink>
-                        )}
-                      </PaginationItem>
+                <Select value={sortValue} onValueChange={setSortValue}>
+                  <SelectTrigger className="w-52 cursor-pointer">
+                    <SelectValue placeholder="Sort by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SORT_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
                     ))}
-                    <PaginationItem className="cursor-pointer">
-                      <PaginationNext
-                        onClick={(e) => { e.preventDefault(); goToNext(); }}
-                        className={currentPage === totalPages ? "pointer-events-none opacity-50" : ""}
-                      />
-                    </PaginationItem>
-                  </PaginationContent>
-                </Pagination>
+                  </SelectContent>
+                </Select>
               </div>
-            )}
-          </CardContent>
-        </Card>
+              <div className="relative" data-tour-id="page-contacts-search">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by name, email, phone, or company"
+                  value={searchValue}
+                  onChange={(event) => setSearchValue(event.target.value)}
+                  className="pl-10 cursor-text"
+                />
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {conflicts.length > 0 && (
+                <button
+                  onClick={() => {
+                    setFocusedConflictContactId(null);
+                    setIsConflictSheetOpen(true);
+                  }}
+                  className="w-full bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-lg p-3 flex items-center justify-between text-sm text-amber-800 dark:text-amber-300 hover:bg-amber-100/50 dark:hover:bg-amber-950/30 transition-colors cursor-pointer font-medium"
+                >
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-500" />
+                    <span>{conflicts.length} Pending Profile Conflicts</span>
+                  </div>
+                  <span className="text-xs underline">Review conflicts</span>
+                </button>
+              )}
 
-        <Card className="h-full">
-          <CardHeader className="border-b">
-            <CardTitle className="text-base">Contact details</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {!selectedContact ? (
-              <div className="text-sm text-muted-foreground">
-                Select a contact to see details.
+              {selectedContacts.length > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-border p-3">
+                  <div className="text-sm text-muted-foreground">
+                    {selectedContacts.length} contacts selected
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsBulkTagDialogOpen(true)}
+                      className="cursor-pointer"
+                    >
+                      Add tags
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleBulkExport}
+                      className="cursor-pointer"
+                    >
+                      Export
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => setIsDeleteDialogOpen(true)}
+                      className="cursor-pointer"
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {selectedIsOutsideFilters && selectedContact && (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/[0.04] px-3 py-2 text-sm">
+                  <span>
+                    <strong>{selectedContact.name}</strong> is kept visible
+                    while it is open, but no longer matches the current filters.
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={clearFilters}
+                    className="cursor-pointer"
+                  >
+                    Clear filters
+                  </Button>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={
+                      filteredContacts.length > 0 &&
+                      filteredContacts.every((contact) =>
+                        selectedContacts.includes(contact.id),
+                      )
+                    }
+                    onChange={toggleSelectAll}
+                    className="accent-primary cursor-pointer"
+                  />
+                  Select all
+                </label>
+                <span>
+                  Showing {startItem}-{endItem} of {totalItems} results
+                </span>
               </div>
-            ) : (
-              <ContactDetailsCard
-                contact={selectedContact}
-                onResolveConflictsClick={() => {
-                  setFocusedConflictContactId(selectedContact.id);
-                  setIsConflictSheetOpen(true);
-                }}
-              />
-            )}
-          </CardContent>
-        </Card>
+
+              <div className="flex flex-col gap-1">
+                {paginatedContacts.map((contact) => {
+                  const isActive = contact.id === effectiveSelectedContactId;
+                  const isSelected = selectedContacts.includes(contact.id);
+                  return (
+                    <div
+                      key={contact.id}
+                      className={`relative w-full rounded-lg border-l-4 py-3.5 px-4 text-left transition-all select-none ${
+                        isActive
+                          ? "bg-primary/[0.04] border-l-primary shadow-xs"
+                          : isSelected
+                            ? "bg-primary/[0.015] border-l-transparent"
+                            : "hover:bg-muted/30 border-l-transparent"
+                      }`}
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${contact.name} for bulk actions`}
+                            checked={selectedContacts.includes(contact.id)}
+                            onChange={() => toggleBulkSelect(contact.id)}
+                            className="accent-primary cursor-pointer"
+                          />
+                          <div className="relative">
+                            <div className="h-10 w-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-semibold">
+                              {contact.name
+                                .split(" ")
+                                .map((part) => part[0])
+                                .join("")
+                                .slice(0, 2)
+                                .toUpperCase()}
+                            </div>
+                            <span
+                              className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background ${
+                                contact.isOnline
+                                  ? "bg-emerald-500"
+                                  : isRecentlyActive(contact.lastActivity)
+                                    ? "bg-amber-400"
+                                    : "bg-muted"
+                              }`}
+                              title={
+                                contact.isOnline ? "Online" : "Recently active"
+                              }
+                            />
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedContactId(contact.id)}
+                          className="grid min-w-0 flex-1 cursor-pointer grid-cols-1 gap-3 text-left md:grid-cols-[1.2fr_1fr_1fr]"
+                        >
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-semibold text-foreground">
+                                {contact.name}
+                              </h3>
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] capitalize"
+                              >
+                                {contact.lifecycleStage}
+                              </Badge>
+                              {contact.conflicts &&
+                                contact.conflicts.length > 0 && (
+                                  <Badge
+                                    variant="outline"
+                                    className="bg-amber-500/10 text-amber-600 dark:text-amber-500 border-amber-500/20 text-[10px] py-0 px-1 font-medium flex items-center gap-0.5"
+                                  >
+                                    <AlertTriangle className="h-3 w-3" />
+                                    Conflict
+                                  </Badge>
+                                )}
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                              {contact.email ||
+                                contact.phone ||
+                                "No contact info"}
+                            </p>
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            <div className="font-medium text-foreground">
+                              {contact.company || "Independent"}
+                            </div>
+                            <div className="mt-0.5 text-xs capitalize">
+                              {contact.owner?.name || "Unassigned"} ·{" "}
+                              {contact.leadStatus.replace("_", " ")}
+                            </div>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {contact.tags.slice(0, 3).map((tag) => (
+                                <Badge
+                                  key={tag}
+                                  variant="secondary"
+                                  className="text-xs"
+                                >
+                                  {tag}
+                                </Badge>
+                              ))}
+                              {contact.tags.length > 3 && (
+                                <span className="text-xs text-muted-foreground">
+                                  +{contact.tags.length - 3}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            <div className="flex items-center gap-2">
+                              <Clock className="h-4 w-4" />
+                              <span>
+                                {formatRelative(contact.lastActivity)}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <MessagesSquare className="h-4 w-4" />
+                              <span>
+                                {contact.conversationCount} conversations
+                              </span>
+                            </div>
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {!isLoadingContacts && displayedContacts.length === 0 && (
+                <div className="rounded-lg border border-dashed p-8 text-center">
+                  <Users className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
+                  <p className="font-medium">No contacts found</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {hasActiveFilters
+                      ? "No contacts match the current search and filters."
+                      : "Create the first contact to begin building your CRM."}
+                  </p>
+                  {hasActiveFilters && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={clearFilters}
+                      className="mt-4 cursor-pointer"
+                    >
+                      Clear filters
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {totalPages > 1 && (
+                <div className="pt-4 border-t border-border">
+                  <Pagination>
+                    <PaginationContent>
+                      <PaginationItem className="cursor-pointer">
+                        <PaginationPrevious
+                          onClick={(e) => {
+                            e.preventDefault();
+                            goPrev();
+                          }}
+                          className={
+                            currentPage === 1
+                              ? "pointer-events-none opacity-50"
+                              : ""
+                          }
+                        />
+                      </PaginationItem>
+                      {pageNumbers.map((page, idx) => (
+                        <PaginationItem key={idx} className="cursor-pointer">
+                          {page === "..." ? (
+                            <PaginationEllipsis />
+                          ) : (
+                            <PaginationLink
+                              isActive={page === currentPage}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                goToPage(page as number);
+                              }}
+                            >
+                              {page}
+                            </PaginationLink>
+                          )}
+                        </PaginationItem>
+                      ))}
+                      <PaginationItem className="cursor-pointer">
+                        <PaginationNext
+                          onClick={(e) => {
+                            e.preventDefault();
+                            goToNext();
+                          }}
+                          className={
+                            currentPage === totalPages
+                              ? "pointer-events-none opacity-50"
+                              : ""
+                          }
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="h-fit xl:sticky xl:top-6">
+            <CardHeader className="border-b">
+              <CardTitle className="text-base">Contact details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {!selectedContact ? (
+                <div className="text-sm text-muted-foreground">
+                  Select a contact to see details.
+                </div>
+              ) : (
+                <ContactDetailsCard
+                  contact={selectedContact}
+                  onResolveConflictsClick={() => {
+                    setFocusedConflictContactId(selectedContact.id);
+                    setIsConflictSheetOpen(true);
+                  }}
+                />
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       <DeleteConfirmDialog
@@ -732,7 +975,8 @@ export function ContactsPage() {
               Add Tags in Bulk
             </DialogTitle>
             <DialogDescription>
-              Apply tags to the {selectedContacts.length} selected contacts. Enter tags separated by commas.
+              Apply tags to the {selectedContacts.length} selected contacts.
+              Enter tags separated by commas.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -789,14 +1033,23 @@ export function ContactsPage() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             {(focusedConflictContactId
-              ? conflicts.filter((c) => c.contactId === focusedConflictContactId)
+              ? conflicts.filter(
+                  (c) => c.contactId === focusedConflictContactId,
+                )
               : conflicts
             ).map((conflict) => (
-              <div key={conflict.id} className="border border-border rounded-lg p-4 space-y-3 bg-muted/20">
+              <div
+                key={conflict.id}
+                className="border border-border rounded-lg p-4 space-y-3 bg-muted/20"
+              >
                 <div className="flex justify-between items-start">
                   <div>
-                    <h4 className="font-semibold text-sm">{conflict.contactName}</h4>
-                    <p className="text-xs text-muted-foreground">{conflict.contactEmail || "No email"}</p>
+                    <h4 className="font-semibold text-sm">
+                      {conflict.contactName}
+                    </h4>
+                    <p className="text-xs text-muted-foreground">
+                      {conflict.contactEmail || "No email"}
+                    </p>
                   </div>
                   <Badge variant="outline" className="capitalize text-xs">
                     {conflict.field} Mismatch
@@ -805,13 +1058,21 @@ export function ContactsPage() {
 
                 <div className="grid grid-cols-2 gap-4 text-sm bg-background border border-border rounded-md p-3">
                   <div>
-                    <span className="text-xs text-muted-foreground block mb-1">Current Value</span>
+                    <span className="text-xs text-muted-foreground block mb-1">
+                      Current Value
+                    </span>
                     <span className="font-medium text-foreground block truncate">
-                      {conflict.currentValue || <em className="text-muted-foreground text-xs">Not set</em>}
+                      {conflict.currentValue || (
+                        <em className="text-muted-foreground text-xs">
+                          Not set
+                        </em>
+                      )}
                     </span>
                   </div>
                   <div>
-                    <span className="text-xs text-amber-600 dark:text-amber-500 block mb-1">Proposed Value</span>
+                    <span className="text-xs text-amber-600 dark:text-amber-500 block mb-1">
+                      Proposed Value
+                    </span>
                     <span className="font-medium text-amber-600 dark:text-amber-500 block truncate">
                       {conflict.proposedValue}
                     </span>
@@ -822,7 +1083,9 @@ export function ContactsPage() {
                   <button
                     onClick={() => {
                       setIsConflictSheetOpen(false);
-                      navigate(`/dashboard/conversations/inbox/chat/${conflict.conversationId}`);
+                      navigate(
+                        `/dashboard/conversations/inbox/chat/${conflict.conversationId}`,
+                      );
                     }}
                     className="text-xs text-primary hover:underline flex items-center gap-1 cursor-pointer bg-transparent border-0 p-0"
                   >
@@ -832,14 +1095,18 @@ export function ContactsPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => handleResolveConflict(conflict.id, "dismiss")}
+                      onClick={() =>
+                        handleResolveConflict(conflict.id, "dismiss")
+                      }
                       className="cursor-pointer text-xs"
                     >
                       Keep Current
                     </Button>
                     <Button
                       size="sm"
-                      onClick={() => handleResolveConflict(conflict.id, "apply")}
+                      onClick={() =>
+                        handleResolveConflict(conflict.id, "apply")
+                      }
                       className="cursor-pointer text-xs bg-amber-500 hover:bg-amber-600 text-white border-0"
                     >
                       Apply Proposed

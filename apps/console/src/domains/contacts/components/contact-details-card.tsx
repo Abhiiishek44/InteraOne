@@ -12,6 +12,8 @@ import {
   Tags,
   Trash2,
   Loader2,
+  CalendarClock,
+  UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ChannelIcon, EmailIcon } from "@/shared/ui/channel-icon";
@@ -56,7 +58,8 @@ export function ContactDetailsCard({
   const [newTag, setNewTag] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
   const noteComposerRef = useRef<HTMLTextAreaElement>(null);
-  const [isConversationsDialogOpen, setIsConversationsDialogOpen] = useState(false);
+  const [isConversationsDialogOpen, setIsConversationsDialogOpen] =
+    useState(false);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [noteToDelete, setNoteToDelete] = useState<ContactNote | null>(null);
   const [isSavingNote, setIsSavingNote] = useState(false);
@@ -68,18 +71,26 @@ export function ContactDetailsCard({
     try {
       await contactsApi.addTag(contact.id, tag);
       setNewTag("");
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      await queryClient.invalidateQueries({
+        queryKey: ["contacts"],
+        exact: true,
+      });
+      toast.success("Tag added");
     } catch (err) {
-      console.error("Failed to add tag:", err);
+      toast.error(err instanceof Error ? err.message : "Failed to add tag");
     }
   };
 
   const handleRemoveTag = async (tag: string) => {
     try {
       await contactsApi.removeTag(contact.id, tag);
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      await queryClient.invalidateQueries({
+        queryKey: ["contacts"],
+        exact: true,
+      });
+      toast.success("Tag removed");
     } catch (err) {
-      console.error("Failed to remove tag:", err);
+      toast.error(err instanceof Error ? err.message : "Failed to remove tag");
     }
   };
 
@@ -89,9 +100,13 @@ export function ContactDetailsCard({
     try {
       await contactsApi.addNote(contact.id, content);
       setNoteDraft("");
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      await queryClient.invalidateQueries({
+        queryKey: ["contacts"],
+        exact: true,
+      });
+      toast.success("Note added");
     } catch (err) {
-      console.error("Failed to add note:", err);
+      toast.error(err instanceof Error ? err.message : "Failed to add note");
     }
   };
 
@@ -100,7 +115,10 @@ export function ContactDetailsCard({
     setNoteDraft(note.content);
     requestAnimationFrame(() => {
       noteComposerRef.current?.focus();
-      noteComposerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      noteComposerRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
     });
   };
 
@@ -114,7 +132,10 @@ export function ContactDetailsCard({
     setIsSavingNote(true);
     try {
       await contactsApi.updateNote(contact.id, editingNoteId, noteDraft.trim());
-      await queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      await queryClient.invalidateQueries({
+        queryKey: ["contacts"],
+        exact: true,
+      });
       cancelEditingNote();
       toast.success("Note updated");
     } catch (err: unknown) {
@@ -129,7 +150,10 @@ export function ContactDetailsCard({
     setIsDeletingNote(true);
     try {
       await contactsApi.deleteNote(contact.id, noteToDelete.id);
-      await queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      await queryClient.invalidateQueries({
+        queryKey: ["contacts"],
+        exact: true,
+      });
       if (editingNoteId === noteToDelete.id) cancelEditingNote();
       setNoteToDelete(null);
       toast.success("Note deleted");
@@ -212,11 +236,55 @@ export function ContactDetailsCard({
                       phone: displayPhone,
                       company: contact.company || "",
                       tags: contact.tags,
+                      lifecycleStage: contact.lifecycleStage,
+                      leadStatus: contact.leadStatus,
+                      ownerId: contact.owner?.id || null,
+                      acquisitionSource: contact.acquisitionSource,
+                      preferredChannel: contact.preferredChannel,
+                      nextFollowUpAt: contact.nextFollowUpAt,
                     }}
                     triggerType="icon"
                   />
                 )}
               </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="rounded-md border border-border bg-background p-2.5">
+              <span className="text-muted-foreground">Lifecycle</span>
+              <p className="mt-1 font-semibold capitalize">
+                {contact.lifecycleStage}
+              </p>
+            </div>
+            <div className="rounded-md border border-border bg-background p-2.5">
+              <span className="text-muted-foreground">Lead status</span>
+              <p className="mt-1 font-semibold capitalize">
+                {contact.leadStatus.replace("_", " ")}
+              </p>
+            </div>
+            <div className="rounded-md border border-border bg-background p-2.5">
+              <span className="flex items-center gap-1 text-muted-foreground">
+                <UserRound className="h-3 w-3" /> Owner
+              </span>
+              <p className="mt-1 truncate font-semibold">
+                {contact.owner?.name || "Unassigned"}
+              </p>
+            </div>
+            <div className="rounded-md border border-border bg-background p-2.5">
+              <span className="flex items-center gap-1 text-muted-foreground">
+                <CalendarClock className="h-3 w-3" /> Next follow-up
+              </span>
+              <p className="mt-1 font-semibold">
+                {contact.nextFollowUpAt
+                  ? new Date(contact.nextFollowUpAt).toLocaleString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })
+                  : "Not scheduled"}
+              </p>
             </div>
           </div>
 
@@ -239,22 +307,24 @@ export function ContactDetailsCard({
             </div>
           </div>
 
-          {contact.conflicts && contact.conflicts.length > 0 && onResolveConflictsClick && (
-            <div className="flex items-center justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 p-2.5 dark:border-amber-900 dark:bg-amber-950/20">
-              <div className="flex items-center gap-2 text-xs font-semibold text-amber-800 dark:text-amber-300">
-                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-500" />
-                <span>{contact.conflicts.length} pending conflicts</span>
+          {contact.conflicts &&
+            contact.conflicts.length > 0 &&
+            onResolveConflictsClick && (
+              <div className="flex items-center justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 p-2.5 dark:border-amber-900 dark:bg-amber-950/20">
+                <div className="flex items-center gap-2 text-xs font-semibold text-amber-800 dark:text-amber-300">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-500" />
+                  <span>{contact.conflicts.length} pending conflicts</span>
+                </div>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  onClick={onResolveConflictsClick}
+                  className="h-7 cursor-pointer border-amber-300 px-2 text-[11px] hover:bg-amber-100/50"
+                >
+                  Resolve
+                </Button>
               </div>
-              <Button
-                size="xs"
-                variant="outline"
-                onClick={onResolveConflictsClick}
-                className="h-7 cursor-pointer border-amber-300 px-2 text-[11px] hover:bg-amber-100/50"
-              >
-                Resolve
-              </Button>
-            </div>
-          )}
+            )}
         </section>
 
         <section className="border-t border-border pt-4">
@@ -278,7 +348,9 @@ export function ContactDetailsCard({
               </button>
             ))}
             {contact.tags.length === 0 && (
-              <span className="text-xs text-muted-foreground">No tags yet.</span>
+              <span className="text-xs text-muted-foreground">
+                No tags yet.
+              </span>
             )}
           </div>
           <div className="flex gap-2">
@@ -311,7 +383,9 @@ export function ContactDetailsCard({
                 {contact.insights.sentiment} sentiment
               </span>
             </div>
-            <p className="text-xs leading-relaxed">{contact.insights.summary}</p>
+            <p className="text-xs leading-relaxed">
+              {contact.insights.summary}
+            </p>
             {contact.insights.topics.length > 0 && (
               <div className="flex flex-wrap gap-1.5 pt-1">
                 {contact.insights.topics.map((topic) => (
@@ -336,7 +410,9 @@ export function ContactDetailsCard({
           </div>
           <Textarea
             ref={noteComposerRef}
-            placeholder={editingNoteId ? "Edit internal note" : "Add internal note"}
+            placeholder={
+              editingNoteId ? "Edit internal note" : "Add internal note"
+            }
             value={noteDraft}
             onChange={(event) => setNoteDraft(event.target.value)}
             className="min-h-20 cursor-text resize-none text-sm"
@@ -348,11 +424,7 @@ export function ContactDetailsCard({
               disabled={!noteDraft.trim() || isSavingNote}
               className="cursor-pointer"
             >
-              {editingNoteId
-                ? isSavingNote
-                  ? "Saving…"
-                  : "Save"
-                : "Add note"}
+              {editingNoteId ? (isSavingNote ? "Saving…" : "Save") : "Add note"}
             </Button>
             {editingNoteId && (
               <Button
@@ -385,50 +457,57 @@ export function ContactDetailsCard({
             )}
           </div>
           <div className="mt-3 space-y-2">
-            {contact.notes.filter((note) => note.id !== editingNoteId).map((note) => (
-              <div
-                key={note.id}
-                className="group rounded-md bg-muted/25 p-2.5 text-sm transition-colors hover:bg-muted/40"
-              >
-                <div className="mb-1.5 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-                  <span className="min-w-0 flex-1 truncate" title={note.author}>
-                    {note.author}
-                  </span>
-                  <div className="flex shrink-0 items-center gap-0.5">
-                    <time
-                      className="mr-0.5 whitespace-nowrap text-[11px]"
-                      dateTime={note.createdAt}
-                      title={new Date(note.createdAt).toLocaleString()}
+            {contact.notes
+              .filter((note) => note.id !== editingNoteId)
+              .map((note) => (
+                <div
+                  key={note.id}
+                  className="group rounded-md bg-muted/25 p-2.5 text-sm transition-colors hover:bg-muted/40"
+                >
+                  <div className="mb-1.5 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                    <span
+                      className="min-w-0 flex-1 truncate"
+                      title={note.author}
                     >
-                      {formatRelative(note.createdAt)}
-                    </time>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 cursor-pointer opacity-0 transition-opacity hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-60"
-                      onClick={() => startEditingNote(note)}
-                      title="Edit note"
-                      aria-label="Edit note"
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 cursor-pointer text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-60"
-                      onClick={() => setNoteToDelete(note)}
-                      title="Delete note"
-                      aria-label="Delete note"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
+                      {note.author}
+                    </span>
+                    <div className="flex shrink-0 items-center gap-0.5">
+                      <time
+                        className="mr-0.5 whitespace-nowrap text-[11px]"
+                        dateTime={note.createdAt}
+                        title={new Date(note.createdAt).toLocaleString()}
+                      >
+                        {formatRelative(note.createdAt)}
+                      </time>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 cursor-pointer opacity-0 transition-opacity hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-60"
+                        onClick={() => startEditingNote(note)}
+                        title="Edit note"
+                        aria-label="Edit note"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 cursor-pointer text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-60"
+                        onClick={() => setNoteToDelete(note)}
+                        title="Delete note"
+                        aria-label="Delete note"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
                   </div>
+                  <p className="whitespace-pre-wrap break-words leading-relaxed">
+                    {note.content}
+                  </p>
                 </div>
-                <p className="whitespace-pre-wrap break-words leading-relaxed">{note.content}</p>
-              </div>
-            ))}
+              ))}
             {contact.notes.length === 0 && (
               <p className="text-xs text-muted-foreground">No notes yet.</p>
             )}
@@ -450,7 +529,9 @@ export function ContactDetailsCard({
               <button
                 key={conversation.id}
                 onClick={() =>
-                  navigate(`/dashboard/conversations/inbox/chat/${conversation.id}`)
+                  navigate(
+                    `/dashboard/conversations/inbox/chat/${conversation.id}`,
+                  )
                 }
                 className="w-full rounded-md border border-border bg-background/60 p-2.5 text-left text-sm transition-colors hover:bg-muted/40 cursor-pointer"
               >
@@ -489,7 +570,10 @@ export function ContactDetailsCard({
         </section>
       </div>
 
-      <Dialog open={isConversationsDialogOpen} onOpenChange={setIsConversationsDialogOpen}>
+      <Dialog
+        open={isConversationsDialogOpen}
+        onOpenChange={setIsConversationsDialogOpen}
+      >
         <DialogContent className="sm:max-w-[500px] max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -506,21 +590,25 @@ export function ContactDetailsCard({
                 key={conversation.id}
                 onClick={() => {
                   setIsConversationsDialogOpen(false);
-                  navigate(`/dashboard/conversations/inbox/chat/${conversation.id}`);
+                  navigate(
+                    `/dashboard/conversations/inbox/chat/${conversation.id}`,
+                  );
                 }}
                 className="rounded-lg border border-border p-3 text-sm cursor-pointer hover:bg-muted/40 transition-all select-none duration-150"
               >
                 <div className="flex items-center justify-between mb-1.5">
                   <div className="flex items-center gap-1.5">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border capitalize leading-none shrink-0 ${
-                      (conversation.status as string) === "open"
-                        ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/25"
-                        : (conversation.status as string) === "pending"
-                        ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25"
-                        : (conversation.status as string) === "resolved"
-                        ? "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/25"
-                        : "bg-muted text-muted-foreground border-border"
-                    }`}>
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border capitalize leading-none shrink-0 ${
+                        (conversation.status as string) === "open"
+                          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/25"
+                          : (conversation.status as string) === "pending"
+                            ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25"
+                            : (conversation.status as string) === "resolved"
+                              ? "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/25"
+                              : "bg-muted text-muted-foreground border-border"
+                      }`}
+                    >
                       {conversation.status}
                     </span>
                     {getChannelBadge(conversation.channel)}
@@ -529,7 +617,9 @@ export function ContactDetailsCard({
                     {formatRelative(conversation.updatedAt)}
                   </span>
                 </div>
-                <p className="text-muted-foreground line-clamp-2">{conversation.lastMessage}</p>
+                <p className="text-muted-foreground line-clamp-2">
+                  {conversation.lastMessage}
+                </p>
               </div>
             ))}
           </div>
@@ -546,7 +636,8 @@ export function ContactDetailsCard({
           <DialogHeader>
             <DialogTitle>Delete this note?</DialogTitle>
             <DialogDescription>
-              This action cannot be undone. The note will be permanently removed from the contact.
+              This action cannot be undone. The note will be permanently removed
+              from the contact.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

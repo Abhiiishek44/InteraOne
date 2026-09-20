@@ -29,6 +29,7 @@ import {
   Ticket,
   BarChart3,
   type LucideIcon,
+  Columns3,
 } from "lucide-react";
 import { useAuth } from "@/domains/auth/hooks/useAuth";
 import { useLogout } from "@/domains/auth/hooks/useLogout";
@@ -36,13 +37,13 @@ import { authApi } from "@/domains/auth/api/auth.api";
 import { useConversationDetail } from "@/domains/conversation/hooks/useConversationDetail";
 import { useTicket } from "@/domains/tickets/hooks/useTicket";
 import { useQueryClient } from "@tanstack/react-query";
-import { useConversations, useMyConversations } from "@/domains/conversation/hooks";
+import {
+  useConversations,
+  useMyConversations,
+} from "@/domains/conversation/hooks";
 import io, { Socket } from "socket.io-client";
 import { formatDistanceToNow } from "date-fns";
-import {
-  getInteraOneMode,
-  isEeEnabledByEnv,
-} from "@/shared/ee";
+import { getInteraOneMode, isEeEnabledByEnv } from "@/shared/ee";
 import { OrgSwitcher } from "@/shared/components/org-switcher";
 import { playNotificationSound } from "@/shared/lib/audio";
 import { UsageBanner } from "@/shared/components/usage-banner";
@@ -51,7 +52,13 @@ import { useTheme } from "@/shared/theme/theme-context";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Loader } from "@/shared/ui/loader";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/shared/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/shared/ui/dialog";
 import { apiClient } from "@/shared/lib/api-client";
 import { useDashboardTour } from "@/shared/tours/use-dashboard-tour";
 
@@ -67,13 +74,23 @@ const getBreadcrumbIcon = (path: string, label: string): LucideIcon | null => {
   if (path === "/dashboard") return BarChart3;
   if (path.startsWith("/dashboard/conversations")) return Inbox;
   if (path.startsWith("/dashboard/tickets")) return Ticket;
-  if (path.startsWith("/dashboard/contacts")) return Users2;
+  if (path.startsWith("/dashboard/crm/pipeline")) return Columns3;
+  if (
+    path.startsWith("/dashboard/crm") ||
+    path.startsWith("/dashboard/contacts")
+  )
+    return Users2;
   if (path.startsWith("/dashboard/channels")) return Radio;
   if (path.startsWith("/dashboard/agents")) return UserCog;
   if (path.startsWith("/dashboard/members")) return UserCheck;
-  if (path.startsWith("/dashboard/widget/qr") || normalizedLabel === "qr codes") return QrCode;
+  if (path.startsWith("/dashboard/widget/qr") || normalizedLabel === "qr codes")
+    return QrCode;
   if (path.startsWith("/dashboard/widget")) return Crown;
-  if (path.startsWith("/dashboard/knowledge/realtime") || normalizedLabel === "realtime") return Bot;
+  if (
+    path.startsWith("/dashboard/knowledge/realtime") ||
+    normalizedLabel === "realtime"
+  )
+    return Bot;
   if (path.startsWith("/dashboard/knowledge")) return BookOpen;
   if (path.startsWith("/dashboard/settings/billing/usage")) return BarChart3;
   if (path.startsWith("/dashboard/settings/billing")) return CreditCard;
@@ -116,10 +133,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const logoutMutation = useLogout();
   const { data: widgetData } = useWidget();
 
-  const chatMatch = location.pathname.match(/\/dashboard\/conversations\/inbox\/chat\/([a-fA-F0-9]+)/);
+  const chatMatch = location.pathname.match(
+    /\/dashboard\/conversations\/inbox\/chat\/([a-fA-F0-9]+)/,
+  );
   const conversationId = chatMatch ? chatMatch[1] : undefined;
 
-  const ticketMatch = location.pathname.match(/\/dashboard\/tickets\/([a-fA-F0-9]+)/);
+  const ticketMatch = location.pathname.match(
+    /\/dashboard\/tickets\/([a-fA-F0-9]+)/,
+  );
   const ticketId = ticketMatch ? ticketMatch[1] : undefined;
 
   const { data: convResponse } = useConversationDetail(conversationId || "");
@@ -128,7 +149,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const customerName = useMemo(() => {
     if (!convResponse?.data?.conversation) return "Customer";
     const c = convResponse.data.conversation;
-    return c.metadata?.customer?.name || c.metadata?.customerName || c.metadata?.senderName || "Anonymous Visitor";
+    return (
+      c.metadata?.customer?.name ||
+      c.metadata?.customerName ||
+      c.metadata?.senderName ||
+      "Anonymous Visitor"
+    );
   }, [convResponse]);
 
   const ticketTitle = useMemo(() => {
@@ -138,29 +164,32 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const orgRole: OrgRole | null = isAuthenticated ? authApi.getOrgRole() : null;
   const activeOrgId = isAuthenticated ? authApi.getActiveOrgId() : null;
   const canAccessContacts = true;
-  const billingVisible =
-    getInteraOneMode() === "cloud" && isEeEnabledByEnv();
+  const billingVisible = getInteraOneMode() === "cloud" && isEeEnabledByEnv();
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [notificationFilter, setNotificationFilter] = useState<"new" | "history">("new");
+  const [notificationFilter, setNotificationFilter] = useState<
+    "new" | "history"
+  >("new");
   const [isContentFullscreen, setIsContentFullscreen] = useState(false);
   const [hasInboxBadge, setHasInboxBadge] = useState(false);
 
   const queryClient = useQueryClient();
 
   // Fetch open unassigned conversations and open conversations assigned to the current user
-  const { data: unassignedConvs = [] } = useConversations("open", { unassigned: true });
+  const { data: unassignedConvs = [] } = useConversations("open", {
+    unassigned: true,
+  });
   const { data: myConvs = [] } = useMyConversations("open");
 
   // Merge, filter duplicates, sort by latest activity, and keep top 5
   const escalatedOrUnassigned = useMemo(() => {
     if (!isAuthenticated || !user) return [];
-    
+
     const merged = [...unassignedConvs, ...myConvs];
     const uniqueMap = new Map<string, any>();
-    
+
     for (const conv of merged) {
       uniqueMap.set(conv._id, conv);
     }
@@ -173,8 +202,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       })
       .slice(0, 5);
   }, [unassignedConvs, myConvs, isAuthenticated, user]);
-
-
 
   const getVisitorName = (conv: any) =>
     conv.metadata?.customer?.name ||
@@ -243,29 +270,34 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     ];
 
     if (canAccessContacts) {
-      base.push({ label: "All Contacts", to: "/dashboard/contacts/all-contacts" });
+      base.push(
+        { label: "CRM Contacts", to: "/dashboard/crm/contacts" },
+        { label: "CRM Pipeline", to: "/dashboard/crm/pipeline" },
+      );
     }
 
     if (orgRole === "admin" || orgRole === "owner") {
       base.push(
-
         { label: "Agents", to: "/dashboard/agents" },
         { label: "Members", to: "/dashboard/members" },
         { label: "Knowledge Static", to: "/dashboard/knowledge/static" },
         { label: "Knowledge Realtime", to: "/dashboard/knowledge/realtime" },
-        { label: "Widget", to: "/dashboard/widget" }
+        { label: "Widget", to: "/dashboard/widget" },
       );
     }
 
     if (orgRole === "owner") {
       if (billingVisible) {
-        base.push({ label: "Billing", to: "/dashboard/settings/billing/plans" });
+        base.push({
+          label: "Billing",
+          to: "/dashboard/settings/billing/plans",
+        });
       }
 
       base.push(
         { label: "QR Codes", to: "/dashboard/widget/qr" },
         { label: "General Settings", to: "/dashboard/settings/general" },
-        { label: "Danger Zone", to: "/dashboard/settings/danger-zone" }
+        { label: "Danger Zone", to: "/dashboard/settings/danger-zone" },
       );
     }
 
@@ -274,14 +306,16 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const breadcrumbs = useMemo(() => {
     const pathname = location.pathname;
-    
+
     // 1. Dashboard root
     if (pathname === "/dashboard" || pathname === "/dashboard/") {
       return [{ label: "Dashboard", to: "/dashboard" }];
     }
-    
+
     // 2. Chat detail page
-    const chatMatch = pathname.match(/\/dashboard\/conversations\/inbox\/chat\/([a-fA-F0-9]+)/);
+    const chatMatch = pathname.match(
+      /\/dashboard\/conversations\/inbox\/chat\/([a-fA-F0-9]+)/,
+    );
     if (chatMatch) {
       return [
         { label: "Dashboard", to: "/dashboard" },
@@ -289,12 +323,19 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         { label: customerName, to: pathname },
       ];
     }
-    
+
     // 3. Conversations Inbox list views
-    const inboxMatch = pathname.match(/\/dashboard\/conversations\/inbox\/([a-zA-Z0-9_-]+)/);
+    const inboxMatch = pathname.match(
+      /\/dashboard\/conversations\/inbox\/([a-zA-Z0-9_-]+)/,
+    );
     if (inboxMatch) {
       const subpath = inboxMatch[1];
-      const subLabel = subpath === "open" ? "open" : subpath === "assigned" ? "Assigned" : subpath.charAt(0).toUpperCase() + subpath.slice(1);
+      const subLabel =
+        subpath === "open"
+          ? "open"
+          : subpath === "assigned"
+            ? "Assigned"
+            : subpath.charAt(0).toUpperCase() + subpath.slice(1);
       return [
         { label: "dashboard", to: "/dashboard" },
         { label: "inbox", to: "/dashboard/conversations/inbox/open" },
@@ -303,7 +344,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     }
 
     // 4. Ticket detail view
-    const ticketDetailMatch = pathname.match(/\/dashboard\/tickets\/([a-fA-F0-9]+)/);
+    const ticketDetailMatch = pathname.match(
+      /\/dashboard\/tickets\/([a-fA-F0-9]+)/,
+    );
     if (ticketDetailMatch) {
       return [
         { label: "Dashboard", to: "/dashboard" },
@@ -313,7 +356,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     }
 
     // 5. Ticket root list view
-    if (pathname === "/dashboard/tickets" || pathname === "/dashboard/tickets/") {
+    if (
+      pathname === "/dashboard/tickets" ||
+      pathname === "/dashboard/tickets/"
+    ) {
       return [
         { label: "Dashboard", to: "/dashboard" },
         { label: "Tickets", to: "/dashboard/tickets" },
@@ -332,9 +378,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         index === 0 && part === "dashboard"
           ? "Dashboard"
           : part
-            .split("-")
-            .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-            .join(" ");
+              .split("-")
+              .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+              .join(" ");
 
       items.push({ label, to: currentPath });
     });
@@ -351,7 +397,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const searchResults = useMemo(() => {
     const term = searchQuery.trim().toLowerCase();
     if (!term) return [];
-    return searchableRoutes.filter((route) => route.label.toLowerCase().includes(term)).slice(0, 5);
+    return searchableRoutes
+      .filter((route) => route.label.toLowerCase().includes(term))
+      .slice(0, 5);
   }, [searchQuery, searchableRoutes]);
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -383,36 +431,50 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
       newNotificationsRef.current = [
         notification,
-        ...newNotificationsRef.current.filter(item => item.id !== notification.id),
+        ...newNotificationsRef.current.filter(
+          (item) => item.id !== notification.id,
+        ),
       ];
       setNewNotifications(newNotificationsRef.current);
-      setNotifications(prev => [
+      setNotifications((prev) => [
         notification,
-        ...prev.filter(item => item.id !== notification.id),
+        ...prev.filter((item) => item.id !== notification.id),
       ]);
     });
 
     const handleConversationsUpdate = () => {
-      queryClient.invalidateQueries({ queryKey: ["conversations"], exact: false });
+      queryClient.invalidateQueries({
+        queryKey: ["conversations"],
+        exact: false,
+      });
     };
 
     socket.on("conversation_pending", () => {
       playNotificationSound();
-      if (!window.location.pathname.startsWith("/dashboard/conversations/inbox")) {
+      if (
+        !window.location.pathname.startsWith("/dashboard/conversations/inbox")
+      ) {
         setHasInboxBadge(true);
       }
       handleConversationsUpdate();
     });
 
-    socket.on("conversation_assigned", (data: { conversationId: string; agentId: string }) => {
-      if (data?.agentId === user?.id) {
-        playNotificationSound();
-        if (!window.location.pathname.startsWith("/dashboard/conversations/inbox")) {
-          setHasInboxBadge(true);
+    socket.on(
+      "conversation_assigned",
+      (data: { conversationId: string; agentId: string }) => {
+        if (data?.agentId === user?.id) {
+          playNotificationSound();
+          if (
+            !window.location.pathname.startsWith(
+              "/dashboard/conversations/inbox",
+            )
+          ) {
+            setHasInboxBadge(true);
+          }
         }
-      }
-      handleConversationsUpdate();
-    });
+        handleConversationsUpdate();
+      },
+    );
 
     socket.on("conversation_escalated", handleConversationsUpdate);
     socket.on("status_updated", handleConversationsUpdate);
@@ -432,24 +494,29 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
     const fetchNotifications = async () => {
       try {
-        const res = await apiClient.get<{ data?: NotificationApiItem[] }>(`/notifications`);
+        const res = await apiClient.get<{ data?: NotificationApiItem[] }>(
+          `/notifications`,
+        );
         if (!cancelled && res?.data) {
-          const history = res.data.map((n): Notification => ({
-            id: n.id || n._id,
-            type: n.type,
-            title: n.title,
-            description: n.description,
-            timestamp: new Date(n.createdAt || n.timestamp || Date.now()),
-          }));
+          const history = res.data.map(
+            (n): Notification => ({
+              id: n.id || n._id,
+              type: n.type,
+              title: n.title,
+              description: n.description,
+              timestamp: new Date(n.createdAt || n.timestamp || Date.now()),
+            }),
+          );
 
           // Keep notifications that arrived over the socket while history loaded.
           const liveNotifications = newNotificationsRef.current;
-          const liveIds = new Set(liveNotifications.map(item => item.id));
+          const liveIds = new Set(liveNotifications.map((item) => item.id));
           setNewNotifications(liveNotifications);
           setNotifications(
-            [...liveNotifications, ...history.filter(item => !liveIds.has(item.id))].sort(
-              (a, b) => b.timestamp.getTime() - a.timestamp.getTime(),
-            ),
+            [
+              ...liveNotifications,
+              ...history.filter((item) => !liveIds.has(item.id)),
+            ].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()),
           );
         }
       } catch (err) {
@@ -468,14 +535,19 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   }, [isAuthenticated, user]);
 
   const newNotificationCount = newNotifications.length;
-  const filteredNotifications = notificationFilter === "new" ? newNotifications : notifications;
+  const filteredNotifications =
+    notificationFilter === "new" ? newNotifications : notifications;
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
-      case "assignment": return <UserPlus className="h-4 w-4 text-blue-500" />;
-      case "ai_sync": return <Bot className="h-4 w-4 text-purple-500" />;
-      case "administrative": return <UserCheck className="h-4 w-4 text-emerald-500" />;
-      default: return <Info className="h-4 w-4 text-gray-500" />;
+      case "assignment":
+        return <UserPlus className="h-4 w-4 text-blue-500" />;
+      case "ai_sync":
+        return <Bot className="h-4 w-4 text-purple-500" />;
+      case "administrative":
+        return <UserCheck className="h-4 w-4 text-emerald-500" />;
+      default:
+        return <Info className="h-4 w-4 text-gray-500" />;
     }
   };
 
@@ -487,7 +559,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     const handleOutsideClick = (event: MouseEvent) => {
       const target = event.target as Node;
 
-      if (searchContainerRef.current && !searchContainerRef.current.contains(target)) {
+      if (
+        searchContainerRef.current &&
+        !searchContainerRef.current.contains(target)
+      ) {
         setShowSearchResults(false);
       }
     };
@@ -509,27 +584,42 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   };
 
   const isActive = (path: string, exact = false) => {
-    return exact ? location.pathname === path : location.pathname.startsWith(path);
+    return exact
+      ? location.pathname === path
+      : location.pathname.startsWith(path);
   };
 
-  const isConversationRoute = location.pathname.startsWith("/dashboard/conversations");
+  const isConversationRoute = location.pathname.startsWith(
+    "/dashboard/conversations",
+  );
   const isTicketRoute = location.pathname.startsWith("/dashboard/tickets");
-  const isTicketDetailRoute = /^\/dashboard\/tickets\/[^/]+\/?$/.test(location.pathname);
-  const tourIdentity = useMemo(() => ({
-    orgId: activeOrgId,
-    userId: user?.id,
-    userEmail: user?.email,
-  }), [activeOrgId, user?.email, user?.id]);
+  const isTicketDetailRoute = /^\/dashboard\/tickets\/[^/]+\/?$/.test(
+    location.pathname,
+  );
+  const tourIdentity = useMemo(
+    () => ({
+      orgId: activeOrgId,
+      userId: user?.id,
+      userEmail: user?.email,
+    }),
+    [activeOrgId, user?.email, user?.id],
+  );
   const { replayTour } = useDashboardTour({
     pathname: location.pathname,
-    enabled: isAuthenticated && !isLoading && location.pathname.startsWith("/dashboard"),
+    enabled:
+      isAuthenticated &&
+      !isLoading &&
+      location.pathname.startsWith("/dashboard"),
     identity: tourIdentity,
   });
 
   const renderSidebar = () => {
     return (
       <>
-        <div className="p-4 relative z-50" data-tour-id="dashboard-org-switcher">
+        <div
+          className="p-4 relative z-50"
+          data-tour-id="dashboard-org-switcher"
+        >
           <OrgSwitcher isMinimized={false} />
         </div>
 
@@ -542,9 +632,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               <Button
                 data-tour-id="sidebar-nav-dashboard"
                 variant="ghost"
-                className={`w-full flex items-center px-3 py-2 text-sm cursor-pointer font-medium rounded-lg transition-colors justify-start ${isActive("/dashboard", true)
-                  ? "bg-primary/10 text-primary border-r-2 border-primary"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground"}`}
+                className={`w-full flex items-center px-3 py-2 text-sm cursor-pointer font-medium rounded-lg transition-colors justify-start ${
+                  isActive("/dashboard", true)
+                    ? "bg-primary/10 text-primary border-r-2 border-primary"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                }`}
               >
                 <BarChart3 className="h-5 w-5 mr-3" />
                 <span className="flex-1 text-left">Dashboard</span>
@@ -557,16 +649,26 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               Conversations
             </p>
             {[
-              { label: "Inbox", to: "/dashboard/conversations/inbox", icon: Inbox },
+              {
+                label: "Inbox",
+                to: "/dashboard/conversations/inbox",
+                icon: Inbox,
+              },
               { label: "Tickets", to: "/dashboard/tickets", icon: Ticket },
             ].map((item) => (
               <Link key={item.to} to={item.to}>
                 <Button
-                  data-tour-id={item.label === "Inbox" ? "sidebar-nav-inbox" : "sidebar-nav-tickets"}
+                  data-tour-id={
+                    item.label === "Inbox"
+                      ? "sidebar-nav-inbox"
+                      : "sidebar-nav-tickets"
+                  }
                   variant="ghost"
-                  className={`w-full flex items-center px-3 py-2 text-sm cursor-pointer rounded-lg justify-start ${isActive(item.to, true)
-                    ? "text-primary bg-primary/5 font-medium"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent"}`}
+                  className={`w-full flex items-center px-3 py-2 text-sm cursor-pointer rounded-lg justify-start ${
+                    isActive(item.to, true)
+                      ? "text-primary bg-primary/5 font-medium"
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                  }`}
                 >
                   <item.icon className="h-4 w-4 mr-3" />
                   <span className="flex-1 text-left">{item.label}</span>
@@ -580,17 +682,34 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
           {canAccessContacts && (
             <div className="space-y-1">
-              <p className="px-3 pb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Contacts</p>
+              <p className="px-3 pb-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+                CRM
+              </p>
               {[
-                { label: "All Contacts", to: "/dashboard/contacts/all-contacts", icon: Users2 },
+                {
+                  label: "Contacts",
+                  to: "/dashboard/crm/contacts",
+                  icon: Users2,
+                },
+                {
+                  label: "Pipeline",
+                  to: "/dashboard/crm/pipeline",
+                  icon: Columns3,
+                },
               ].map((item) => (
                 <Link key={item.to} to={item.to}>
                   <Button
-                    data-tour-id="sidebar-nav-contacts"
+                    data-tour-id={
+                      item.label === "Contacts"
+                        ? "sidebar-nav-contacts"
+                        : "sidebar-nav-pipeline"
+                    }
                     variant="ghost"
-                    className={`w-full flex items-center px-3 py-2 text-sm cursor-pointer rounded-lg justify-start ${isActive(item.to, true)
-                      ? "text-primary bg-primary/5 font-medium"
-                      : "text-muted-foreground hover:text-foreground hover:bg-accent"}`}
+                    className={`w-full flex items-center px-3 py-2 text-sm cursor-pointer rounded-lg justify-start ${
+                      isActive(item.to, true)
+                        ? "text-primary bg-primary/5 font-medium"
+                        : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                    }`}
                   >
                     <item.icon className="h-4 w-4 mr-3" />
                     <span>{item.label}</span>
@@ -609,9 +728,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 <Button
                   data-tour-id="sidebar-nav-channels"
                   variant="ghost"
-                  className={`w-full flex items-center px-3 py-2 text-sm cursor-pointer font-medium rounded-lg transition-colors justify-start ${isActive("/dashboard/channels")
-                    ? "bg-primary/10 text-primary border-r-2 border-primary"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"}`}
+                  className={`w-full flex items-center px-3 py-2 text-sm cursor-pointer font-medium rounded-lg transition-colors justify-start ${
+                    isActive("/dashboard/channels")
+                      ? "bg-primary/10 text-primary border-r-2 border-primary"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                  }`}
                 >
                   <Radio className="h-5 w-5 mr-3" />
                   <span className="flex-1 text-left">Channels</span>
@@ -619,8 +740,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               </Link>
             </div>
           )}
-
-
 
           {(orgRole === "admin" || orgRole === "owner") && (
             <div className="space-y-1">
@@ -632,9 +751,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 <Button
                   data-tour-id="sidebar-nav-agents"
                   variant="ghost"
-                  className={`w-full flex items-center px-3 py-2 text-sm cursor-pointer font-medium rounded-lg transition-colors justify-start ${isActive("/dashboard/agents")
-                    ? "bg-primary/10 text-primary border-r-2 border-primary"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"}`}
+                  className={`w-full flex items-center px-3 py-2 text-sm cursor-pointer font-medium rounded-lg transition-colors justify-start ${
+                    isActive("/dashboard/agents")
+                      ? "bg-primary/10 text-primary border-r-2 border-primary"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                  }`}
                 >
                   <UserCog className="h-5 w-5 mr-3" />
                   <span className="flex-1 text-left">Agents</span>
@@ -645,9 +766,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 <Button
                   data-tour-id="sidebar-nav-members"
                   variant="ghost"
-                  className={`w-full flex items-center px-3 py-2 text-sm cursor-pointer font-medium rounded-lg transition-colors justify-start ${isActive("/dashboard/members")
-                    ? "bg-primary/10 text-primary border-r-2 border-primary"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"}`}
+                  className={`w-full flex items-center px-3 py-2 text-sm cursor-pointer font-medium rounded-lg transition-colors justify-start ${
+                    isActive("/dashboard/members")
+                      ? "bg-primary/10 text-primary border-r-2 border-primary"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                  }`}
                 >
                   <UserCheck className="h-5 w-5 mr-3" />
                   <span className="flex-1 text-left">Members</span>
@@ -663,16 +786,30 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               </p>
 
               {[
-                { label: "Knowledge Static", to: "/dashboard/knowledge/static", icon: BookOpen },
-                { label: "Knowledge Realtime", to: "/dashboard/knowledge/realtime", icon: Bot },
+                {
+                  label: "Knowledge Static",
+                  to: "/dashboard/knowledge/static",
+                  icon: BookOpen,
+                },
+                {
+                  label: "Knowledge Realtime",
+                  to: "/dashboard/knowledge/realtime",
+                  icon: Bot,
+                },
               ].map((item) => (
                 <Link key={item.to} to={item.to}>
                   <Button
-                    data-tour-id={item.label === "Knowledge Static" ? "sidebar-nav-knowledge-static" : "sidebar-nav-knowledge-realtime"}
+                    data-tour-id={
+                      item.label === "Knowledge Static"
+                        ? "sidebar-nav-knowledge-static"
+                        : "sidebar-nav-knowledge-realtime"
+                    }
                     variant="ghost"
-                    className={`w-full flex items-center px-3 py-2 text-sm cursor-pointer rounded-lg justify-start ${isActive(item.to, true)
-                      ? "text-primary bg-primary/5 font-medium"
-                      : "text-muted-foreground hover:text-foreground hover:bg-accent"}`}
+                    className={`w-full flex items-center px-3 py-2 text-sm cursor-pointer rounded-lg justify-start ${
+                      isActive(item.to, true)
+                        ? "text-primary bg-primary/5 font-medium"
+                        : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                    }`}
                   >
                     <item.icon className="h-4 w-4 mr-3" />
                     <span>{item.label}</span>
@@ -684,9 +821,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 <Button
                   data-tour-id="sidebar-nav-widget"
                   variant="ghost"
-                  className={`w-full flex items-center px-3 py-2 text-sm cursor-pointer font-medium rounded-lg transition-colors justify-start ${isActive("/dashboard/widget", true)
-                    ? "bg-primary/10 text-primary border-r-2 border-primary"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"}`}
+                  className={`w-full flex items-center px-3 py-2 text-sm cursor-pointer font-medium rounded-lg transition-colors justify-start ${
+                    isActive("/dashboard/widget", true)
+                      ? "bg-primary/10 text-primary border-r-2 border-primary"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                  }`}
                 >
                   <Crown className="h-5 w-5 mr-3" />
                   <span className="flex-1 text-left">Widget</span>
@@ -698,9 +837,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   <Button
                     data-tour-id="sidebar-nav-qr-codes"
                     variant="ghost"
-                    className={`w-full flex items-center px-3 py-2 text-sm cursor-pointer font-medium rounded-lg transition-colors justify-start ${isActive("/dashboard/widget/qr", true)
-                      ? "bg-primary/10 text-primary border-r-2 border-primary"
-                      : "text-muted-foreground hover:bg-accent hover:text-foreground"}`}
+                    className={`w-full flex items-center px-3 py-2 text-sm cursor-pointer font-medium rounded-lg transition-colors justify-start ${
+                      isActive("/dashboard/widget/qr", true)
+                        ? "bg-primary/10 text-primary border-r-2 border-primary"
+                        : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                    }`}
                   >
                     <QrCode className="h-5 w-5 mr-3" />
                     <span className="flex-1 text-left">QR Codes</span>
@@ -716,15 +857,25 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 Billing &amp; Usage
               </p>
               {[
-                { label: "Plans & Pricing", to: "/dashboard/settings/billing/plans", icon: CreditCard },
-                { label: "Resource Usage", to: "/dashboard/settings/billing/usage", icon: BarChart3 },
+                {
+                  label: "Plans & Pricing",
+                  to: "/dashboard/settings/billing/plans",
+                  icon: CreditCard,
+                },
+                {
+                  label: "Resource Usage",
+                  to: "/dashboard/settings/billing/usage",
+                  icon: BarChart3,
+                },
               ].map((item) => (
                 <Link key={item.to} to={item.to}>
                   <Button
                     variant="ghost"
-                    className={`w-full flex items-center px-3 py-2 text-sm cursor-pointer rounded-lg justify-start ${isActive(item.to, true)
-                      ? "text-primary bg-primary/5 font-medium"
-                      : "text-muted-foreground hover:text-foreground hover:bg-accent"}`}
+                    className={`w-full flex items-center px-3 py-2 text-sm cursor-pointer rounded-lg justify-start ${
+                      isActive(item.to, true)
+                        ? "text-primary bg-primary/5 font-medium"
+                        : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                    }`}
                   >
                     <item.icon className="h-4 w-4 mr-3" />
                     <span>{item.label}</span>
@@ -740,18 +891,34 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 Settings
               </p>
               {[
-                { label: "General", to: "/dashboard/settings/general", icon: Settings, visible: true },
-                { label: "Danger Zone", to: "/dashboard/settings/danger-zone", icon: TriangleAlert, visible: true },
+                {
+                  label: "General",
+                  to: "/dashboard/settings/general",
+                  icon: Settings,
+                  visible: true,
+                },
+                {
+                  label: "Danger Zone",
+                  to: "/dashboard/settings/danger-zone",
+                  icon: TriangleAlert,
+                  visible: true,
+                },
               ]
                 .filter((item) => item.visible)
                 .map((item) => (
                   <Link key={item.to} to={item.to}>
                     <Button
-                      data-tour-id={item.label === "General" ? "sidebar-nav-general" : "sidebar-nav-danger-zone"}
+                      data-tour-id={
+                        item.label === "General"
+                          ? "sidebar-nav-general"
+                          : "sidebar-nav-danger-zone"
+                      }
                       variant="ghost"
-                      className={`w-full flex items-center px-3 py-2 text-sm cursor-pointer rounded-lg justify-start ${isActive(item.to, true)
-                        ? "text-primary bg-primary/5 font-medium"
-                        : "text-muted-foreground hover:text-foreground hover:bg-accent"}`}
+                      className={`w-full flex items-center px-3 py-2 text-sm cursor-pointer rounded-lg justify-start ${
+                        isActive(item.to, true)
+                          ? "text-primary bg-primary/5 font-medium"
+                          : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                      }`}
                     >
                       <item.icon className="h-4 w-4 mr-3" />
                       <span>{item.label}</span>
@@ -763,15 +930,22 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         </nav>
 
         <div className="p-4 mt-auto">
-          <div className="flex items-center mb-4 mt-2 space-x-3" data-tour-id="dashboard-user-profile">
+          <div
+            className="flex items-center mb-4 mt-2 space-x-3"
+            data-tour-id="dashboard-user-profile"
+          >
             <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center shrink-0">
               <span className="text-sm font-bold text-primary-foreground">
                 {user?.name?.charAt(0).toUpperCase() || "A"}
               </span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-foreground truncate">{user?.name}</p>
-              <p className="text-xs text-muted-foreground truncate capitalize">{orgRole}</p>
+              <p className="text-sm font-medium text-foreground truncate">
+                {user?.name}
+              </p>
+              <p className="text-xs text-muted-foreground truncate capitalize">
+                {orgRole}
+              </p>
             </div>
           </div>
 
@@ -817,8 +991,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </aside>
         )}
 
-        <div className={`flex min-w-0 flex-1 flex-col bg-background ${isContentFullscreen ? "lg:ml-0" : "lg:ml-76"}`}>
-          <main className={`flex-1 bg-background ${isConversationRoute ? "overflow-hidden" : "overflow-auto"}`}>
+        <div
+          className={`flex min-w-0 flex-1 flex-col bg-background ${isContentFullscreen ? "lg:ml-0" : "lg:ml-76"}`}
+        >
+          <main
+            className={`flex-1 bg-background ${isConversationRoute ? "overflow-hidden" : "overflow-auto"}`}
+          >
             <div
               className={`mx-auto w-full ${isConversationRoute ? "h-full p-4 sm:p-6 lg:p-8 flex flex-col min-h-0" : isContentFullscreen ? "max-w-none p-4 sm:p-6 lg:p-8" : "max-w-384 p-4 sm:p-6 lg:p-8"}`}
             >
@@ -829,14 +1007,28 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     data-tour-id="dashboard-breadcrumbs"
                   >
                     {breadcrumbs.map((crumb, index) => {
-                      const BreadcrumbIcon = getBreadcrumbIcon(crumb.to, crumb.label);
+                      const BreadcrumbIcon = getBreadcrumbIcon(
+                        crumb.to,
+                        crumb.label,
+                      );
 
                       return (
-                        <div key={`${crumb.to}-${index}`} className="flex items-center gap-1 shrink-0">
-                          {index > 0 && <ChevronRight className="h-3.5 w-3.5" />}
+                        <div
+                          key={`${crumb.to}-${index}`}
+                          className="flex items-center gap-1 shrink-0"
+                        >
+                          {index > 0 && (
+                            <ChevronRight className="h-3.5 w-3.5" />
+                          )}
                           {index === breadcrumbs.length - 1 ? (
                             <span className="flex items-center gap-1.5 font-medium text-foreground">
-                              {BreadcrumbIcon && <BreadcrumbIcon aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={1.8} />}
+                              {BreadcrumbIcon && (
+                                <BreadcrumbIcon
+                                  aria-hidden="true"
+                                  className="h-3.5 w-3.5"
+                                  strokeWidth={1.8}
+                                />
+                              )}
                               {crumb.label}
                             </span>
                           ) : (
@@ -845,7 +1037,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                               onClick={() => navigate(crumb.to)}
                               className="flex cursor-pointer items-center gap-1.5 transition-colors hover:text-foreground"
                             >
-                              {BreadcrumbIcon && <BreadcrumbIcon aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={1.8} />}
+                              {BreadcrumbIcon && (
+                                <BreadcrumbIcon
+                                  aria-hidden="true"
+                                  className="h-3.5 w-3.5"
+                                  strokeWidth={1.8}
+                                />
+                              )}
                               {crumb.label}
                             </button>
                           )}
@@ -867,12 +1065,16 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                             .slice(0, 2)
                             .toUpperCase();
                           const hasAgent = !!conv.assignedTo;
-                          
+
                           return (
                             <button
                               key={conv._id}
                               type="button"
-                              onClick={() => navigate(`/dashboard/conversations/inbox/chat/${conv._id}`)}
+                              onClick={() =>
+                                navigate(
+                                  `/dashboard/conversations/inbox/chat/${conv._id}`,
+                                )
+                              }
                               className="group relative cursor-pointer focus:outline-none transition-all duration-300 hover:z-10 hover:-translate-y-0.5"
                               aria-label={`Conversation with ${name}`}
                             >
@@ -880,12 +1082,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                               <div className="w-8 h-8 rounded-full border-2 border-background flex items-center justify-center text-[10px] font-semibold bg-primary text-primary-foreground shadow-sm transition-all duration-300 group-hover:shadow-md">
                                 {initials}
                               </div>
-                              
+
                               {/* Status dot */}
-                              <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border border-background shadow-sm ${
-                                hasAgent ? "bg-red-500" : "bg-amber-500"
-                              }`} />
-                              
+                              <span
+                                className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border border-background shadow-sm ${
+                                  hasAgent ? "bg-red-500" : "bg-amber-500"
+                                }`}
+                              />
+
                               {/* Premium designed tooltip showing the contact name */}
                               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 rounded-lg bg-zinc-900/95 dark:bg-zinc-100/95 text-zinc-50 dark:text-zinc-950 border border-zinc-800/30 dark:border-zinc-200/30 shadow-md text-[11px] font-semibold tracking-wide whitespace-nowrap opacity-0 group-hover:opacity-100 transition-all duration-200 transform translate-y-1 group-hover:translate-y-0 pointer-events-none z-50">
                                 {name}
@@ -935,7 +1139,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                       )}
                     </form>
 
-                    <Dialog open={notificationsOpen} onOpenChange={setNotificationsOpen}>
+                    <Dialog
+                      open={notificationsOpen}
+                      onOpenChange={setNotificationsOpen}
+                    >
                       <DialogTrigger asChild>
                         <Button
                           data-tour-id="dashboard-notifications"
@@ -948,7 +1155,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                           <Bell className="h-4 w-4" />
                           {newNotificationCount > 0 && (
                             <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground border-2 border-background">
-                              {newNotificationCount > 9 ? '9+' : newNotificationCount}
+                              {newNotificationCount > 9
+                                ? "9+"
+                                : newNotificationCount}
                             </span>
                           )}
                         </Button>
@@ -961,7 +1170,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                                 Notifications
                                 <div className="flex bg-background/50 border border-border/50 p-0.5 rounded-lg">
                                   <Button
-                                    variant={notificationFilter === "new" ? "secondary" : "ghost"}
+                                    variant={
+                                      notificationFilter === "new"
+                                        ? "secondary"
+                                        : "ghost"
+                                    }
                                     size="sm"
                                     onClick={() => setNotificationFilter("new")}
                                     className="h-7 cursor-pointer text-xs px-3"
@@ -969,9 +1182,15 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                                     New
                                   </Button>
                                   <Button
-                                    variant={notificationFilter === "history" ? "secondary" : "ghost"}
+                                    variant={
+                                      notificationFilter === "history"
+                                        ? "secondary"
+                                        : "ghost"
+                                    }
                                     size="sm"
-                                    onClick={() => setNotificationFilter("history")}
+                                    onClick={() =>
+                                      setNotificationFilter("history")
+                                    }
                                     className="h-7 cursor-pointer text-xs px-3"
                                   >
                                     Complete History
@@ -992,7 +1211,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                                 <Bell className="h-8 w-8 text-muted-foreground/50" />
                               </div>
                               <p className="text-base font-medium text-foreground">
-                                {notificationFilter === "new" ? "No new notifications" : "No notification history"}
+                                {notificationFilter === "new"
+                                  ? "No new notifications"
+                                  : "No notification history"}
                               </p>
                               <p className="text-sm text-muted-foreground mt-1">
                                 {notificationFilter === "new"
@@ -1019,12 +1240,16 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center justify-between gap-3 mb-1">
-                                      <p className={`text-base truncate ${notificationFilter === "new" ? "font-bold text-foreground" : "font-medium text-foreground/80"}`}>
+                                      <p
+                                        className={`text-base truncate ${notificationFilter === "new" ? "font-bold text-foreground" : "font-medium text-foreground/80"}`}
+                                      >
                                         {item.title}
                                       </p>
                                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
                                         <Clock className="h-3.5 w-3.5" />
-                                        {formatDistanceToNow(item.timestamp, { addSuffix: true })}
+                                        {formatDistanceToNow(item.timestamp, {
+                                          addSuffix: true,
+                                        })}
                                       </div>
                                     </div>
                                     <p className="text-sm text-muted-foreground leading-relaxed">
@@ -1074,7 +1299,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                       variant="outline"
                       size="sm"
                       className="cursor-pointer"
-                      aria-label={isContentFullscreen ? "Exit fullscreen content" : "Fullscreen content"}
+                      aria-label={
+                        isContentFullscreen
+                          ? "Exit fullscreen content"
+                          : "Fullscreen content"
+                      }
                     >
                       {isContentFullscreen ? (
                         <Minimize2 className="h-4 w-4" />
@@ -1087,9 +1316,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               </div>
 
               {isConversationRoute ? (
-                <div className="flex-1 min-h-0 overflow-hidden">
-                  {children}
-                </div>
+                <div className="flex-1 min-h-0 overflow-hidden">{children}</div>
               ) : isTicketDetailRoute ? (
                 <>
                   <UsageBanner />
@@ -1114,7 +1341,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-card p-6 rounded-lg shadow-xl border border-border max-w-md w-full mx-4">
             <h3 className="text-lg font-semibold mb-2">Sign Out</h3>
-            <p className="text-muted-foreground mb-6">Are you sure you want to sign out?</p>
+            <p className="text-muted-foreground mb-6">
+              Are you sure you want to sign out?
+            </p>
             <div className="flex gap-3 justify-end">
               <Button
                 variant="outline"
@@ -1123,7 +1352,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               >
                 Cancel
               </Button>
-              <Button variant="destructive" onClick={handleLogout} className="cursor-pointer">
+              <Button
+                variant="destructive"
+                onClick={handleLogout}
+                className="cursor-pointer"
+              >
                 Sign Out
               </Button>
             </div>

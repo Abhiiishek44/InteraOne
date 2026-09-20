@@ -14,7 +14,13 @@ export class ContactsController {
     try {
       const items = await contactsService.listContacts(getOrgId(req), {
         search: (req.query.q as string) || undefined,
-        limit: req.query.limit ? parseInt(String(req.query.limit), 10) : undefined,
+        limit: req.query.limit
+          ? parseInt(String(req.query.limit), 10)
+          : undefined,
+        lifecycleStage: (req.query.lifecycleStage as string) || undefined,
+        leadStatus: (req.query.leadStatus as string) || undefined,
+        ownerId: (req.query.ownerId as string) || undefined,
+        followUp: req.query.followUp as "overdue" | "upcoming" | undefined,
       });
 
       sendResponse(res, 200, true, "Contacts retrieved", {
@@ -23,6 +29,37 @@ export class ContactsController {
       });
     } catch (error: any) {
       sendError(res, 500, error.message || "Failed to list contacts");
+    }
+  }
+
+  static async createContact(req: Request, res: Response): Promise<void> {
+    try {
+      const role = (req as AuthenticatedRequest).user.orgRole;
+      const source = role === "owner" || role === "admin" ? role : "agent";
+      const contact = await contactsService.createContact(
+        getOrgId(req),
+        req.body,
+        source,
+      );
+      sendResponse(res, 201, true, "Contact created successfully", { contact });
+    } catch (error: any) {
+      const duplicateEmail = error?.code === 11000 && error?.keyPattern?.email;
+      sendError(
+        res,
+        duplicateEmail ? 409 : 400,
+        duplicateEmail
+          ? "A contact with this email already exists"
+          : error.message || "Failed to create contact",
+      );
+    }
+  }
+
+  static async listContactOwners(req: Request, res: Response): Promise<void> {
+    try {
+      const owners = await contactsService.listContactOwners(getOrgId(req));
+      sendResponse(res, 200, true, "Contact owners retrieved", { owners });
+    } catch (error: any) {
+      sendError(res, 500, error.message || "Failed to list contact owners");
     }
   }
 
@@ -87,7 +124,9 @@ export class ContactsController {
         topics,
       });
 
-      sendResponse(res, 200, true, "Contact upserted from AI", { contact: result });
+      sendResponse(res, 200, true, "Contact upserted from AI", {
+        contact: result,
+      });
     } catch (error: any) {
       sendError(res, 400, error.message || "Failed to upsert contact from AI");
     }
@@ -95,14 +134,21 @@ export class ContactsController {
 
   static async aiSeekContact(req: Request, res: Response): Promise<void> {
     try {
-      const { organizationId, email, phone, name } = req.query as Record<string, string>;
+      const { organizationId, email, phone, name } = req.query as Record<
+        string,
+        string
+      >;
 
       if (!organizationId) {
         sendError(res, 400, "organizationId is required");
         return;
       }
       if (!email && !phone && !name) {
-        sendError(res, 400, "At least one of email, phone, or name is required");
+        sendError(
+          res,
+          400,
+          "At least one of email, phone, or name is required",
+        );
         return;
       }
 
@@ -112,11 +158,17 @@ export class ContactsController {
       });
 
       const found = contacts.length > 0;
-      sendResponse(res, 200, true, found ? "Contact found" : "No contact found", {
-        found,
-        contact: found ? contacts[0] : null,
-        total: contacts.length,
-      });
+      sendResponse(
+        res,
+        200,
+        true,
+        found ? "Contact found" : "No contact found",
+        {
+          found,
+          contact: found ? contacts[0] : null,
+          total: contacts.length,
+        },
+      );
     } catch (error: any) {
       sendError(res, 500, error.message || "Failed to seek contact");
     }
@@ -128,7 +180,13 @@ export class ContactsController {
       const { ids } = req.body as { ids: string[] };
 
       const result = await contactsService.deleteContacts(orgId, ids);
-      sendResponse(res, 200, true, `${result.deletedCount} contact(s) deleted`, result);
+      sendResponse(
+        res,
+        200,
+        true,
+        `${result.deletedCount} contact(s) deleted`,
+        result,
+      );
     } catch (error: any) {
       sendError(res, 500, error.message || "Failed to delete contacts");
     }
@@ -140,7 +198,13 @@ export class ContactsController {
       const { ids, tags } = req.body as { ids: string[]; tags: string[] };
 
       const result = await contactsService.bulkAddTags(orgId, ids, tags);
-      sendResponse(res, 200, true, `Tags added to ${result.modifiedCount} contact(s)`, result);
+      sendResponse(
+        res,
+        200,
+        true,
+        `Tags added to ${result.modifiedCount} contact(s)`,
+        result,
+      );
     } catch (error: any) {
       sendError(res, 500, error.message || "Failed to add tags to contacts");
     }
@@ -151,7 +215,8 @@ export class ContactsController {
       const orgId = getOrgId(req);
       const id = req.params.id as string;
       const { content } = req.body as { content: string };
-      const author = (req as any).user?.name || (req as any).user?.email || "Agent";
+      const author =
+        (req as any).user?.name || (req as any).user?.email || "Agent";
 
       const note = await contactsService.addNote(orgId, id, author, content);
       sendResponse(res, 201, true, "Note added successfully", note);
@@ -171,7 +236,11 @@ export class ContactsController {
       sendResponse(res, 200, true, "Note updated successfully", note);
     } catch (error: any) {
       const notFound = error.message === "Contact note not found";
-      sendError(res, notFound ? 404 : 500, error.message || "Failed to update contact note");
+      sendError(
+        res,
+        notFound ? 404 : 500,
+        error.message || "Failed to update contact note",
+      );
     }
   }
 
@@ -185,7 +254,11 @@ export class ContactsController {
       sendResponse(res, 200, true, "Note deleted successfully");
     } catch (error: any) {
       const notFound = error.message === "Contact note not found";
-      sendError(res, notFound ? 404 : 500, error.message || "Failed to delete contact note");
+      sendError(
+        res,
+        notFound ? 404 : 500,
+        error.message || "Failed to delete contact note",
+      );
     }
   }
 
@@ -219,9 +292,19 @@ export class ContactsController {
     try {
       const orgId = getOrgId(req);
       const conflicts = await contactsService.listPendingConflicts(orgId);
-      sendResponse(res, 200, true, "Pending conflicts retrieved successfully", conflicts);
+      sendResponse(
+        res,
+        200,
+        true,
+        "Pending conflicts retrieved successfully",
+        conflicts,
+      );
     } catch (error: any) {
-      sendError(res, 500, error.message || "Failed to retrieve pending conflicts");
+      sendError(
+        res,
+        500,
+        error.message || "Failed to retrieve pending conflicts",
+      );
     }
   }
 
@@ -230,10 +313,16 @@ export class ContactsController {
       const orgId = getOrgId(req);
       const id = req.params.id as string;
       const { action } = req.body as { action: "apply" | "dismiss" };
-      const agentName = (req as any).user?.name || (req as any).user?.email || "Agent";
+      const agentName =
+        (req as any).user?.name || (req as any).user?.email || "Agent";
 
       await contactsService.resolveConflict(orgId, id, action, agentName);
-      sendResponse(res, 200, true, `Conflict ${action === "apply" ? "applied" : "dismissed"} successfully`);
+      sendResponse(
+        res,
+        200,
+        true,
+        `Conflict ${action === "apply" ? "applied" : "dismissed"} successfully`,
+      );
     } catch (error: any) {
       sendError(res, 500, error.message || "Failed to resolve conflict");
     }
@@ -243,19 +332,21 @@ export class ContactsController {
     try {
       const orgId = getOrgId(req);
       const id = req.params.id as string;
-      const { name, email, phone, company, tags } = req.body;
+      const result = await contactsService.updateContact(orgId, id, req.body);
 
-      const result = await contactsService.updateContact(orgId, id, {
-        name,
-        email,
-        phone,
-        company,
-        tags,
+      sendResponse(res, 200, true, "Contact updated successfully", {
+        contact: result,
       });
-
-      sendResponse(res, 200, true, "Contact updated successfully", { contact: result });
     } catch (error: any) {
-      sendError(res, 500, error.message || "Failed to update contact");
+      const duplicateEmail = error?.code === 11000 && error?.keyPattern?.email;
+      const notFound = error.message === "Contact not found";
+      sendError(
+        res,
+        duplicateEmail ? 409 : notFound ? 404 : 400,
+        duplicateEmail
+          ? "A contact with this email already exists"
+          : error.message || "Failed to update contact",
+      );
     }
   }
 }

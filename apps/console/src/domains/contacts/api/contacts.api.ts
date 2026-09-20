@@ -1,5 +1,20 @@
 import { apiClient } from "@/shared/lib/api-client";
-import type { ContactListItem, ContactConflictItem } from "../types/types";
+import type {
+  ContactListItem,
+  ContactConflictItem,
+  ContactNote,
+  ContactOwner,
+  ContactWritePayload,
+} from "../types/types";
+
+interface ApiDataResponse<T> {
+  data: T;
+}
+
+interface CreatedContact {
+  _id: string;
+  id?: string;
+}
 
 interface ContactsResponse {
   success: boolean;
@@ -22,6 +37,23 @@ class ContactsApi {
     return response.data?.contacts || [];
   }
 
+  async createContact(
+    payload: ContactWritePayload & { name: string },
+  ): Promise<CreatedContact> {
+    const res = await apiClient.post<
+      ApiDataResponse<{ contact: CreatedContact }>
+    >("/contacts", payload);
+    return res.data?.contact;
+  }
+
+  async getContactOwners(): Promise<ContactOwner[]> {
+    const res =
+      await apiClient.get<ApiDataResponse<{ owners: ContactOwner[] }>>(
+        "/contacts/owners",
+      );
+    return res.data?.owners || [];
+  }
+
   async deleteContacts(ids: string[]): Promise<void> {
     await apiClient.delete("/contacts", { ids });
   }
@@ -30,22 +62,37 @@ class ContactsApi {
     await apiClient.post("/contacts/tags", { ids, tags });
   }
 
-  async addNote(id: string, content: string): Promise<any> {
-    const res = await apiClient.post<any>(`/contacts/${id}/notes`, { content });
+  async addNote(id: string, content: string): Promise<ContactNote> {
+    const res = await apiClient.post<ApiDataResponse<ContactNote>>(
+      `/contacts/${id}/notes`,
+      { content },
+    );
     return res.data;
   }
 
-  async updateNote(id: string, noteId: string, content: string): Promise<any> {
-    const res = await apiClient.patch<any>(`/contacts/${id}/notes/${encodeURIComponent(noteId)}`, { content });
+  async updateNote(
+    id: string,
+    noteId: string,
+    content: string,
+  ): Promise<ContactNote> {
+    const res = await apiClient.patch<ApiDataResponse<ContactNote>>(
+      `/contacts/${id}/notes/${encodeURIComponent(noteId)}`,
+      { content },
+    );
     return res.data;
   }
 
   async deleteNote(id: string, noteId: string): Promise<void> {
-    await apiClient.delete(`/contacts/${id}/notes/${encodeURIComponent(noteId)}`);
+    await apiClient.delete(
+      `/contacts/${id}/notes/${encodeURIComponent(noteId)}`,
+    );
   }
 
   async addTag(id: string, tag: string): Promise<string> {
-    const res = await apiClient.post<any>(`/contacts/${id}/tags`, { tag });
+    const res = await apiClient.post<ApiDataResponse<{ tag: string }>>(
+      `/contacts/${id}/tags`,
+      { tag },
+    );
     return res.data?.tag || tag;
   }
 
@@ -58,15 +105,21 @@ class ContactsApi {
     return res.data || [];
   }
 
-  async resolveConflict(id: string, action: "apply" | "dismiss"): Promise<void> {
+  async resolveConflict(
+    id: string,
+    action: "apply" | "dismiss",
+  ): Promise<void> {
     await apiClient.post(`/contacts/conflicts/${id}/resolve`, { action });
   }
 
   async updateContact(
     id: string,
-    payload: { name?: string; email?: string; phone?: string; company?: string; tags?: string[] },
-  ): Promise<any> {
-    const res = await apiClient.patch<any>(`/contacts/${id}`, payload);
+    payload: ContactWritePayload,
+  ): Promise<unknown> {
+    const res = await apiClient.patch<ApiDataResponse<{ contact: unknown }>>(
+      `/contacts/${id}`,
+      payload,
+    );
     return res.data;
   }
 }

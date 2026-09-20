@@ -32,324 +32,354 @@ import { EmailChannelSetupPage } from "@/domains/channels/pages/email-channel-se
 import { WhatsAppChannelSetupPage } from "@/domains/channels/pages/whatsapp-channel-setup";
 import { TelegramChannelSetupPage } from "@/domains/channels/pages/telegram-channel-setup";
 import { AcceptInvitePage } from "@/domains/auth/pages/accept-invite/page";
+import { PipelinePage } from "@/domains/crm/pages/pipeline-page";
+import { OpportunityDetailsPage } from "@/domains/crm/pages/opportunity-details-page";
 
 const router = createBrowserRouter([
-    {
-        path: "/",
-        element: <App />,
-    },
-    {
-        path: "/auth/login",
-        element: <LoginPage />,
-    },
-    {
-        path: "/auth/signup",
-        element: <SetupPage />,
-    },
-    {
-        path: "/auth/password-recovery",
-        element: <PasswordRecoveryPage />,
-    },
-    {
-        path: "/auth/accept-invite",
-        element: <AcceptInvitePage />,
-    },
-    {
-        path: "/select-org",
-        element: <SelectOrgPage />,
-    },
-    {
-        path: "/organizations/create",
-        element: <CreateOrganizationPage />,
-    },
-    {
-        path: "/dashboard",
-        element: (
-            <ProtectedRoute requiredRole="agent">
-                <DashboardLayout>
-                    <DashboardHomePage />
-                </DashboardLayout>
-            </ProtectedRoute>
-        ),
-    },
+  {
+    path: "/",
+    element: <App />,
+  },
+  {
+    path: "/auth/login",
+    element: <LoginPage />,
+  },
+  {
+    path: "/auth/signup",
+    element: <SetupPage />,
+  },
+  {
+    path: "/auth/password-recovery",
+    element: <PasswordRecoveryPage />,
+  },
+  {
+    path: "/auth/accept-invite",
+    element: <AcceptInvitePage />,
+  },
+  {
+    path: "/select-org",
+    element: <SelectOrgPage />,
+  },
+  {
+    path: "/organizations/create",
+    element: <CreateOrganizationPage />,
+  },
+  {
+    path: "/dashboard",
+    element: (
+      <ProtectedRoute requiredRole="agent">
+        <DashboardLayout>
+          <DashboardHomePage />
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
 
-    {
-        path: "/dashboard/conversations",
-        element: <Navigate to="/dashboard/conversations/inbox/open" replace />,
-    },
-    {
-        path: "/dashboard/conversations/inbox",
-        element: <Navigate to="/dashboard/conversations/inbox/open" replace />,
-    },
-    {
-        path: "/dashboard/conversations/inbox/open",
-        element: (
-            <ProtectedRoute requiredRole="agent">
-                <DashboardLayout>
-                    <ConversationLayout>
-                        <ConversationsInboxPage mode="all" />
-                    </ConversationLayout>
-                </DashboardLayout>
-            </ProtectedRoute>
-        ),
-    },
-    {
-        path: "/dashboard/conversations/inbox/assigned",
-        element: (
-            <ProtectedRoute requiredRole="agent">
-                <DashboardLayout>
-                    <ConversationLayout>
-                        <ConversationsInboxPage mode="mine" />
-                    </ConversationLayout>
-                </DashboardLayout>
-            </ProtectedRoute>
-        ),
-    },
-    {
-        path: "/dashboard/conversations/inbox/chat/:conversationId",
-        element: (
-            <ProtectedRoute requiredRole="agent">
-                <DashboardLayout>
-                    <ConversationLayout>
-                        <ConversationChatPage />
-                    </ConversationLayout>
-                </DashboardLayout>
-            </ProtectedRoute>
-        ),
-    },
-    {
-        path: "/dashboard/agents",
-        element: (
-            <ProtectedRoute requiredRole="admin">
-                <DashboardLayout>
-                    <AgentsPage />
-                </DashboardLayout>
-            </ProtectedRoute>
-        ),
-    },
-    {
-        path: "/dashboard/members",
-        element: (
-            <ProtectedRoute requiredRole="admin">
-                <DashboardLayout>
-                    <MembersPage />
-                </DashboardLayout>
-            </ProtectedRoute>
-        ),
-    },
-    {
-        path: "/dashboard/tickets",
-        element: (
-            <ProtectedRoute requiredRole="agent">
-                <DashboardLayout>
-                    <TicketsPage />
-                </DashboardLayout>
-            </ProtectedRoute>
-        ),
-    },
-    {
-        path: "/dashboard/tickets/:ticketId",
-        element: (
-            <ProtectedRoute requiredRole="agent">
-                <DashboardLayout>
-                    <TicketDetailPage />
-                </DashboardLayout>
-            </ProtectedRoute>
-        ),
-    },
-    {
-        path: "/dashboard/contacts",
-        element: <Navigate to="/dashboard/contacts/all-contacts" replace />,
-    },
-    {
-        path: "/dashboard/contacts/all-contacts",
-        element: (
-            <ProtectedRoute requiredRole="agent">
-                <DashboardLayout>
-                    <ContactsPage />
-                </DashboardLayout>
-            </ProtectedRoute>
-        ),
-    },
-    {
-        path: "/dashboard/widget",
-        element: (
-            <ProtectedRoute requiredRole="admin">
-                <DashboardLayout>
-                    <WidgetPage />
-                </DashboardLayout>
-            </ProtectedRoute>
-        ),
-    },
-    {
-        path: "/dashboard/widget/qr",
-        element: (
-            <ProtectedRoute requiredRole="owner">
-                <DashboardLayout>
-                    <QRCodeGeneratorPage />
-                </DashboardLayout>
-            </ProtectedRoute>
-        ),
-    },
-    {
-        path: "/c/:publicKey",
-        element: <QRScannerLandingPage />,
-    },
-    {
-        path: "/dashboard/channels",
-        element: (
-            <ProtectedRoute requiredRole="admin">
-                <DashboardLayout>
-                    <ChannelsPage />
-                </DashboardLayout>
-            </ProtectedRoute>
-        ),
-    },
-    {
-        path: "/dashboard/channels/email",
-        element: (
-            <ProtectedRoute requiredRole="admin">
-                <DashboardLayout>
-                    <EmailChannelSetupPage />
-                </DashboardLayout>
-            </ProtectedRoute>
-        ),
-    },
-    {
-        path: "/dashboard/channels/whatsapp",
-        element: (
-            <ProtectedRoute requiredRole="admin">
-                <DashboardLayout>
-                    <WhatsAppChannelSetupPage />
-                </DashboardLayout>
-            </ProtectedRoute>
-        ),
-    },
-    {
-        path: "/dashboard/channels/telegram",
-        element: (
-            <ProtectedRoute requiredRole="admin">
-                <DashboardLayout>
-                    <TelegramChannelSetupPage />
-                </DashboardLayout>
-            </ProtectedRoute>
-        ),
-    },
-    {
-        path: "/dashboard/knowledge",
-        element: (
-            <DashboardLayout>
-                <Navigate to="/dashboard/knowledge/static" replace />
-            </DashboardLayout>
-        ),
-    },
-    {
-        path: "/dashboard/knowledge/static",
-        element: (
-            <ProtectedRoute requiredRole="admin">
-                <DashboardLayout>
-                    <KnowledgeStaticPage />
-                </DashboardLayout>
-            </ProtectedRoute>
-        ),
-    },
-    {
-        path: "/dashboard/knowledge/realtime",
-        element: (
-            <ProtectedRoute requiredRole="admin">
-                <DashboardLayout>
-                    <KnowledgeRealtimePage />
-                </DashboardLayout>
-            </ProtectedRoute>
-        ),
-    },
-    {
-        path: "/dashboard/settings",
-        element: <Navigate to="/dashboard/settings/general" replace />,
-    },
-    {
-        path: "/dashboard/settings/general",
-        element: (
-            <ProtectedRoute requiredRole="owner">
-                <DashboardLayout>
-                    <GeneralSettingsPage />
-                </DashboardLayout>
-            </ProtectedRoute>
-        ),
-    },
-    {
-        path: "/dashboard/settings/billing",
-        element: <Navigate to="/dashboard/settings/billing/plans" replace />,
-    },
-    {
-        path: "/dashboard/settings/billing/plans",
-        element: (
-            <ProtectedRoute requiredRole="owner">
-                <DashboardLayout>
-                    <PlansPage />
-                </DashboardLayout>
-            </ProtectedRoute>
-        ),
-    },
-    {
-        path: "/dashboard/settings/billing/usage",
-        element: (
-            <ProtectedRoute requiredRole="owner">
-                <DashboardLayout>
-                    <UsagePage />
-                </DashboardLayout>
-            </ProtectedRoute>
-        ),
-    },
-    {
-        path: "/dashboard/settings/billing/success",
-        element: (
-            <DashboardLayout>
-                <BillingSuccessPage />
-            </DashboardLayout>
-        ),
-    },
-    {
-        path: "/dashboard/settings/billing/failed",
-        element: (
-            <DashboardLayout>
-                <BillingFailedPage />
-            </DashboardLayout>
-        ),
-    },
+  {
+    path: "/dashboard/conversations",
+    element: <Navigate to="/dashboard/conversations/inbox/open" replace />,
+  },
+  {
+    path: "/dashboard/conversations/inbox",
+    element: <Navigate to="/dashboard/conversations/inbox/open" replace />,
+  },
+  {
+    path: "/dashboard/conversations/inbox/open",
+    element: (
+      <ProtectedRoute requiredRole="agent">
+        <DashboardLayout>
+          <ConversationLayout>
+            <ConversationsInboxPage mode="all" />
+          </ConversationLayout>
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/dashboard/conversations/inbox/assigned",
+    element: (
+      <ProtectedRoute requiredRole="agent">
+        <DashboardLayout>
+          <ConversationLayout>
+            <ConversationsInboxPage mode="mine" />
+          </ConversationLayout>
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/dashboard/conversations/inbox/chat/:conversationId",
+    element: (
+      <ProtectedRoute requiredRole="agent">
+        <DashboardLayout>
+          <ConversationLayout>
+            <ConversationChatPage />
+          </ConversationLayout>
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/dashboard/agents",
+    element: (
+      <ProtectedRoute requiredRole="admin">
+        <DashboardLayout>
+          <AgentsPage />
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/dashboard/members",
+    element: (
+      <ProtectedRoute requiredRole="admin">
+        <DashboardLayout>
+          <MembersPage />
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/dashboard/tickets",
+    element: (
+      <ProtectedRoute requiredRole="agent">
+        <DashboardLayout>
+          <TicketsPage />
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/dashboard/tickets/:ticketId",
+    element: (
+      <ProtectedRoute requiredRole="agent">
+        <DashboardLayout>
+          <TicketDetailPage />
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/dashboard/contacts",
+    element: <Navigate to="/dashboard/crm/contacts" replace />,
+  },
+  {
+    path: "/dashboard/contacts/all-contacts",
+    element: <Navigate to="/dashboard/crm/contacts" replace />,
+  },
+  {
+    path: "/dashboard/crm",
+    element: <Navigate to="/dashboard/crm/contacts" replace />,
+  },
+  {
+    path: "/dashboard/crm/contacts",
+    element: (
+      <ProtectedRoute requiredRole="agent">
+        <DashboardLayout>
+          <ContactsPage />
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/dashboard/crm/pipeline",
+    element: (
+      <ProtectedRoute requiredRole="agent">
+        <DashboardLayout>
+          <PipelinePage />
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/dashboard/crm/pipeline/:opportunityId",
+    element: (
+      <ProtectedRoute requiredRole="agent">
+        <DashboardLayout>
+          <OpportunityDetailsPage />
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/dashboard/widget",
+    element: (
+      <ProtectedRoute requiredRole="admin">
+        <DashboardLayout>
+          <WidgetPage />
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/dashboard/widget/qr",
+    element: (
+      <ProtectedRoute requiredRole="owner">
+        <DashboardLayout>
+          <QRCodeGeneratorPage />
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/c/:publicKey",
+    element: <QRScannerLandingPage />,
+  },
+  {
+    path: "/dashboard/channels",
+    element: (
+      <ProtectedRoute requiredRole="admin">
+        <DashboardLayout>
+          <ChannelsPage />
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/dashboard/channels/email",
+    element: (
+      <ProtectedRoute requiredRole="admin">
+        <DashboardLayout>
+          <EmailChannelSetupPage />
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/dashboard/channels/whatsapp",
+    element: (
+      <ProtectedRoute requiredRole="admin">
+        <DashboardLayout>
+          <WhatsAppChannelSetupPage />
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/dashboard/channels/telegram",
+    element: (
+      <ProtectedRoute requiredRole="admin">
+        <DashboardLayout>
+          <TelegramChannelSetupPage />
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/dashboard/knowledge",
+    element: (
+      <DashboardLayout>
+        <Navigate to="/dashboard/knowledge/static" replace />
+      </DashboardLayout>
+    ),
+  },
+  {
+    path: "/dashboard/knowledge/static",
+    element: (
+      <ProtectedRoute requiredRole="admin">
+        <DashboardLayout>
+          <KnowledgeStaticPage />
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/dashboard/knowledge/realtime",
+    element: (
+      <ProtectedRoute requiredRole="admin">
+        <DashboardLayout>
+          <KnowledgeRealtimePage />
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/dashboard/settings",
+    element: <Navigate to="/dashboard/settings/general" replace />,
+  },
+  {
+    path: "/dashboard/settings/general",
+    element: (
+      <ProtectedRoute requiredRole="owner">
+        <DashboardLayout>
+          <GeneralSettingsPage />
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/dashboard/settings/billing",
+    element: <Navigate to="/dashboard/settings/billing/plans" replace />,
+  },
+  {
+    path: "/dashboard/settings/billing/plans",
+    element: (
+      <ProtectedRoute requiredRole="owner">
+        <DashboardLayout>
+          <PlansPage />
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/dashboard/settings/billing/usage",
+    element: (
+      <ProtectedRoute requiredRole="owner">
+        <DashboardLayout>
+          <UsagePage />
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/dashboard/settings/billing/success",
+    element: (
+      <DashboardLayout>
+        <BillingSuccessPage />
+      </DashboardLayout>
+    ),
+  },
+  {
+    path: "/dashboard/settings/billing/failed",
+    element: (
+      <DashboardLayout>
+        <BillingFailedPage />
+      </DashboardLayout>
+    ),
+  },
 
-    {
-        path: "/dashboard/settings/danger-zone",
-        element: (
-            <ProtectedRoute requiredRole="owner">
-                <DashboardLayout>
-                    <DangerZonePage />
-                </DashboardLayout>
-            </ProtectedRoute>
-        ),
-    },
-    {
-        path: "/dashboard/organizations/create",
-        element: <Navigate to="/organizations/create" replace />,
-    },
-    {
-        path: "/dashboard/*",
-        element: (
-            <DashboardLayout>
-                <div className="flex h-screen w-full items-center justify-center">
-                    <h1 className="text-2xl font-bold">404 - Page Not Found</h1>
-                </div>
-            </DashboardLayout>
-        ),
-    },
-    {
-        path: "*",
-        element: (
-            <div className="flex h-screen w-full items-center justify-center">
-                <h1 className="text-2xl font-bold">404 - Page Not Found</h1>
-            </div>
-        )
-    }
+  {
+    path: "/dashboard/settings/danger-zone",
+    element: (
+      <ProtectedRoute requiredRole="owner">
+        <DashboardLayout>
+          <DangerZonePage />
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/dashboard/organizations/create",
+    element: <Navigate to="/organizations/create" replace />,
+  },
+  {
+    path: "/dashboard/*",
+    element: (
+      <DashboardLayout>
+        <div className="flex h-screen w-full items-center justify-center">
+          <h1 className="text-2xl font-bold">404 - Page Not Found</h1>
+        </div>
+      </DashboardLayout>
+    ),
+  },
+  {
+    path: "*",
+    element: (
+      <div className="flex h-screen w-full items-center justify-center">
+        <h1 className="text-2xl font-bold">404 - Page Not Found</h1>
+      </div>
+    ),
+  },
 ]);
 
 export default router;

@@ -1,10 +1,10 @@
 import { Router } from "express";
 import {
-	authenticate,
-	resolveOrganization,
-	requireRole,
-	validateRequest,
-	validateAiSecret,
+  authenticate,
+  resolveOrganization,
+  requireRole,
+  validateRequest,
+  validateAiSecret,
 } from "@shared/security/middleware";
 import { ContactsController } from "./contacts.controller";
 import { contactsSchema } from "./contacts.schema";
@@ -42,11 +42,7 @@ const router = Router();
  *       404:
  *         description: Contact not found
  */
-router.get(
-	"/ai/seek",
-	validateAiSecret,
-	ContactsController.aiSeekContact,
-);
+router.get("/ai/seek", validateAiSecret, ContactsController.aiSeekContact);
 
 // Internal endpoint called by AI tool (authenticated by shared secret header).
 
@@ -84,10 +80,10 @@ router.get(
  *         description: Contact upserted successfully
  */
 router.post(
-	"/ai/upsert",
-	validateAiSecret,
-	validateRequest(contactsSchema.upsertFromAI),
-	ContactsController.upsertFromAI,
+  "/ai/upsert",
+  validateAiSecret,
+  validateRequest(contactsSchema.upsertFromAI),
+  ContactsController.upsertFromAI,
 );
 
 // ─── Agent UI Routes (JWT required) ─────────────────────────────────────────
@@ -118,77 +114,90 @@ router.use(resolveOrganization);
  *         description: Successfully retrieved list of contacts
  */
 router.get(
-	"/",
-	validateRequest(contactsSchema.listContactsQuery, "query"),
-	requireRole("agent"),
-	ContactsController.listContacts,
-);
-
-router.delete(
-	"/",
-	validateRequest(contactsSchema.deleteContacts),
-	requireRole("agent"),
-	ContactsController.deleteContacts,
+  "/",
+  validateRequest(contactsSchema.listContactsQuery, "query"),
+  requireRole("agent"),
+  ContactsController.listContacts,
 );
 
 router.post(
-	"/tags",
-	validateRequest(contactsSchema.bulkAddTags),
-	requireRole("agent"),
-	ContactsController.bulkAddTags,
-);
-
-router.post(
-	"/:id/notes",
-	validateRequest(contactsSchema.addNote),
-	requireRole("agent"),
-	ContactsController.addNote,
-);
-
-router.patch(
-	"/:id/notes/:noteId",
-	validateRequest(contactsSchema.updateNote),
-	requireRole("agent"),
-	ContactsController.updateNote,
-);
-
-router.delete(
-	"/:id/notes/:noteId",
-	requireRole("agent"),
-	ContactsController.deleteNote,
-);
-
-router.post(
-	"/:id/tags",
-	validateRequest(contactsSchema.addTag),
-	requireRole("agent"),
-	ContactsController.addTag,
-);
-
-router.delete(
-	"/:id/tags/:tag",
-	requireRole("agent"),
-	ContactsController.removeTag,
+  "/",
+  validateRequest(contactsSchema.createContact),
+  requireRole("agent"),
+  ContactsController.createContact,
 );
 
 router.get(
-	"/conflicts",
-	requireRole("agent"),
-	ContactsController.listConflicts,
+  "/owners",
+  requireRole("agent"),
+  ContactsController.listContactOwners,
+);
+
+router.delete(
+  "/",
+  validateRequest(contactsSchema.deleteContacts),
+  requireRole("agent"),
+  ContactsController.deleteContacts,
 );
 
 router.post(
-	"/conflicts/:id/resolve",
-	validateRequest(contactsSchema.resolveConflict),
-	requireRole("agent"),
-	ContactsController.resolveConflict,
+  "/tags",
+  validateRequest(contactsSchema.bulkAddTags),
+  requireRole("agent"),
+  ContactsController.bulkAddTags,
+);
+
+router.post(
+  "/:id/notes",
+  validateRequest(contactsSchema.addNote),
+  requireRole("agent"),
+  ContactsController.addNote,
 );
 
 router.patch(
-	"/:id",
-	validateRequest(contactsSchema.updateContact),
-	requireRole("agent"),
-	ContactsController.updateContact,
+  "/:id/notes/:noteId",
+  validateRequest(contactsSchema.updateNote),
+  requireRole("agent"),
+  ContactsController.updateNote,
+);
+
+router.delete(
+  "/:id/notes/:noteId",
+  requireRole("agent"),
+  ContactsController.deleteNote,
+);
+
+router.post(
+  "/:id/tags",
+  validateRequest(contactsSchema.addTag),
+  requireRole("agent"),
+  ContactsController.addTag,
+);
+
+router.delete(
+  "/:id/tags/:tag",
+  requireRole("agent"),
+  ContactsController.removeTag,
+);
+
+router.get(
+  "/conflicts",
+  requireRole("agent"),
+  ContactsController.listConflicts,
+);
+
+router.post(
+  "/conflicts/:id/resolve",
+  validateRequest(contactsSchema.resolveConflict),
+  requireRole("agent"),
+  ContactsController.resolveConflict,
+);
+
+router.patch(
+  "/:id",
+  validateRequest(contactsSchema.updateContact),
+  requireRole("agent"),
+  ContactsController.updateContact,
 );
 
 export default router;

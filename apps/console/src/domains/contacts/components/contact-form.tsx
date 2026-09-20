@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -13,8 +13,28 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { User, Loader2, Edit2 } from "lucide-react";
 import { toast } from "sonner";
-import { useUpdateContact } from "../hooks/use-contacts";
+import { useContactOwners, useUpdateContact } from "../hooks/use-contacts";
 import { useUpdateContactAssociation } from "@/domains/conversation/hooks";
+import type {
+  ContactAcquisitionSource,
+  ContactChannel,
+  ContactLeadStatus,
+  ContactLifecycleStage,
+  ContactWritePayload,
+} from "../types/types";
+
+type ContactFormPayload = ContactWritePayload & {
+  name: string;
+  tags: string[];
+};
+
+const toLocalDateTime = (value?: string | null) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+};
 
 interface ContactFormProps {
   mode: "create" | "update";
@@ -24,17 +44,18 @@ interface ContactFormProps {
     phone?: string;
     company?: string;
     tags?: string[];
+    lifecycleStage?: ContactLifecycleStage;
+    leadStatus?: ContactLeadStatus;
+    ownerId?: string | null;
+    acquisitionSource?: ContactAcquisitionSource;
+    preferredChannel?: ContactChannel | null;
+    nextFollowUpAt?: string | null;
   };
-  onSubmit: (payload: {
-    name: string;
-    email?: string;
-    phone?: string;
-    company?: string;
-    tags: string[];
-  }) => void;
+  onSubmit: (payload: ContactFormPayload) => void | Promise<void>;
   onCancel: () => void;
   tagOptions: string[];
   loading?: boolean;
+  ownerOptions?: Array<{ id: string; name: string }>;
 }
 
 export function ContactForm({
@@ -44,28 +65,30 @@ export function ContactForm({
   onCancel,
   tagOptions,
   loading = false,
+  ownerOptions = [],
 }: ContactFormProps) {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [company, setCompany] = useState("");
-  const [tags, setTags] = useState<string[]>([]);
-
-  useEffect(() => {
-    if (initialValues) {
-      setName(initialValues.name || "");
-      setEmail(initialValues.email || "");
-      setPhone(initialValues.phone || "");
-      setCompany(initialValues.company || "");
-      setTags(initialValues.tags || []);
-    } else {
-      setName("");
-      setEmail("");
-      setPhone("");
-      setCompany("");
-      setTags([]);
-    }
-  }, [initialValues]);
+  const [name, setName] = useState(initialValues?.name || "");
+  const [email, setEmail] = useState(initialValues?.email || "");
+  const [phone, setPhone] = useState(initialValues?.phone || "");
+  const [company, setCompany] = useState(initialValues?.company || "");
+  const [tags, setTags] = useState<string[]>(initialValues?.tags || []);
+  const [lifecycleStage, setLifecycleStage] = useState<ContactLifecycleStage>(
+    initialValues?.lifecycleStage || "new",
+  );
+  const [leadStatus, setLeadStatus] = useState<ContactLeadStatus>(
+    initialValues?.leadStatus || "needs_review",
+  );
+  const [ownerId, setOwnerId] = useState(initialValues?.ownerId || "");
+  const [acquisitionSource, setAcquisitionSource] =
+    useState<ContactAcquisitionSource>(
+      initialValues?.acquisitionSource || "manual",
+    );
+  const [preferredChannel, setPreferredChannel] = useState<ContactChannel | "">(
+    initialValues?.preferredChannel || "",
+  );
+  const [nextFollowUpAt, setNextFollowUpAt] = useState(
+    toLocalDateTime(initialValues?.nextFollowUpAt),
+  );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,6 +98,14 @@ export function ContactForm({
       phone: phone.trim() || undefined,
       company: company.trim() || undefined,
       tags,
+      lifecycleStage,
+      leadStatus,
+      ownerId: ownerId || null,
+      acquisitionSource,
+      preferredChannel: preferredChannel || null,
+      nextFollowUpAt: nextFollowUpAt
+        ? new Date(nextFollowUpAt).toISOString()
+        : null,
     });
   };
 
@@ -129,6 +160,123 @@ export function ContactForm({
             className="cursor-text"
             disabled={loading}
           />
+        </div>
+      </div>
+
+      <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
+        <div>
+          <h3 className="text-sm font-semibold">CRM details</h3>
+          <p className="text-xs text-muted-foreground">
+            Track ownership, qualification, and the next action.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="grid gap-2">
+            <Label htmlFor="contact-lifecycle-stage">Lifecycle stage</Label>
+            <select
+              id="contact-lifecycle-stage"
+              value={lifecycleStage}
+              onChange={(event) =>
+                setLifecycleStage(event.target.value as ContactLifecycleStage)
+              }
+              disabled={loading}
+              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="new">New</option>
+              <option value="qualified">Qualified</option>
+              <option value="opportunity">Opportunity</option>
+              <option value="customer">Customer</option>
+              <option value="inactive">Inactive</option>
+              <option value="lost">Lost</option>
+            </select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="contact-lead-status">Lead status</Label>
+            <select
+              id="contact-lead-status"
+              value={leadStatus}
+              onChange={(event) =>
+                setLeadStatus(event.target.value as ContactLeadStatus)
+              }
+              disabled={loading}
+              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="needs_review">Needs review</option>
+              <option value="contacted">Contacted</option>
+              <option value="follow_up">Follow-up</option>
+              <option value="converted">Converted</option>
+              <option value="unqualified">Unqualified</option>
+            </select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="contact-owner">Contact owner</Label>
+            <select
+              id="contact-owner"
+              value={ownerId}
+              onChange={(event) => setOwnerId(event.target.value)}
+              disabled={loading}
+              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="">Unassigned</option>
+              {ownerOptions.map((owner) => (
+                <option key={owner.id} value={owner.id}>
+                  {owner.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="contact-source">Acquisition source</Label>
+            <select
+              id="contact-source"
+              value={acquisitionSource}
+              onChange={(event) =>
+                setAcquisitionSource(
+                  event.target.value as ContactAcquisitionSource,
+                )
+              }
+              disabled={loading}
+              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="manual">Manual</option>
+              <option value="widget">Widget</option>
+              <option value="email">Email</option>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="telegram">Telegram</option>
+              <option value="phone">Phone</option>
+              <option value="qr">QR</option>
+              <option value="unknown">Unknown</option>
+            </select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="contact-preferred-channel">Preferred channel</Label>
+            <select
+              id="contact-preferred-channel"
+              value={preferredChannel}
+              onChange={(event) =>
+                setPreferredChannel(event.target.value as ContactChannel | "")
+              }
+              disabled={loading}
+              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="">Not set</option>
+              <option value="widget">Widget</option>
+              <option value="email">Email</option>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="telegram">Telegram</option>
+              <option value="phone">Phone</option>
+            </select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="contact-next-follow-up">Next follow-up</Label>
+            <Input
+              id="contact-next-follow-up"
+              type="datetime-local"
+              value={nextFollowUpAt}
+              onChange={(event) => setNextFollowUpAt(event.target.value)}
+              disabled={loading}
+            />
+          </div>
         </div>
       </div>
 
@@ -192,17 +340,23 @@ interface ContactDialogProps {
     phone?: string;
     company?: string;
     tags?: string[];
+    lifecycleStage?: ContactLifecycleStage;
+    leadStatus?: ContactLeadStatus;
+    ownerId?: string | null;
+    acquisitionSource?: ContactAcquisitionSource;
+    preferredChannel?: ContactChannel | null;
+    nextFollowUpAt?: string | null;
   };
   triggerType?: "button" | "icon" | "custom";
   customTrigger?: React.ReactNode;
-  onSubmit?: (payload: {
+  onSubmit?: (payload: ContactFormPayload) => void | Promise<void>;
+  onSuccess?: (updatedContact: {
     name: string;
-    email?: string;
-    phone?: string;
-    company?: string;
+    email: string;
+    phone: string;
+    company: string;
     tags: string[];
   }) => void;
-  onSuccess?: (updatedContact: { name: string; email: string; phone: string; company: string; tags: string[] }) => void;
 }
 
 export function ContactDialog({
@@ -220,19 +374,24 @@ export function ContactDialog({
 
   const updateContactMutation = useUpdateContact();
   const associateContactMutation = useUpdateContactAssociation();
+  const { data: ownerOptions = [] } = useContactOwners();
 
   const TAG_OPTIONS = ["VIP", "Enterprise", "Trial", "Billing", "At Risk"];
 
-  const handleFormSubmit = async (payload: {
-    name: string;
-    email?: string;
-    phone?: string;
-    company?: string;
-    tags: string[];
-  }) => {
+  const handleFormSubmit = async (payload: ContactFormPayload) => {
     if (mode === "create") {
-      onSubmit?.(payload);
-      setOpen(false);
+      setLoading(true);
+      try {
+        await onSubmit?.(payload);
+        setOpen(false);
+        toast.success("Contact created successfully");
+      } catch (error: unknown) {
+        toast.error(
+          error instanceof Error ? error.message : "Failed to create contact",
+        );
+      } finally {
+        setLoading(false);
+      }
       return;
     }
 
@@ -242,8 +401,16 @@ export function ContactDialog({
     const trimmedCompany = payload.company?.trim() || "";
     const tags = payload.tags;
 
-    if (!trimmedName && !trimmedEmail && !trimmedPhone && !trimmedCompany && tags.length === 0) {
-      toast.error("Please provide at least a name, email address, phone number, company name, or tags to update.");
+    if (
+      !trimmedName &&
+      !trimmedEmail &&
+      !trimmedPhone &&
+      !trimmedCompany &&
+      tags.length === 0
+    ) {
+      toast.error(
+        "Please provide at least a name, email address, phone number, company name, or tags to update.",
+      );
       return;
     }
 
@@ -251,7 +418,9 @@ export function ContactDialog({
     try {
       if (!contactId || contactId === "temp-contact") {
         if (!conversationId) {
-          toast.error("Cannot associate contact: conversation context is missing.");
+          toast.error(
+            "Cannot associate contact: conversation context is missing.",
+          );
           setLoading(false);
           return;
         }
@@ -277,11 +446,11 @@ export function ContactDialog({
 
       await updateContactMutation.mutateAsync({
         id: contactId,
+        ...payload,
         name: trimmedName || undefined,
-        email: trimmedEmail || undefined,
-        phone: trimmedPhone || undefined,
-        company: trimmedCompany || undefined,
-        tags,
+        email: trimmedEmail,
+        phone: trimmedPhone,
+        company: trimmedCompany,
       });
 
       toast.success("Details updated successfully");
@@ -293,8 +462,10 @@ export function ContactDialog({
         company: trimmedCompany,
         tags,
       });
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to update details");
+    } catch (error: unknown) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to update details",
+      );
     } finally {
       setLoading(false);
     }
@@ -324,21 +495,26 @@ export function ContactDialog({
       <DialogContent className="sm:max-w-180">
         <DialogHeader>
           <DialogTitle>
-            {mode === "create" ? "Add new contact" : "Update Customer Information"}
+            {mode === "create"
+              ? "Add new contact"
+              : "Update Customer Information"}
           </DialogTitle>
           {mode === "create" && (
             <DialogDescription>
-              Capture customer details so agents can provide faster, more personal support.
+              Capture customer details so agents can provide faster, more
+              personal support.
             </DialogDescription>
           )}
         </DialogHeader>
         <ContactForm
+          key={`${mode}:${contactId || "new"}:${JSON.stringify(contact || {})}`}
           mode={mode}
           initialValues={contact}
           onSubmit={handleFormSubmit}
           onCancel={() => setOpen(false)}
           tagOptions={TAG_OPTIONS}
           loading={loading}
+          ownerOptions={ownerOptions}
         />
       </DialogContent>
     </Dialog>

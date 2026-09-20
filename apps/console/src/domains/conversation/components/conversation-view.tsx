@@ -308,14 +308,20 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
   const matchedContact = useMemo(() => {
     if (!conversation) return null;
     const conversationSessionId = conversation.sessionId;
-    
-    const email = conversation.metadata?.customer?.email || conversation.metadata?.senderEmail;
-    const phone = conversation.metadata?.customer?.phone || conversation.metadata?.visitorPhone;
+
+    const email =
+      conversation.metadata?.customer?.email ||
+      conversation.metadata?.senderEmail;
+    const phone =
+      conversation.metadata?.customer?.phone ||
+      conversation.metadata?.visitorPhone;
 
     const raw =
       contacts.find((c) => {
-        if (conversationSessionId && c.sessionId === conversationSessionId) return true;
-        if (email && c.email && c.email.toLowerCase() === email.toLowerCase()) return true;
+        if (conversationSessionId && c.sessionId === conversationSessionId)
+          return true;
+        if (email && c.email && c.email.toLowerCase() === email.toLowerCase())
+          return true;
         if (phone && c.phone && c.phone === phone) return true;
         return false;
       }) || null;
@@ -337,8 +343,8 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
 
     const displayEmail =
       email &&
-        email !== "anonymous@temp.local" &&
-        !email.endsWith("@anonymous.interaone")
+      email !== "anonymous@temp.local" &&
+      !email.endsWith("@anonymous.interaone")
         ? email
         : "";
 
@@ -351,6 +357,18 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
       company: conversation.metadata?.customer?.company || "",
       notes: [],
       tags: [],
+      lifecycleStage: "new" as const,
+      leadStatus: "needs_review" as const,
+      owner: null,
+      acquisitionSource: (conversation.channel || "unknown") as
+        | "widget"
+        | "email"
+        | "whatsapp"
+        | "telegram"
+        | "unknown",
+      preferredChannel: null,
+      nextFollowUpAt: null,
+      lastContactedAt: null,
       conversations: [],
       insights: {
         sentiment: "neutral" as const,
@@ -491,7 +509,9 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
           sock.off("assist:result");
           sock.disconnect();
         }
-        pendingRequests.current.forEach((req) => req.reject(new Error("Conversation changed")));
+        pendingRequests.current.forEach((req) =>
+          req.reject(new Error("Conversation changed")),
+        );
         pendingRequests.current.clear();
         if (isAgentTypingRef.current && sock) {
           try {
@@ -694,11 +714,24 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
   const personalizeTemplate = (content: string): string => {
     let result = content;
     result = result.replaceAll("{{customer_name}}", customerName || "there");
-    result = result.replaceAll("{{agent_name}}", user?.name || user?.email?.split("@")[0] || "Agent");
+    result = result.replaceAll(
+      "{{agent_name}}",
+      user?.name || user?.email?.split("@")[0] || "Agent",
+    );
     result = result.replaceAll("{{agent_email}}", user?.email || "");
-    result = result.replaceAll("{{channel}}", (conversation?.channel || "web").toLowerCase().replace(/_channel$/, ""));
+    result = result.replaceAll(
+      "{{channel}}",
+      (conversation?.channel || "web").toLowerCase().replace(/_channel$/, ""),
+    );
     result = result.replaceAll("{{org_name}}", orgName);
-    result = result.replaceAll("{{current_date}}", new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }));
+    result = result.replaceAll(
+      "{{current_date}}",
+      new Date().toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }),
+    );
     return result;
   };
 
@@ -1074,10 +1107,11 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
             <Button
               variant="ghost"
               size="icon-sm"
-              className={`h-8 w-8 cursor-pointer rounded-md ${isContactSidebarOpen
+              className={`h-8 w-8 cursor-pointer rounded-md ${
+                isContactSidebarOpen
                   ? "bg-muted text-foreground"
                   : "text-muted-foreground"
-                }`}
+              }`}
               onClick={() => setIsContactSidebarOpen(!isContactSidebarOpen)}
               aria-label={
                 isContactSidebarOpen
@@ -1100,19 +1134,21 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
         <div className="flex border-b border-border/70 bg-transparent px-4 shrink-0">
           <button
             onClick={() => setActiveTab("chat")}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors cursor-pointer ${activeTab === "chat"
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
+              activeTab === "chat"
                 ? "border-primary text-primary"
                 : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
+            }`}
           >
             Chat
           </button>
           <button
             onClick={() => setActiveTab("runs")}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors cursor-pointer ${activeTab === "runs"
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
+              activeTab === "runs"
                 ? "border-primary text-primary"
                 : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
+            }`}
           >
             Agent Execution Logs
           </button>
@@ -1131,10 +1167,11 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
                   {messages.map((message) => (
                     <div
                       key={message._id}
-                      className={`flex ${isAgentMessage(message)
+                      className={`flex ${
+                        isAgentMessage(message)
                           ? "justify-end"
                           : "justify-start"
-                        }`}
+                      }`}
                     >
                       <div
                         className={`max-w-[70%] px-4 py-3 rounded-lg ${getBubbleClass(message)}`}
@@ -1201,12 +1238,15 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
                           : "Type a message first"
                       }
                     >
-                      {isDraftAssistLoading && draftAssistMode === "variations" ? (
+                      {isDraftAssistLoading &&
+                      draftAssistMode === "variations" ? (
                         <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                       ) : (
                         <Shuffle className="mr-1.5 h-3.5 w-3.5" />
                       )}
-                      {isDraftAssistLoading && draftAssistMode === "variations" ? "Generating" : "Variations"}
+                      {isDraftAssistLoading && draftAssistMode === "variations"
+                        ? "Generating"
+                        : "Variations"}
                     </Button>
                     <Button
                       type="button"
@@ -1334,8 +1374,9 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
                             slashOptionRefs.current[index] = element;
                           }}
                           type="button"
-                          className={`flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-muted ${index === activeSlashIndex ? "bg-muted" : ""
-                            }`}
+                          className={`flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-muted ${
+                            index === activeSlashIndex ? "bg-muted" : ""
+                          }`}
                           onMouseDown={(event) => {
                             event.preventDefault();
                             replaceSlashCommandWithTemplate(template);
@@ -1369,7 +1410,11 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
                       value={newMessage}
                       onChange={handleInputChange}
                       onKeyDown={handleKeyPress}
-                      placeholder={isTicketReply ? "Reply via email..." : "Write a reply..."}
+                      placeholder={
+                        isTicketReply
+                          ? "Reply via email..."
+                          : "Write a reply..."
+                      }
                       className="min-h-[76px] flex-1 resize-none cursor-text rounded-none border-0 bg-transparent p-0 shadow-none focus-visible:border-transparent focus-visible:ring-0 text-foreground placeholder:text-muted-foreground/60 text-sm leading-relaxed"
                       disabled={isLoading}
                     />
@@ -1387,7 +1432,9 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
                 </div>
                 <div className="mt-1 flex justify-end">
                   <span className="text-xs text-slate-600 dark:text-zinc-400">
-                    {isTicketReply ? "Reply will be sent via email" : "Press Enter to send"}
+                    {isTicketReply
+                      ? "Reply will be sent via email"
+                      : "Press Enter to send"}
                   </span>
                 </div>
               </div>

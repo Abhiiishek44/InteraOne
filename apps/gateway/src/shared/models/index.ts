@@ -5,16 +5,66 @@ export { Conversation, IConversation } from "./Conversation";
 export { Message, IMessage } from "./Message";
 export { Widget, IWidget } from "./Widget";
 export { Knowledge, IKnowledge } from "./Knowledge";
-export { EmailTemplate, IEmailTemplate, EmailTemplateType } from "./EmailTemplate";
-export { Contact, IContact, ContactSource } from "./Contact";
-export { BillingWebhookEvent, IBillingWebhookEvent } from "./BillingWebhookEvent";
-export { BillingCheckoutIntent, IBillingCheckoutIntent } from "./BillingCheckoutIntent";
+export {
+  EmailTemplate,
+  IEmailTemplate,
+  EmailTemplateType,
+} from "./EmailTemplate";
+export {
+  Contact,
+  IContact,
+  ContactSource,
+  ContactLifecycleStage,
+  ContactLeadStatus,
+  ContactChannel,
+  ContactAcquisitionSource,
+} from "./Contact";
+export {
+  BillingWebhookEvent,
+  IBillingWebhookEvent,
+} from "./BillingWebhookEvent";
+export {
+  BillingCheckoutIntent,
+  IBillingCheckoutIntent,
+} from "./BillingCheckoutIntent";
 export { UsageRecord, IUsageRecord } from "./UsageRecord";
-export { BillingSubscription, IBillingSubscription, SubscriptionStatus } from "./BillingSubscription";
+export {
+  BillingSubscription,
+  IBillingSubscription,
+  SubscriptionStatus,
+} from "./BillingSubscription";
 export { Notification, INotification } from "./Notification";
 export { SystemEvent, ISystemEvent, EventCategory } from "./SystemEvent";
-export { Ticket, ITicket, TicketStatus, TicketPriority, TicketSource } from "./Ticket";
-export { Channel, IChannel, ChannelType, ChannelVerificationStatus, IDnsRecord, IEmailChannelConfig, IChannelConfig } from "./Channel";
+export {
+  Ticket,
+  ITicket,
+  TicketStatus,
+  TicketPriority,
+  TicketSource,
+} from "./Ticket";
+export {
+  Channel,
+  IChannel,
+  ChannelType,
+  ChannelVerificationStatus,
+  IDnsRecord,
+  IEmailChannelConfig,
+  IChannelConfig,
+} from "./Channel";
 export { ContactConflict, IContactConflict } from "./ContactConflict";
 export { UnansweredQuestion, IUnansweredQuestion } from "./UnansweredQuestion";
 export { Template, ITemplate } from "./Template";
+export {
+  Opportunity,
+  IOpportunity,
+  OpportunityStage,
+  OpportunityColor,
+} from "./Opportunity";
+export {
+  SalesPipeline,
+  ISalesPipeline,
+  IPipelineStage,
+  PipelineStageType,
+  PipelineStageColor,
+  DEFAULT_PIPELINE_STAGES,
+} from "./SalesPipeline";

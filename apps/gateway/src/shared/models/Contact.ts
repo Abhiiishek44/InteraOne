@@ -3,6 +3,30 @@ import { IOrganization } from "./Organization";
 
 export type ContactSource = "ai" | "widget" | "agent" | "owner" | "admin";
 export type ContactSentiment = "positive" | "neutral" | "negative";
+export type ContactLifecycleStage =
+  | "new"
+  | "qualified"
+  | "opportunity"
+  | "customer"
+  | "inactive"
+  | "lost";
+export type ContactLeadStatus =
+  | "needs_review"
+  | "contacted"
+  | "follow_up"
+  | "converted"
+  | "unqualified";
+export type ContactChannel =
+  | "widget"
+  | "email"
+  | "whatsapp"
+  | "telegram"
+  | "phone";
+export type ContactAcquisitionSource =
+  | ContactChannel
+  | "qr"
+  | "manual"
+  | "unknown";
 
 export interface IContactNote {
   id: string;
@@ -35,6 +59,13 @@ export interface IContact extends Document {
   company?: string;
   tags: string[];
   source: ContactSource;
+  lifecycleStage: ContactLifecycleStage;
+  leadStatus: ContactLeadStatus;
+  ownerId?: Types.ObjectId | null;
+  acquisitionSource: ContactAcquisitionSource;
+  preferredChannel?: ContactChannel | null;
+  nextFollowUpAt?: Date | null;
+  lastContactedAt?: Date | null;
   lastActivityAt: Date;
   notes: IContactNote[];
   conversations: IContactConversation[];
@@ -53,7 +84,11 @@ const contactSchema = new Schema<IContact>(
       index: true,
     },
     sessionId: { type: String, required: true, trim: true },
-    conversationId: { type: Schema.Types.ObjectId, ref: "Conversation", default: null },
+    conversationId: {
+      type: Schema.Types.ObjectId,
+      ref: "Conversation",
+      default: null,
+    },
     name: { type: String, required: true, trim: true, maxlength: 120 },
     email: { type: String, trim: true, lowercase: true },
     phone: { type: String, trim: true, maxlength: 40 },
@@ -64,6 +99,44 @@ const contactSchema = new Schema<IContact>(
       enum: ["ai", "widget", "agent", "owner", "admin"],
       default: "ai",
     },
+    lifecycleStage: {
+      type: String,
+      enum: ["new", "qualified", "opportunity", "customer", "inactive", "lost"],
+      default: "new",
+    },
+    leadStatus: {
+      type: String,
+      enum: [
+        "needs_review",
+        "contacted",
+        "follow_up",
+        "converted",
+        "unqualified",
+      ],
+      default: "needs_review",
+    },
+    ownerId: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    acquisitionSource: {
+      type: String,
+      enum: [
+        "widget",
+        "email",
+        "whatsapp",
+        "telegram",
+        "phone",
+        "qr",
+        "manual",
+        "unknown",
+      ],
+      default: "unknown",
+    },
+    preferredChannel: {
+      type: String,
+      enum: ["widget", "email", "whatsapp", "telegram", "phone", null],
+      default: null,
+    },
+    nextFollowUpAt: { type: Date, default: null },
+    lastContactedAt: { type: Date, default: null },
     lastActivityAt: { type: Date, default: Date.now },
     notes: [
       {
@@ -100,7 +173,12 @@ const contactSchema = new Schema<IContact>(
 );
 
 contactSchema.index({ organizationId: 1, sessionId: 1 }, { unique: true });
-contactSchema.index({ organizationId: 1, email: 1 }, { unique: true, sparse: true });
+contactSchema.index(
+  { organizationId: 1, email: 1 },
+  { unique: true, sparse: true },
+);
 contactSchema.index({ organizationId: 1, lastActivityAt: -1 });
+contactSchema.index({ organizationId: 1, lifecycleStage: 1, leadStatus: 1 });
+contactSchema.index({ organizationId: 1, ownerId: 1, nextFollowUpAt: 1 });
 
 export const Contact = mongoose.model<IContact>("Contact", contactSchema);
