@@ -35,10 +35,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/shared/ui/dialog";
-import {
-  useContacts,
-  useContactOwners,
-} from "@/domains/contacts/hooks/use-contacts";
+import { useContactOwners } from "@/domains/contacts/hooks/use-contacts";
 import { authApi } from "@/domains/auth/api/auth.api";
 import { OpportunityDialog } from "../components/opportunity-dialog";
 import { PipelineSettingsDialog } from "../components/pipeline-settings-dialog";
@@ -114,7 +111,6 @@ export function PipelinePage() {
   const canCustomizePipeline = orgRole === "owner" || orgRole === "admin";
   const { data: opportunities = [], isLoading } = useOpportunities();
   const { data: pipeline, isLoading: pipelineLoading } = useSalesPipeline();
-  const { data: contacts = [] } = useContacts();
   const { data: owners = [] } = useContactOwners();
   const moveOpportunityMutation = useMoveOpportunity();
   const addActivity = useAddOpportunityActivity();
@@ -313,11 +309,9 @@ export function PipelinePage() {
             visible.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={openCreate} disabled={pipelineLoading}>
-            <Plus className="mr-2 h-4 w-4" /> New opportunity
-          </Button>
-        </div>
+        <Button onClick={openCreate} disabled={pipelineLoading}>
+          <Plus className="mr-2 h-4 w-4" /> New opportunity
+        </Button>
       </header>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -955,7 +949,6 @@ export function PipelinePage() {
           open={createOpen}
           onOpenChange={setCreateOpen}
           stages={stages}
-          contacts={contacts}
           owners={owners}
         />
       )}

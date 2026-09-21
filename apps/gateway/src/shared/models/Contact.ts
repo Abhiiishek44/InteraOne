@@ -64,6 +64,7 @@ export interface IContact extends Document {
   ownerId?: Types.ObjectId | null;
   acquisitionSource: ContactAcquisitionSource;
   preferredChannel?: ContactChannel | null;
+  manualNextFollowUpAt?: Date | null;
   nextFollowUpAt?: Date | null;
   lastContactedAt?: Date | null;
   lastActivityAt: Date;
@@ -135,6 +136,7 @@ const contactSchema = new Schema<IContact>(
       enum: ["widget", "email", "whatsapp", "telegram", "phone", null],
       default: null,
     },
+    manualNextFollowUpAt: { type: Date, default: null },
     nextFollowUpAt: { type: Date, default: null },
     lastContactedAt: { type: Date, default: null },
     lastActivityAt: { type: Date, default: Date.now },

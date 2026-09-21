@@ -11,6 +11,13 @@ import {
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/shared/ui/select";
 import { User, Loader2, Edit2 } from "lucide-react";
 import { toast } from "sonner";
 import { useContactOwners, useUpdateContact } from "../hooks/use-contacts";
@@ -173,99 +180,116 @@ export function ContactForm({
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="grid gap-2">
             <Label htmlFor="contact-lifecycle-stage">Lifecycle stage</Label>
-            <select
-              id="contact-lifecycle-stage"
+            <Select
               value={lifecycleStage}
-              onChange={(event) =>
-                setLifecycleStage(event.target.value as ContactLifecycleStage)
+              onValueChange={(value) =>
+                setLifecycleStage(value as ContactLifecycleStage)
               }
               disabled={loading}
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
             >
-              <option value="new">New</option>
-              <option value="qualified">Qualified</option>
-              <option value="opportunity">Opportunity</option>
-              <option value="customer">Customer</option>
-              <option value="inactive">Inactive</option>
-              <option value="lost">Lost</option>
-            </select>
+              <SelectTrigger id="contact-lifecycle-stage">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="new">New</SelectItem>
+                <SelectItem value="qualified">Qualified</SelectItem>
+                <SelectItem value="opportunity">Opportunity</SelectItem>
+                <SelectItem value="customer">Customer</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+                <SelectItem value="lost">Lost</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="contact-lead-status">Lead status</Label>
-            <select
-              id="contact-lead-status"
+            <Select
               value={leadStatus}
-              onChange={(event) =>
-                setLeadStatus(event.target.value as ContactLeadStatus)
+              onValueChange={(value) =>
+                setLeadStatus(value as ContactLeadStatus)
               }
               disabled={loading}
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
             >
-              <option value="needs_review">Needs review</option>
-              <option value="contacted">Contacted</option>
-              <option value="follow_up">Follow-up</option>
-              <option value="converted">Converted</option>
-              <option value="unqualified">Unqualified</option>
-            </select>
+              <SelectTrigger id="contact-lead-status">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="needs_review">Needs review</SelectItem>
+                <SelectItem value="contacted">Contacted</SelectItem>
+                <SelectItem value="follow_up">Follow-up</SelectItem>
+                <SelectItem value="converted">Converted</SelectItem>
+                <SelectItem value="unqualified">Unqualified</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="contact-owner">Contact owner</Label>
-            <select
-              id="contact-owner"
-              value={ownerId}
-              onChange={(event) => setOwnerId(event.target.value)}
+            <Select
+              value={ownerId || "unassigned"}
+              onValueChange={(value) =>
+                setOwnerId(value === "unassigned" ? "" : value)
+              }
               disabled={loading}
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
             >
-              <option value="">Unassigned</option>
-              {ownerOptions.map((owner) => (
-                <option key={owner.id} value={owner.id}>
-                  {owner.name}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger id="contact-owner">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
+                {ownerOptions.map((owner) => (
+                  <SelectItem key={owner.id} value={owner.id}>
+                    {owner.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="contact-source">Acquisition source</Label>
-            <select
-              id="contact-source"
+            <Select
               value={acquisitionSource}
-              onChange={(event) =>
-                setAcquisitionSource(
-                  event.target.value as ContactAcquisitionSource,
-                )
+              onValueChange={(value) =>
+                setAcquisitionSource(value as ContactAcquisitionSource)
               }
               disabled={loading}
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
             >
-              <option value="manual">Manual</option>
-              <option value="widget">Widget</option>
-              <option value="email">Email</option>
-              <option value="whatsapp">WhatsApp</option>
-              <option value="telegram">Telegram</option>
-              <option value="phone">Phone</option>
-              <option value="qr">QR</option>
-              <option value="unknown">Unknown</option>
-            </select>
+              <SelectTrigger id="contact-source">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="manual">Manual</SelectItem>
+                <SelectItem value="widget">Widget</SelectItem>
+                <SelectItem value="email">Email</SelectItem>
+                <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                <SelectItem value="telegram">Telegram</SelectItem>
+                <SelectItem value="phone">Phone</SelectItem>
+                <SelectItem value="qr">QR</SelectItem>
+                <SelectItem value="unknown">Unknown</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="contact-preferred-channel">Preferred channel</Label>
-            <select
-              id="contact-preferred-channel"
-              value={preferredChannel}
-              onChange={(event) =>
-                setPreferredChannel(event.target.value as ContactChannel | "")
+            <Select
+              value={preferredChannel || "not_set"}
+              onValueChange={(value) =>
+                setPreferredChannel(
+                  value === "not_set" ? "" : (value as ContactChannel),
+                )
               }
               disabled={loading}
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
             >
-              <option value="">Not set</option>
-              <option value="widget">Widget</option>
-              <option value="email">Email</option>
-              <option value="whatsapp">WhatsApp</option>
-              <option value="telegram">Telegram</option>
-              <option value="phone">Phone</option>
-            </select>
+              <SelectTrigger id="contact-preferred-channel">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="not_set">Not set</SelectItem>
+                <SelectItem value="widget">Widget</SelectItem>
+                <SelectItem value="email">Email</SelectItem>
+                <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                <SelectItem value="telegram">Telegram</SelectItem>
+                <SelectItem value="phone">Phone</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="contact-next-follow-up">Next follow-up</Label>

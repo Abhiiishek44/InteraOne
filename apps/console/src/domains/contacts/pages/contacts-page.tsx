@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { ContactDetailsCard } from "../components/contact-details-card";
 import { Button } from "@/shared/ui/button";
@@ -33,19 +33,18 @@ import {
 } from "lucide-react";
 import { ContactDialog } from "@/domains/contacts/components/contact-form";
 import {
-  useContacts,
   usePendingConflicts,
   useResolveConflict,
   useDeleteContacts,
   useBulkAddTags,
   useCreateContact,
+  useContactsPage,
 } from "../hooks/use-contacts";
 import type {
   ContactListItem,
   Contact,
   ContactWritePayload,
 } from "../types/types";
-import { usePagination } from "@/shared/hooks/usePagination";
 import {
   Pagination,
   PaginationContent,
@@ -56,6 +55,8 @@ import {
   PaginationEllipsis,
 } from "@/shared/ui/pagination";
 import { DeleteConfirmDialog } from "@/shared/components/delete-confirm-dialog";
+import { SavedViewControls } from "@/domains/crm/components/saved-view-controls";
+import type { SavedViewState } from "@/domains/crm/types/saved-view";
 
 const TAG_OPTIONS = ["VIP", "Enterprise", "Trial", "Billing", "At Risk"];
 const SORT_OPTIONS = [
@@ -155,16 +156,28 @@ export function ContactsPage() {
   const [lifecycleFilter, setLifecycleFilter] = useState<string>("all");
   const [leadStatusFilter, setLeadStatusFilter] = useState<string>("all");
   const [sortValue, setSortValue] = useState("recent");
+  const [currentPage, setCurrentPage] = useState(1);
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isBulkTagDialogOpen, setIsBulkTagDialogOpen] = useState(false);
   const [bulkTagsInput, setBulkTagsInput] = useState("");
 
   const {
-    data: rawContacts = [],
+    data: contactsPage,
     isLoading: isLoadingContacts,
     error: loadErrorData,
-  } = useContacts();
+  } = useContactsPage({
+    search: searchValue,
+    page: currentPage,
+    limit: 10,
+    lifecycleStage: lifecycleFilter,
+    leadStatus: leadStatusFilter,
+    tags: tagFilters,
+    activityRange: activityFilter,
+    conversationRange: conversationFilter,
+    sort: sortValue,
+  });
+  const rawContacts = contactsPage?.contacts || [];
   const { data: conflicts = [] } = usePendingConflicts();
 
   const resolveConflictMutation = useResolveConflict();
@@ -179,126 +192,48 @@ export function ContactsPage() {
     [rawContacts],
   );
 
-  const filteredContacts = useMemo(() => {
-    const query = searchValue.trim().toLowerCase();
-    let result = contacts.filter((contact) => {
-      const matchesSearch =
-        !query ||
-        contact.name.toLowerCase().includes(query) ||
-        contact.email?.toLowerCase().includes(query) ||
-        contact.phone?.toLowerCase().includes(query) ||
-        contact.company?.toLowerCase().includes(query);
-
-      const tagMatch =
-        tagFilters.length === 0 ||
-        contact.tags.some((tag) =>
-          tagFilters.some(
-            (filterTag) => filterTag.toLowerCase() === tag.toLowerCase(),
-          ),
-        );
-
-      const activityMatch = (() => {
-        if (activityFilter === "all") return true;
-        if (!contact.lastActivity) return false;
-        const lastActivity = new Date(contact.lastActivity).getTime();
-        if (isNaN(lastActivity)) return false;
-        const hours = Math.max(
-          0,
-          (Date.now() - lastActivity) / (1000 * 60 * 60),
-        );
-        if (activityFilter === "24h") return hours <= 24;
-        if (activityFilter === "7d") return hours <= 24 * 7;
-        if (activityFilter === "30d") return hours <= 24 * 30;
-        if (activityFilter === "90d") return hours <= 24 * 90;
-        return true;
-      })();
-
-      const conversationMatch = (() => {
-        if (conversationFilter === "all") return true;
-        if (conversationFilter === "1-2") return contact.conversationCount <= 2;
-        if (conversationFilter === "3-10")
-          return (
-            contact.conversationCount >= 3 && contact.conversationCount <= 10
-          );
-        if (conversationFilter === "10+")
-          return contact.conversationCount >= 10;
-        return true;
-      })();
-
-      const lifecycleMatch =
-        lifecycleFilter === "all" || contact.lifecycleStage === lifecycleFilter;
-      const leadStatusMatch =
-        leadStatusFilter === "all" || contact.leadStatus === leadStatusFilter;
-
-      return (
-        matchesSearch &&
-        tagMatch &&
-        activityMatch &&
-        conversationMatch &&
-        lifecycleMatch &&
-        leadStatusMatch
-      );
-    });
-
-    result = [...result].sort((a, b) => {
-      if (sortValue === "name") return a.name.localeCompare(b.name);
-      if (sortValue === "conversations")
-        return b.conversationCount - a.conversationCount;
-      if (sortValue === "created")
-        return (
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
-      return (
-        new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime()
-      );
-    });
-
-    return result;
-  }, [
-    contacts,
-    searchValue,
-    tagFilters,
-    activityFilter,
-    conversationFilter,
-    lifecycleFilter,
-    leadStatusFilter,
-    sortValue,
-  ]);
-
-  const fallbackContactId = filteredContacts[0]?.id || "";
-  const persistedSelectedContact = contacts.find(
+  const filteredContacts = contacts;
+  const fallbackContactId = contacts[0]?.id || "";
+  const effectiveSelectedContactId = contacts.some(
     (contact) => contact.id === selectedContactId,
-  );
-  const effectiveSelectedContactId = persistedSelectedContact
+  )
     ? selectedContactId
     : fallbackContactId;
   const selectedContact = contacts.find(
     (contact) => contact.id === effectiveSelectedContactId,
   );
-  const selectedIsOutsideFilters = Boolean(
-    persistedSelectedContact &&
-    !filteredContacts.some((contact) => contact.id === selectedContactId),
-  );
-  const displayedContacts = useMemo(
-    () =>
-      selectedIsOutsideFilters && selectedContact
-        ? [selectedContact, ...filteredContacts]
-        : filteredContacts,
-    [filteredContacts, selectedContact, selectedIsOutsideFilters],
-  );
+  const displayedContacts = contacts;
+  const paginatedContacts = contacts;
+  const totalItems = contactsPage?.total || 0;
+  const totalPages = contactsPage?.totalPages || 1;
+  const startItem = totalItems === 0 ? 0 : (currentPage - 1) * 10 + 1;
+  const endItem = Math.min(currentPage * 10, totalItems);
+  const pageNumbers = useMemo(() => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+    const pages: Array<number | string> = [1];
+    if (currentPage > 3) pages.push("...");
+    for (
+      let page = Math.max(2, currentPage - 1);
+      page <= Math.min(totalPages - 1, currentPage + 1);
+      page += 1
+    ) {
+      pages.push(page);
+    }
+    if (currentPage < totalPages - 2) pages.push("...");
+    pages.push(totalPages);
+    return pages;
+  }, [currentPage, totalPages]);
+  const goToPage = (page: number) =>
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+  const goToNext = () => goToPage(currentPage + 1);
+  const goPrev = () => goToPage(currentPage - 1);
 
-  const {
-    currentItems: paginatedContacts,
-    currentPage,
-    totalPages,
-    pageNumbers,
-    goToPage,
-    goToNext,
-    goPrev,
-    startItem,
-    endItem,
-    totalItems,
-  } = usePagination(displayedContacts, 10, [
+  useEffect(() => {
+    const timeout = setTimeout(() => setCurrentPage(1), 0);
+    return () => clearTimeout(timeout);
+  }, [
     searchValue,
     tagFilters,
     activityFilter,
@@ -306,8 +241,27 @@ export function ContactsPage() {
     lifecycleFilter,
     leadStatusFilter,
     sortValue,
-    selectedIsOutsideFilters,
   ]);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => setSelectedContacts([]), 0);
+    return () => clearTimeout(timeout);
+  }, [
+    currentPage,
+    searchValue,
+    tagFilters,
+    activityFilter,
+    conversationFilter,
+    lifecycleFilter,
+    leadStatusFilter,
+    sortValue,
+  ]);
+
+  useEffect(() => {
+    if (!contactsPage || contactsPage.page === currentPage) return;
+    const timeout = setTimeout(() => setCurrentPage(contactsPage.page), 0);
+    return () => clearTimeout(timeout);
+  }, [contactsPage, currentPage]);
 
   const toggleBulkSelect = (id: string) => {
     setSelectedContacts((prev) =>
@@ -355,6 +309,7 @@ export function ContactsPage() {
     setConversationFilter("all");
     setLifecycleFilter("all");
     setLeadStatusFilter("all");
+    setCurrentPage(1);
   };
 
   const hasActiveFilters = Boolean(
@@ -365,6 +320,50 @@ export function ContactsPage() {
     lifecycleFilter !== "all" ||
     leadStatusFilter !== "all",
   );
+
+  const savedViewState = useMemo(
+    () => ({
+      search: searchValue,
+      tags: tagFilters,
+      activity: activityFilter,
+      conversations: conversationFilter,
+      lifecycle: lifecycleFilter,
+      leadStatus: leadStatusFilter,
+      sort: sortValue,
+    }),
+    [
+      activityFilter,
+      conversationFilter,
+      leadStatusFilter,
+      lifecycleFilter,
+      searchValue,
+      sortValue,
+      tagFilters,
+    ],
+  );
+
+  const applySavedView = (state: SavedViewState) => {
+    setSearchValue(typeof state.search === "string" ? state.search : "");
+    setTagFilters(
+      Array.isArray(state.tags)
+        ? state.tags.filter((tag): tag is string => typeof tag === "string")
+        : [],
+    );
+    setActivityFilter(
+      typeof state.activity === "string" ? state.activity : "all",
+    );
+    setConversationFilter(
+      typeof state.conversations === "string" ? state.conversations : "all",
+    );
+    setLifecycleFilter(
+      typeof state.lifecycle === "string" ? state.lifecycle : "all",
+    );
+    setLeadStatusFilter(
+      typeof state.leadStatus === "string" ? state.leadStatus : "all",
+    );
+    setSortValue(typeof state.sort === "string" ? state.sort : "recent");
+    setCurrentPage(1);
+  };
 
   const handleBulkDelete = async () => {
     if (selectedContacts.length === 0) return;
@@ -470,9 +469,14 @@ export function ContactsPage() {
           </p>
         </div>
         <div
-          className="flex items-center gap-2"
+          className="flex flex-wrap items-center gap-2"
           data-tour-id="page-contacts-primary-action"
         >
+          <SavedViewControls
+            entityType="contacts"
+            state={savedViewState}
+            onApply={applySavedView}
+          />
           <ContactDialog
             mode="create"
             onSubmit={handleAddContact}
@@ -618,7 +622,7 @@ export function ContactsPage() {
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-2 text-base font-semibold">
                   <Users className="h-4 w-4" />
-                  {filteredContacts.length} contacts
+                  {totalItems} contacts
                 </div>
                 <Select value={sortValue} onValueChange={setSortValue}>
                   <SelectTrigger className="w-52 cursor-pointer">
@@ -694,24 +698,6 @@ export function ContactsPage() {
                 </div>
               )}
 
-              {selectedIsOutsideFilters && selectedContact && (
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/[0.04] px-3 py-2 text-sm">
-                  <span>
-                    <strong>{selectedContact.name}</strong> is kept visible
-                    while it is open, but no longer matches the current filters.
-                  </span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={clearFilters}
-                    className="cursor-pointer"
-                  >
-                    Clear filters
-                  </Button>
-                </div>
-              )}
-
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -725,7 +711,7 @@ export function ContactsPage() {
                     onChange={toggleSelectAll}
                     className="accent-primary cursor-pointer"
                   />
-                  Select all
+                  Select page
                 </label>
                 <span>
                   Showing {startItem}-{endItem} of {totalItems} results
@@ -782,11 +768,11 @@ export function ContactsPage() {
                         <button
                           type="button"
                           onClick={() => setSelectedContactId(contact.id)}
-                          className="grid min-w-0 flex-1 cursor-pointer grid-cols-1 gap-3 text-left md:grid-cols-[1.2fr_1fr_1fr]"
+                          className="grid min-w-0 flex-1 cursor-pointer grid-cols-1 gap-y-3 text-left md:grid-cols-[minmax(200px,240px)_minmax(220px,250px)_minmax(160px,1fr)] md:gap-x-4"
                         >
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h3 className="font-semibold text-foreground">
+                          <div className="min-w-0">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <h3 className="truncate font-semibold text-foreground">
                                 {contact.name}
                               </h3>
                               <Badge
@@ -806,14 +792,14 @@ export function ContactsPage() {
                                   </Badge>
                                 )}
                             </div>
-                            <p className="text-sm text-muted-foreground">
+                            <p className="truncate text-sm text-muted-foreground">
                               {contact.email ||
                                 contact.phone ||
                                 "No contact info"}
                             </p>
                           </div>
-                          <div className="text-sm text-muted-foreground">
-                            <div className="font-medium text-foreground">
+                          <div className="min-w-0 text-sm text-muted-foreground">
+                            <div className="truncate font-medium text-foreground">
                               {contact.company || "Independent"}
                             </div>
                             <div className="mt-0.5 text-xs capitalize">
@@ -837,7 +823,7 @@ export function ContactsPage() {
                               )}
                             </div>
                           </div>
-                          <div className="text-sm text-muted-foreground">
+                          <div className="min-w-0 text-sm text-muted-foreground md:w-[200px] md:justify-self-end">
                             <div className="flex items-center gap-2">
                               <Clock className="h-4 w-4" />
                               <span>

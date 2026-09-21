@@ -6,6 +6,7 @@ import type {
   OpportunityStage,
   SalesPipeline,
   UpdatePipelinePayload,
+  UpdateOpportunityPayload,
 } from "../types/types";
 
 interface OpportunitiesResponse {
@@ -40,6 +41,14 @@ export const opportunitiesApi = {
 
   async create(payload: CreateOpportunityPayload): Promise<void> {
     await apiClient.post("/opportunities", payload);
+  },
+
+  async update(id: string, payload: UpdateOpportunityPayload): Promise<void> {
+    await apiClient.patch(`/opportunities/${id}`, payload);
+  },
+
+  async remove(id: string): Promise<void> {
+    await apiClient.delete(`/opportunities/${id}`);
   },
 
   async updateStage(id: string, stage: OpportunityStage): Promise<void> {
@@ -82,6 +91,23 @@ export const opportunitiesApi = {
   async completeActivity(id: string, activityId: string): Promise<void> {
     await apiClient.patch(
       `/opportunities/${id}/activities/${activityId}/complete`,
+    );
+  },
+
+  async updateNote(
+    id: string,
+    activityId: string,
+    content: string,
+  ): Promise<void> {
+    await apiClient.patch(
+      `/opportunities/${id}/activities/${encodeURIComponent(activityId)}`,
+      { content },
+    );
+  },
+
+  async deleteNote(id: string, activityId: string): Promise<void> {
+    await apiClient.delete(
+      `/opportunities/${id}/activities/${encodeURIComponent(activityId)}`,
     );
   },
 };

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { contactsApi } from "../api/contacts.api";
+import type { ContactListQuery } from "../api/contacts.api";
 import type {
   ContactListItem,
   ContactConflictItem,
@@ -11,6 +12,18 @@ export function useContacts() {
     queryKey: ["contacts"],
     queryFn: () => contactsApi.getContacts(),
     placeholderData: (previousContacts) => previousContacts,
+  });
+}
+
+export function useContactsPage(
+  query: ContactListQuery,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: ["contacts", "page", query],
+    queryFn: () => contactsApi.getContactsPage(query),
+    placeholderData: (previousPage) => previousPage,
+    enabled: options?.enabled ?? true,
   });
 }
 
@@ -40,10 +53,7 @@ export function useResolveConflict() {
       action: "apply" | "dismiss";
     }) => contactsApi.resolveConflict(conflictId, action),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ["contacts"],
-        exact: true,
-      });
+      await queryClient.invalidateQueries({ queryKey: ["contacts"] });
       queryClient.invalidateQueries({ queryKey: ["contacts", "conflicts"] });
     },
   });
@@ -54,10 +64,7 @@ export function useDeleteContacts() {
   return useMutation({
     mutationFn: (ids: string[]) => contactsApi.deleteContacts(ids),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ["contacts"],
-        exact: true,
-      });
+      await queryClient.invalidateQueries({ queryKey: ["contacts"] });
     },
   });
 }
@@ -68,10 +75,7 @@ export function useCreateContact() {
     mutationFn: (payload: ContactWritePayload & { name: string }) =>
       contactsApi.createContact(payload),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ["contacts"],
-        exact: true,
-      });
+      await queryClient.invalidateQueries({ queryKey: ["contacts"] });
     },
   });
 }
@@ -82,10 +86,7 @@ export function useBulkAddTags() {
     mutationFn: ({ ids, tags }: { ids: string[]; tags: string[] }) =>
       contactsApi.bulkAddTags(ids, tags),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ["contacts"],
-        exact: true,
-      });
+      await queryClient.invalidateQueries({ queryKey: ["contacts"] });
     },
   });
 }
@@ -96,10 +97,7 @@ export function useUpdateContact() {
     mutationFn: ({ id, ...payload }: ContactWritePayload & { id: string }) =>
       contactsApi.updateContact(id, payload),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ["contacts"],
-        exact: true,
-      });
+      await queryClient.invalidateQueries({ queryKey: ["contacts"] });
       queryClient.invalidateQueries({ queryKey: ["conversation"] });
     },
   });

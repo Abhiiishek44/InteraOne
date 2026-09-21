@@ -21,6 +21,10 @@ interface CreateOpportunityInput {
   nextAction?: string;
 }
 
+type UpdateOpportunityInput = Partial<
+  Omit<CreateOpportunityInput, "contactId" | "stage">
+>;
+
 export class OpportunitiesService {
   async getPipeline(organizationId: string) {
     const pipeline = await SalesPipeline.findOne({ organizationId }).lean();
@@ -212,6 +216,85 @@ export class OpportunitiesService {
     return opportunity;
   }
 
+  async update(
+    organizationId: string,
+    opportunityId: string,
+    input: UpdateOpportunityInput,
+  ) {
+    const orgId = new Types.ObjectId(organizationId);
+    if (input.ownerId) {
+      const membership = await Membership.exists({
+        organizationId: orgId,
+        userId: new Types.ObjectId(input.ownerId),
+        inviteStatus: "accepted",
+      });
+      if (!membership) {
+        throw new Error(
+          "Opportunity owner must be an active organization member",
+        );
+      }
+    }
+
+    const updates: Record<string, unknown> = {};
+    if (input.title !== undefined) updates.title = input.title.trim();
+    if (input.company !== undefined) updates.company = input.company.trim();
+    if (input.value !== undefined) updates.value = input.value;
+    if (input.currency !== undefined) updates.currency = input.currency;
+    if (input.ownerId !== undefined) {
+      updates.ownerId = input.ownerId
+        ? new Types.ObjectId(input.ownerId)
+        : null;
+    }
+    if (input.expectedCloseAt !== undefined) {
+      updates.expectedCloseAt = input.expectedCloseAt
+        ? new Date(input.expectedCloseAt)
+        : null;
+    }
+    if (input.nextAction !== undefined) {
+      updates.nextAction = input.nextAction.trim();
+    }
+
+    const opportunity = await Opportunity.findOneAndUpdate(
+      { _id: opportunityId, organizationId: orgId },
+      {
+        $set: updates,
+        $push: {
+          activities: {
+            $each: [
+              {
+                id: `activity-${Date.now()}`,
+                type: "status",
+                content: "Opportunity details updated",
+                createdAt: new Date(),
+              },
+            ],
+            $position: 0,
+          },
+        },
+      },
+      { new: true, runValidators: true },
+    );
+    if (!opportunity) throw new Error("Opportunity not found");
+    return opportunity;
+  }
+
+  async remove(organizationId: string, opportunityId: string) {
+    const opportunity = await Opportunity.findOneAndDelete({
+      _id: opportunityId,
+      organizationId,
+    });
+    if (!opportunity) throw new Error("Opportunity not found");
+
+    await this.syncContactFromOpportunities(
+      organizationId,
+      opportunity.contactId.toString(),
+    );
+    await this.syncContactNextFollowUp(
+      organizationId,
+      opportunity.contactId.toString(),
+    );
+  }
+
   async updateStage(
     organizationId: string,
     opportunityId: string,
@@ -305,6 +388,12 @@ export class OpportunitiesService {
       { new: true, runValidators: true },
     );
     if (!opportunity) throw new Error("Opportunity not found");
+    if (activity.dueAt) {
+      await this.syncContactNextFollowUp(
+        organizationId,
+        opportunity.contactId.toString(),
+      );
+    }
     return activity;
   }
 
@@ -333,7 +422,49 @@ export class OpportunitiesService {
       { new: true },
     );
     if (!opportunity) throw new Error("Activity not found");
+    await this.syncContactNextFollowUp(
+      organizationId,
+      opportunity.contactId.toString(),
+    );
     return opportunity;
+  }
+
+  async updateNote(
+    organizationId: string,
+    opportunityId: string,
+    activityId: string,
+    content: string,
+  ) {
+    const opportunity = await Opportunity.findOne({
+      _id: opportunityId,
+      organizationId,
+    });
+    const activity = opportunity?.activities.find(
+      (item) => item.id === activityId && item.type === "note",
+    );
+    if (!opportunity || !activity)
+      throw new Error("Opportunity note not found");
+    activity.content = content.trim();
+    await opportunity.save();
+    return activity;
+  }
+
+  async deleteNote(
+    organizationId: string,
+    opportunityId: string,
+    activityId: string,
+  ) {
+    const result = await Opportunity.updateOne(
+      {
+        _id: opportunityId,
+        organizationId,
+        activities: { $elemMatch: { id: activityId, type: "note" } },
+      },
+      { $pull: { activities: { id: activityId, type: "note" } } },
+    );
+    if (result.modifiedCount === 0) {
+      throw new Error("Opportunity note not found");
+    }
   }
 
   async move(
@@ -430,7 +561,12 @@ export class OpportunitiesService {
             organizationId,
             lifecycleStage: { $ne: "customer" },
           },
-          { $set: { lifecycleStage: "lost" } },
+          {
+            $set: {
+              lifecycleStage: "lost",
+              leadStatus: "unqualified",
+            },
+          },
         );
       }
       return;
@@ -438,7 +574,100 @@ export class OpportunitiesService {
 
     await Contact.updateOne(
       { _id: contactId, organizationId, lifecycleStage: { $ne: "customer" } },
-      { $set: { lifecycleStage: "opportunity" } },
+      { $set: { lifecycleStage: "opportunity", leadStatus: "follow_up" } },
+    );
+  }
+
+  private async syncContactNextFollowUp(
+    organizationId: string,
+    contactId: string,
+  ) {
+    const opportunities = await Opportunity.find({
+      organizationId,
+      contactId,
+      activities: {
+        $elemMatch: {
+          type: "planned",
+          completedAt: null,
+          dueAt: { $ne: null },
+        },
+      },
+    })
+      .select("activities")
+      .lean();
+    const pendingDates = opportunities.flatMap((item) =>
+      (item.activities || [])
+        .filter(
+          (activity) =>
+            activity.type === "planned" &&
+            !activity.completedAt &&
+            activity.dueAt,
+        )
+        .map((activity) => new Date(activity.dueAt!)),
+    );
+    const contact = await Contact.findOne({
+      _id: contactId,
+      organizationId,
+    })
+      .select("manualNextFollowUpAt nextFollowUpAt")
+      .lean();
+    const manualNextFollowUpAt =
+      contact?.manualNextFollowUpAt === undefined
+        ? contact?.nextFollowUpAt
+        : contact.manualNextFollowUpAt;
+    if (manualNextFollowUpAt) {
+      pendingDates.push(new Date(manualNextFollowUpAt));
+    }
+    const nextFollowUpAt = pendingDates.length
+      ? new Date(Math.min(...pendingDates.map((date) => date.getTime())))
+      : null;
+    await Contact.updateOne(
+      { _id: contactId, organizationId },
+      { $set: { nextFollowUpAt } },
+    );
+  }
+
+  private async syncContactFromOpportunities(
+    organizationId: string,
+    contactId: string,
+  ) {
+    const pipeline = await this.getPipeline(organizationId);
+    const opportunities = await Opportunity.find({
+      organizationId,
+      contactId,
+    })
+      .select("stage")
+      .lean();
+    const stageTypes = opportunities.map(
+      (item) =>
+        pipeline.stages.find((stage) => stage.id === item.stage)?.type ||
+        "open",
+    );
+
+    if (stageTypes.includes("won")) {
+      await Contact.updateOne(
+        { _id: contactId, organizationId },
+        { $set: { lifecycleStage: "customer", leadStatus: "converted" } },
+      );
+      return;
+    }
+    if (stageTypes.includes("open")) {
+      await Contact.updateOne(
+        { _id: contactId, organizationId, lifecycleStage: { $ne: "customer" } },
+        { $set: { lifecycleStage: "opportunity", leadStatus: "follow_up" } },
+      );
+      return;
+    }
+    if (stageTypes.includes("lost")) {
+      await Contact.updateOne(
+        { _id: contactId, organizationId, lifecycleStage: { $ne: "customer" } },
+        { $set: { lifecycleStage: "lost", leadStatus: "unqualified" } },
+      );
+      return;
+    }
+    await Contact.updateOne(
+      { _id: contactId, organizationId, lifecycleStage: "opportunity" },
+      { $set: { lifecycleStage: "qualified", leadStatus: "follow_up" } },
     );
   }
 }

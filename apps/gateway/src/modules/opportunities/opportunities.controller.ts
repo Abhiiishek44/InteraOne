@@ -47,6 +47,30 @@ export class OpportunitiesController {
     }
   }
 
+  static async update(req: Request, res: Response) {
+    try {
+      const opportunity = await service.update(
+        getOrgId(req),
+        req.params.id as string,
+        req.body,
+      );
+      sendResponse(res, 200, true, "Opportunity updated", { opportunity });
+    } catch (error: any) {
+      const status = error.message === "Opportunity not found" ? 404 : 400;
+      sendError(res, status, error.message || "Failed to update opportunity");
+    }
+  }
+
+  static async remove(req: Request, res: Response) {
+    try {
+      await service.remove(getOrgId(req), req.params.id as string);
+      sendResponse(res, 200, true, "Opportunity deleted");
+    } catch (error: any) {
+      const status = error.message === "Opportunity not found" ? 404 : 400;
+      sendError(res, status, error.message || "Failed to delete opportunity");
+    }
+  }
+
   static async updateStage(req: Request, res: Response) {
     try {
       const opportunity = await service.updateStage(
@@ -153,6 +177,43 @@ export class OpportunitiesController {
     } catch (error: any) {
       const status = error.message === "Activity not found" ? 404 : 400;
       sendError(res, status, error.message || "Failed to complete activity");
+    }
+  }
+
+  static async updateNote(req: Request, res: Response) {
+    try {
+      const activity = await service.updateNote(
+        getOrgId(req),
+        req.params.id as string,
+        req.params.activityId as string,
+        req.body.content,
+      );
+      sendResponse(res, 200, true, "Opportunity note updated", { activity });
+    } catch (error: any) {
+      const status = error.message === "Opportunity note not found" ? 404 : 400;
+      sendError(
+        res,
+        status,
+        error.message || "Failed to update opportunity note",
+      );
+    }
+  }
+
+  static async deleteNote(req: Request, res: Response) {
+    try {
+      await service.deleteNote(
+        getOrgId(req),
+        req.params.id as string,
+        req.params.activityId as string,
+      );
+      sendResponse(res, 200, true, "Opportunity note deleted");
+    } catch (error: any) {
+      const status = error.message === "Opportunity note not found" ? 404 : 400;
+      sendError(
+        res,
+        status,
+        error.message || "Failed to delete opportunity note",
+      );
     }
   }
 }

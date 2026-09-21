@@ -68,3 +68,8 @@ export {
   PipelineStageColor,
   DEFAULT_PIPELINE_STAGES,
 } from "./SalesPipeline";
+export {
+  CrmSavedView,
+  ICrmSavedView,
+  CrmSavedViewEntity,
+} from "./CrmSavedView";

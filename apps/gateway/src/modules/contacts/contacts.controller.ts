@@ -12,8 +12,9 @@ function getOrgId(req: Request): string {
 export class ContactsController {
   static async listContacts(req: Request, res: Response): Promise<void> {
     try {
-      const items = await contactsService.listContacts(getOrgId(req), {
+      const result = await contactsService.listContacts(getOrgId(req), {
         search: (req.query.q as string) || undefined,
+        page: req.query.page ? parseInt(String(req.query.page), 10) : undefined,
         limit: req.query.limit
           ? parseInt(String(req.query.limit), 10)
           : undefined,
@@ -21,11 +22,37 @@ export class ContactsController {
         leadStatus: (req.query.leadStatus as string) || undefined,
         ownerId: (req.query.ownerId as string) || undefined,
         followUp: req.query.followUp as "overdue" | "upcoming" | undefined,
+        tags: req.query.tags
+          ? String(req.query.tags)
+              .split(",")
+              .map((tag) => tag.trim())
+              .filter(Boolean)
+          : undefined,
+        activityRange: req.query.activityRange as
+          | "24h"
+          | "7d"
+          | "30d"
+          | "90d"
+          | undefined,
+        conversationRange: req.query.conversationRange as
+          | "1-2"
+          | "3-10"
+          | "10+"
+          | undefined,
+        sort: req.query.sort as
+          | "name"
+          | "recent"
+          | "conversations"
+          | "created"
+          | undefined,
       });
 
       sendResponse(res, 200, true, "Contacts retrieved", {
-        contacts: items,
-        total: items.length,
+        contacts: result.contacts,
+        total: result.total,
+        page: result.page,
+        limit: result.limit,
+        totalPages: result.totalPages,
       });
     } catch (error: any) {
       sendError(res, 500, error.message || "Failed to list contacts");
@@ -152,10 +179,11 @@ export class ContactsController {
         return;
       }
 
-      const contacts = await contactsService.listContacts(organizationId, {
+      const result = await contactsService.listContacts(organizationId, {
         search: email || phone || name,
         limit: 5,
       });
+      const contacts = result.contacts;
 
       const found = contacts.length > 0;
       sendResponse(

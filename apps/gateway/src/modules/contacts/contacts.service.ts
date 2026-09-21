@@ -6,6 +6,9 @@ import {
   Message,
   ContactConflict,
   Membership,
+  Opportunity,
+  SalesPipeline,
+  DEFAULT_PIPELINE_STAGES,
 } from "@shared/models";
 import {
   ContactWriteInput,
@@ -20,11 +23,15 @@ export class ContactsService {
     options: ListContactsOptions = {},
   ) {
     const limit = Math.min(Math.max(options.limit || 100, 1), 300);
+    const page = Math.max(options.page || 1, 1);
     const query: Record<string, unknown> = { organizationId };
 
     if (options.search?.trim()) {
       const term = options.search.trim();
-      const regex = new RegExp(term, "i");
+      const regex = new RegExp(
+        term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+        "i",
+      );
       query.$or = [
         { name: regex },
         { email: regex },
@@ -45,7 +52,6 @@ export class ContactsService {
     const contacts = await Contact.find(query)
       .populate("ownerId", "name email")
       .sort({ lastActivityAt: -1 })
-      .limit(limit)
       .lean();
 
     const sessionIds = contacts.map((c) => c.sessionId).filter(Boolean);
@@ -137,7 +143,7 @@ export class ContactsService {
       });
     }
 
-    return contacts.map((contact) => {
+    let items = contacts.map((contact) => {
       const contactConversations = getContactConversations(contact);
       const contactConflicts = conflictsMap.get(contact._id.toString()) || [];
 
@@ -227,6 +233,69 @@ export class ContactsService {
         updatedAt: (contact.updatedAt || contact.createdAt).toISOString(),
       };
     });
+
+    if (options.tags?.length) {
+      const selectedTags = new Set(
+        options.tags.map((tag) => tag.trim().toLowerCase()),
+      );
+      items = items.filter((contact) =>
+        contact.tags.some((tag) => selectedTags.has(tag.toLowerCase())),
+      );
+    }
+
+    if (options.activityRange) {
+      const hoursByRange = { "24h": 24, "7d": 168, "30d": 720, "90d": 2160 };
+      const cutoff =
+        Date.now() - hoursByRange[options.activityRange] * 60 * 60 * 1000;
+      items = items.filter(
+        (contact) => new Date(contact.lastActivity).getTime() >= cutoff,
+      );
+    }
+
+    if (options.conversationRange) {
+      items = items.filter((contact) => {
+        if (options.conversationRange === "1-2") {
+          return (
+            contact.conversationCount >= 1 && contact.conversationCount <= 2
+          );
+        }
+        if (options.conversationRange === "3-10") {
+          return (
+            contact.conversationCount >= 3 && contact.conversationCount <= 10
+          );
+        }
+        return contact.conversationCount >= 10;
+      });
+    }
+
+    items.sort((left, right) => {
+      if (options.sort === "name") return left.name.localeCompare(right.name);
+      if (options.sort === "conversations") {
+        return right.conversationCount - left.conversationCount;
+      }
+      if (options.sort === "created") {
+        return (
+          new Date(right.createdAt).getTime() -
+          new Date(left.createdAt).getTime()
+        );
+      }
+      return (
+        new Date(right.lastActivity).getTime() -
+        new Date(left.lastActivity).getTime()
+      );
+    });
+
+    const total = items.length;
+    const totalPages = Math.max(Math.ceil(total / limit), 1);
+    const resolvedPage = Math.min(page, totalPages);
+    const start = (resolvedPage - 1) * limit;
+    return {
+      contacts: items.slice(start, start + limit),
+      total,
+      page: resolvedPage,
+      limit,
+      totalPages,
+    };
   }
 
   private async validateOwner(
@@ -287,6 +356,9 @@ export class ContactsService {
       acquisitionSource: data.acquisitionSource || "manual",
       preferredChannel: data.preferredChannel || null,
       nextFollowUpAt: data.nextFollowUpAt
+        ? new Date(data.nextFollowUpAt)
+        : null,
+      manualNextFollowUpAt: data.nextFollowUpAt
         ? new Date(data.nextFollowUpAt)
         : null,
       lastContactedAt: data.lastContactedAt
@@ -900,9 +972,10 @@ export class ContactsService {
     if (preferredChannel !== undefined)
       updateFields.preferredChannel = preferredChannel || null;
     if (nextFollowUpAt !== undefined) {
-      updateFields.nextFollowUpAt = nextFollowUpAt
+      updateFields.manualNextFollowUpAt = nextFollowUpAt
         ? new Date(nextFollowUpAt)
         : null;
+      updateFields.nextFollowUpAt = updateFields.manualNextFollowUpAt;
     }
     if (lastContactedAt !== undefined) {
       updateFields.lastContactedAt = lastContactedAt
@@ -922,6 +995,61 @@ export class ContactsService {
       { new: true, runValidators: true },
     ).populate("ownerId", "name email");
     if (!updated) throw new Error("Contact not found");
+
+    if (nextFollowUpAt !== undefined) {
+      const opportunities = await Opportunity.find({
+        organizationId: new Types.ObjectId(organizationId),
+        contactId: new Types.ObjectId(contactId),
+      })
+        .select("activities")
+        .lean();
+      const pendingDates = opportunities.flatMap((opportunity) =>
+        (opportunity.activities || [])
+          .filter(
+            (activity) =>
+              activity.type === "planned" &&
+              !activity.completedAt &&
+              activity.dueAt,
+          )
+          .map((activity) => new Date(activity.dueAt!)),
+      );
+      if (nextFollowUpAt) pendingDates.push(new Date(nextFollowUpAt));
+      updated.nextFollowUpAt = pendingDates.length
+        ? new Date(Math.min(...pendingDates.map((date) => date.getTime())))
+        : null;
+      await updated.save();
+    }
+
+    if (
+      (lifecycleStage !== undefined || leadStatus !== undefined) &&
+      updated.lifecycleStage !== "customer"
+    ) {
+      const [pipeline, linkedOpportunities] = await Promise.all([
+        SalesPipeline.findOne({ organizationId }).lean(),
+        Opportunity.find({ organizationId, contactId }).select("stage").lean(),
+      ]);
+      if (linkedOpportunities.length > 0) {
+        const stages = pipeline?.stages?.length
+          ? pipeline.stages
+          : DEFAULT_PIPELINE_STAGES;
+        const stageTypes = linkedOpportunities.map(
+          (opportunity) =>
+            stages.find((stage) => stage.id === opportunity.stage)?.type ||
+            "open",
+        );
+        if (stageTypes.includes("won")) {
+          updated.lifecycleStage = "customer";
+          updated.leadStatus = "converted";
+        } else if (stageTypes.includes("open")) {
+          updated.lifecycleStage = "opportunity";
+          updated.leadStatus = "follow_up";
+        } else {
+          updated.lifecycleStage = "lost";
+          updated.leadStatus = "unqualified";
+        }
+        await updated.save();
+      }
+    }
 
     return updated;
   }

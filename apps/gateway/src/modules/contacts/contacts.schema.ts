@@ -36,11 +36,16 @@ const acquisitionSource = Joi.string().valid(
 export const contactsSchema = {
   listContactsQuery: Joi.object({
     q: Joi.string().trim().max(200).allow(""),
+    page: Joi.number().integer().min(1),
     limit: Joi.number().integer().min(1).max(300),
     lifecycleStage,
     leadStatus,
     ownerId: Joi.string().hex().length(24),
     followUp: Joi.string().valid("overdue", "upcoming"),
+    tags: Joi.string().trim().max(500).allow(""),
+    activityRange: Joi.string().valid("24h", "7d", "30d", "90d"),
+    conversationRange: Joi.string().valid("1-2", "3-10", "10+"),
+    sort: Joi.string().valid("name", "recent", "conversations", "created"),
   }),
 
   createContact: Joi.object({

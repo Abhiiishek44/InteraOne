@@ -22,7 +22,30 @@ interface ContactsResponse {
   data: {
     contacts: ContactListItem[];
     total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
   };
+}
+
+export interface ContactListQuery {
+  search?: string;
+  page?: number;
+  limit?: number;
+  lifecycleStage?: string;
+  leadStatus?: string;
+  tags?: string[];
+  activityRange?: string;
+  conversationRange?: string;
+  sort?: string;
+}
+
+export interface ContactListPage {
+  contacts: ContactListItem[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 }
 
 interface ConflictsResponse {
@@ -33,8 +56,42 @@ interface ConflictsResponse {
 
 class ContactsApi {
   async getContacts(): Promise<ContactListItem[]> {
-    const response = await apiClient.get<ContactsResponse>("/contacts");
+    const response = await apiClient.get<ContactsResponse>(
+      "/contacts?limit=300",
+    );
     return response.data?.contacts || [];
+  }
+
+  async getContactsPage(query: ContactListQuery): Promise<ContactListPage> {
+    const params = new URLSearchParams();
+    if (query.search?.trim()) params.set("q", query.search.trim());
+    if (query.page) params.set("page", String(query.page));
+    if (query.limit) params.set("limit", String(query.limit));
+    if (query.lifecycleStage && query.lifecycleStage !== "all") {
+      params.set("lifecycleStage", query.lifecycleStage);
+    }
+    if (query.leadStatus && query.leadStatus !== "all") {
+      params.set("leadStatus", query.leadStatus);
+    }
+    if (query.tags?.length) params.set("tags", query.tags.join(","));
+    if (query.activityRange && query.activityRange !== "all") {
+      params.set("activityRange", query.activityRange);
+    }
+    if (query.conversationRange && query.conversationRange !== "all") {
+      params.set("conversationRange", query.conversationRange);
+    }
+    if (query.sort) params.set("sort", query.sort);
+
+    const response = await apiClient.get<ContactsResponse>(
+      `/contacts?${params.toString()}`,
+    );
+    return {
+      contacts: response.data?.contacts || [],
+      total: response.data?.total || 0,
+      page: response.data?.page || query.page || 1,
+      limit: response.data?.limit || query.limit || 10,
+      totalPages: response.data?.totalPages || 1,
+    };
   }
 
   async createContact(

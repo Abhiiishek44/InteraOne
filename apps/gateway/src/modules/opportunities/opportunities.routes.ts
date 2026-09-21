@@ -25,6 +25,12 @@ router.post(
   OpportunitiesController.create,
 );
 router.patch(
+  "/:id",
+  validateRequest(opportunitiesSchema.update),
+  OpportunitiesController.update,
+);
+router.delete("/:id", OpportunitiesController.remove);
+router.patch(
   "/:id/priority",
   validateRequest(opportunitiesSchema.updatePriority),
   OpportunitiesController.updatePriority,
@@ -32,6 +38,15 @@ router.patch(
 router.patch(
   "/:id/activities/:activityId/complete",
   OpportunitiesController.completeActivity,
+);
+router.patch(
+  "/:id/activities/:activityId",
+  validateRequest(opportunitiesSchema.updateNote),
+  OpportunitiesController.updateNote,
+);
+router.delete(
+  "/:id/activities/:activityId",
+  OpportunitiesController.deleteNote,
 );
 router.patch(
   "/:id/stage",

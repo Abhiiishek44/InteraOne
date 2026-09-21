@@ -13,7 +13,9 @@ import {
   Mail,
   MessageSquare,
   Phone,
+  Pencil,
   Plus,
+  Trash2,
   UserRound,
   SquareCheckBig,
   Video,
@@ -34,13 +36,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/shared/ui/dialog";
-import { useContacts } from "@/domains/contacts/hooks/use-contacts";
+import {
+  useContactOwners,
+  useContacts,
+} from "@/domains/contacts/hooks/use-contacts";
+import { DeleteConfirmDialog } from "@/shared/components/delete-confirm-dialog";
+import { OpportunityDialog } from "../components/opportunity-dialog";
 import {
   useAddOpportunityActivity,
   useCompleteOpportunityActivity,
+  useDeleteOpportunity,
+  useDeleteOpportunityNote,
   useOpportunities,
   useSalesPipeline,
   useUpdateOpportunityNextAction,
+  useUpdateOpportunityNote,
   useUpdateOpportunityStage,
 } from "../hooks/use-opportunities";
 import type { Opportunity } from "../types/types";
@@ -90,16 +100,25 @@ export function OpportunityDetailsPage() {
   const { opportunityId } = useParams<{ opportunityId: string }>();
   const { data: opportunities = [], isLoading } = useOpportunities();
   const { data: contacts = [] } = useContacts();
+  const { data: owners = [] } = useContactOwners();
   const { data: pipeline, isLoading: pipelineLoading } = useSalesPipeline();
   const updateStage = useUpdateOpportunityStage();
   const updateNextAction = useUpdateOpportunityNextAction();
   const addActivity = useAddOpportunityActivity();
   const completeActivity = useCompleteOpportunityActivity();
+  const deleteOpportunity = useDeleteOpportunity();
+  const updateOpportunityNote = useUpdateOpportunityNote();
+  const deleteOpportunityNote = useDeleteOpportunityNote();
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [nextActionEdit, setNextActionEdit] = useState<{
     opportunityId: string;
     value: string;
   }>();
   const [activityDraft, setActivityDraft] = useState("");
+  const [editingNoteId, setEditingNoteId] = useState<string>();
+  const [noteToDelete, setNoteToDelete] =
+    useState<Opportunity["activities"][number]>();
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(
@@ -135,9 +154,7 @@ export function OpportunityDetailsPage() {
   const plannedActivities = (opportunity?.activities || []).filter(
     (activity) => activity.type === "planned" && !activity.completedAt,
   );
-  const activityTimeline = (opportunity?.activities || []).filter(
-    (activity) => activity.type !== "planned" || activity.completedAt,
-  );
+  const activityTimeline = opportunity?.activities || [];
 
   const scheduleActivity = async () => {
     if (!opportunity || !scheduleTitle.trim() || !scheduleAt) return;
@@ -254,14 +271,36 @@ export function OpportunityDetailsPage() {
     const content = activityDraft.trim();
     if (!opportunity || !content) return;
     try {
-      await addActivity.mutateAsync({ id: opportunity.id, content });
+      if (editingNoteId) {
+        await updateOpportunityNote.mutateAsync({
+          id: opportunity.id,
+          activityId: editingNoteId,
+          content,
+        });
+      } else {
+        await addActivity.mutateAsync({ id: opportunity.id, content });
+      }
       setActivityDraft("");
-      toast.success("Activity recorded");
+      setEditingNoteId(undefined);
+      toast.success(editingNoteId ? "Note updated" : "Note added");
     } catch (error: unknown) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to record activity",
+        error instanceof Error ? error.message : "Failed to save note",
       );
     }
+  };
+
+  const startEditingNote = (activity: Opportunity["activities"][number]) => {
+    setEditingNoteId(activity.id);
+    setActivityDraft(activity.content);
+    requestAnimationFrame(() =>
+      document.getElementById("opportunity-activity-composer")?.focus(),
+    );
+  };
+
+  const cancelEditingNote = () => {
+    setEditingNoteId(undefined);
+    setActivityDraft("");
   };
 
   const changeStage = async (stage: string) => {
@@ -332,6 +371,9 @@ export function OpportunityDetailsPage() {
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
+            <Pencil className="mr-2 h-4 w-4" /> Edit
+          </Button>
           <Button
             size="sm"
             variant="outline"
@@ -382,6 +424,14 @@ export function OpportunityDetailsPage() {
             }
           >
             Log note
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setDeleteOpen(true)}
+            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+          >
+            <Trash2 className="mr-2 h-4 w-4" /> Delete
           </Button>
         </div>
       </header>
@@ -514,24 +564,42 @@ export function OpportunityDetailsPage() {
       <Card>
         <CardContent className="p-5">
           <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold">
-            <Clock3 className="h-4 w-4" /> Record activity
+            <Clock3 className="h-4 w-4" /> Opportunity notes
           </h2>
           <div className="flex gap-3">
             <Textarea
               id="opportunity-activity-composer"
               value={activityDraft}
               onChange={(event) => setActivityDraft(event.target.value)}
-              placeholder="Record a call, meeting, email, or follow-up note…"
+              placeholder={
+                editingNoteId
+                  ? "Update this internal note…"
+                  : "Add an internal note about this opportunity…"
+              }
               maxLength={2000}
               className="min-h-20 resize-none"
             />
-            <Button
-              className="self-end"
-              onClick={() => void recordActivity()}
-              disabled={!activityDraft.trim() || addActivity.isPending}
-            >
-              {addActivity.isPending ? "Recording…" : "Record"}
-            </Button>
+            <div className="flex self-end gap-2">
+              {editingNoteId && (
+                <Button variant="outline" onClick={cancelEditingNote}>
+                  Cancel
+                </Button>
+              )}
+              <Button
+                onClick={() => void recordActivity()}
+                disabled={
+                  !activityDraft.trim() ||
+                  addActivity.isPending ||
+                  updateOpportunityNote.isPending
+                }
+              >
+                {addActivity.isPending || updateOpportunityNote.isPending
+                  ? "Saving…"
+                  : editingNoteId
+                    ? "Save note"
+                    : "Add note"}
+              </Button>
+            </div>
           </div>
           {plannedActivities.length > 0 && (
             <div className="mt-6 border-t pt-4">
@@ -589,33 +657,68 @@ export function OpportunityDetailsPage() {
             </div>
           )}
           <div className="mt-5 border-t pt-4">
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              History
+            </h3>
             <div className="max-h-[420px] space-y-3 overflow-y-auto pr-2">
               {activityTimeline.map((activity) => (
-                <div key={activity.id} className="rounded-md bg-muted/35 p-3">
-                  <Badge
-                    variant="outline"
-                    className="mb-2 text-[10px] uppercase"
-                  >
-                    {activity.type === "status"
-                      ? "Stage change"
-                      : activity.completedAt
-                        ? "Completed"
-                        : activity.type}
-                  </Badge>
+                <div
+                  key={activity.id}
+                  className="group rounded-md bg-muted/35 p-3"
+                >
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <Badge variant="outline" className="text-[10px] uppercase">
+                      {activity.type === "status"
+                        ? "Stage change"
+                        : activity.completedAt
+                          ? "Completed"
+                          : activity.type === "planned"
+                            ? "Scheduled"
+                            : activity.type}
+                    </Badge>
+                    {activity.type === "note" && (
+                      <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-60">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => startEditingNote(activity)}
+                          title="Edit note"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => setNoteToDelete(activity)}
+                          title="Delete note"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                   <p className="whitespace-pre-wrap text-sm">
                     {activity.content}
                   </p>
+                  {activity.type === "planned" && activity.dueAt && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Due {new Date(activity.dueAt).toLocaleString()}
+                    </p>
+                  )}
                   <time className="mt-1.5 block text-xs text-muted-foreground">
                     {new Date(activity.createdAt).toLocaleString()}
                   </time>
                 </div>
               ))}
-              {activityTimeline.length === 0 &&
-                plannedActivities.length === 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    No activity has been recorded yet.
-                  </p>
-                )}
+              {activityTimeline.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  No activity has been recorded yet.
+                </p>
+              )}
             </div>
             <div className="grid gap-2 pt-2 text-xs text-muted-foreground sm:grid-cols-2">
               <p>Created {new Date(opportunity.createdAt).toLocaleString()}</p>
@@ -1013,6 +1116,62 @@ export function OpportunityDetailsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <OpportunityDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        stages={stages}
+        owners={owners}
+        opportunity={opportunity}
+      />
+      <DeleteConfirmDialog
+        isOpen={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={() => {
+          void deleteOpportunity
+            .mutateAsync(opportunity.id)
+            .then(() => {
+              toast.success("Opportunity deleted");
+              navigate("/dashboard/crm/pipeline");
+            })
+            .catch((error: unknown) => {
+              toast.error(
+                error instanceof Error
+                  ? error.message
+                  : "Failed to delete opportunity",
+              );
+            });
+        }}
+        title="Delete opportunity"
+        itemName={opportunity.title}
+        isDeleting={deleteOpportunity.isPending}
+      />
+      <DeleteConfirmDialog
+        isOpen={Boolean(noteToDelete)}
+        onClose={() => setNoteToDelete(undefined)}
+        onConfirm={() => {
+          if (!noteToDelete) return;
+          void deleteOpportunityNote
+            .mutateAsync({
+              id: opportunity.id,
+              activityId: noteToDelete.id,
+            })
+            .then(() => {
+              if (editingNoteId === noteToDelete.id) cancelEditingNote();
+              setNoteToDelete(undefined);
+              toast.success("Note deleted");
+            })
+            .catch((error: unknown) => {
+              toast.error(
+                error instanceof Error
+                  ? error.message
+                  : "Failed to delete note",
+              );
+            });
+        }}
+        title="Delete opportunity note"
+        description="Are you sure you want to delete this note? This action cannot be undone."
+        isDeleting={deleteOpportunityNote.isPending}
+      />
     </div>
   );
 }

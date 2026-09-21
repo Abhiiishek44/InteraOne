@@ -73,7 +73,6 @@ export function ContactDetailsCard({
       setNewTag("");
       await queryClient.invalidateQueries({
         queryKey: ["contacts"],
-        exact: true,
       });
       toast.success("Tag added");
     } catch (err) {
@@ -86,7 +85,6 @@ export function ContactDetailsCard({
       await contactsApi.removeTag(contact.id, tag);
       await queryClient.invalidateQueries({
         queryKey: ["contacts"],
-        exact: true,
       });
       toast.success("Tag removed");
     } catch (err) {
@@ -102,7 +100,6 @@ export function ContactDetailsCard({
       setNoteDraft("");
       await queryClient.invalidateQueries({
         queryKey: ["contacts"],
-        exact: true,
       });
       toast.success("Note added");
     } catch (err) {
@@ -134,7 +131,6 @@ export function ContactDetailsCard({
       await contactsApi.updateNote(contact.id, editingNoteId, noteDraft.trim());
       await queryClient.invalidateQueries({
         queryKey: ["contacts"],
-        exact: true,
       });
       cancelEditingNote();
       toast.success("Note updated");
@@ -152,7 +148,6 @@ export function ContactDetailsCard({
       await contactsApi.deleteNote(contact.id, noteToDelete.id);
       await queryClient.invalidateQueries({
         queryKey: ["contacts"],
-        exact: true,
       });
       if (editingNoteId === noteToDelete.id) cancelEditingNote();
       setNoteToDelete(null);

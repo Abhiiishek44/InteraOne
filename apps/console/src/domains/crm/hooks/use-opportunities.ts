@@ -5,6 +5,7 @@ import type {
   OpportunityColor,
   OpportunityStage,
   UpdatePipelinePayload,
+  UpdateOpportunityPayload,
 } from "../types/types";
 
 export function useSalesPipeline() {
@@ -26,6 +27,31 @@ export function useCreateOpportunity() {
   return useMutation({
     mutationFn: (payload: CreateOpportunityPayload) =>
       opportunitiesApi.create(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["opportunities"] });
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+    },
+  });
+}
+
+export function useUpdateOpportunity() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...payload
+    }: UpdateOpportunityPayload & { id: string }) =>
+      opportunitiesApi.update(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["opportunities"] });
+    },
+  });
+}
+
+export function useDeleteOpportunity() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => opportunitiesApi.remove(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["opportunities"] });
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
@@ -111,7 +137,7 @@ export function useMoveOpportunity() {
         queryKey: ["opportunities"],
         exact: true,
       });
-      queryClient.invalidateQueries({ queryKey: ["contacts"], exact: true });
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
     },
   });
 }
@@ -163,6 +189,33 @@ export function useCompleteOpportunityActivity() {
   return useMutation({
     mutationFn: ({ id, activityId }: { id: string; activityId: string }) =>
       opportunitiesApi.completeActivity(id, activityId),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["opportunities"] }),
+  });
+}
+
+export function useUpdateOpportunityNote() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      activityId,
+      content,
+    }: {
+      id: string;
+      activityId: string;
+      content: string;
+    }) => opportunitiesApi.updateNote(id, activityId, content),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["opportunities"] }),
+  });
+}
+
+export function useDeleteOpportunityNote() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, activityId }: { id: string; activityId: string }) =>
+      opportunitiesApi.deleteNote(id, activityId),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ["opportunities"] }),
   });

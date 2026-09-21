@@ -87,3 +87,7 @@ export interface CreateOpportunityPayload {
   expectedCloseAt?: string | null;
   nextAction?: string;
 }
+
+export type UpdateOpportunityPayload = Partial<
+  Omit<CreateOpportunityPayload, "contactId" | "stage">
+>;

@@ -28,6 +28,17 @@ export const opportunitiesSchema = {
     expectedCloseAt: Joi.date().iso().allow(null, ""),
     nextAction: Joi.string().trim().max(500).allow(""),
   }),
+  update: Joi.object({
+    title: Joi.string().trim().max(160),
+    company: Joi.string().trim().max(160).allow(""),
+    value: Joi.number().min(0),
+    currency: Joi.string().valid("USD", "INR", "EUR", "GBP"),
+    ownerId: Joi.string().hex().length(24).allow(null, ""),
+    expectedCloseAt: Joi.date().iso().allow(null, ""),
+    nextAction: Joi.string().trim().max(500).allow(""),
+  })
+    .min(1)
+    .options({ stripUnknown: true }),
   updateStage: Joi.object({
     stage: stageId.required(),
   }),
@@ -60,6 +71,9 @@ export const opportunitiesSchema = {
     category: Joi.string()
       .valid("todo", "email", "call", "meeting", "document")
       .default("todo"),
+  }),
+  updateNote: Joi.object({
+    content: Joi.string().trim().max(2000).required(),
   }),
   updatePriority: Joi.object({
     priority: Joi.number().integer().valid(1, 2, 3).required(),
