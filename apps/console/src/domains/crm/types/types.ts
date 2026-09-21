@@ -42,8 +42,19 @@ export interface Opportunity {
   currency: "USD" | "INR" | "EUR" | "GBP";
   stage: OpportunityStage;
   color: OpportunityColor;
+  position: number;
+  priority: 1 | 2 | 3;
   expectedCloseAt: string | null;
   nextAction: string;
+  activities: Array<{
+    id: string;
+    type: "note" | "status" | "planned" | "message";
+    content: string;
+    category: "todo" | "email" | "call" | "meeting" | "document";
+    dueAt: string | null;
+    completedAt: string | null;
+    createdAt: string;
+  }>;
   contact: {
     id: string;
     name: string;

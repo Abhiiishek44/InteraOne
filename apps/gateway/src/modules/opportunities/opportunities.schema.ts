@@ -47,6 +47,23 @@ export const opportunitiesSchema = {
       )
       .required(),
   }),
+  move: Joi.object({
+    stage: stageId.required(),
+    position: Joi.number().integer().min(0).required(),
+  }),
+  updateNextAction: Joi.object({
+    nextAction: Joi.string().trim().max(500).allow("").required(),
+  }),
+  addActivity: Joi.object({
+    content: Joi.string().trim().max(2000).required(),
+    dueAt: Joi.date().iso().allow(null, ""),
+    category: Joi.string()
+      .valid("todo", "email", "call", "meeting", "document")
+      .default("todo"),
+  }),
+  updatePriority: Joi.object({
+    priority: Joi.number().integer().valid(1, 2, 3).required(),
+  }),
   updatePipeline: Joi.object({
     name: Joi.string().trim().max(80).required(),
     stages: Joi.array()

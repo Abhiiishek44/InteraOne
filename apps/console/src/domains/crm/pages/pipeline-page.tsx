@@ -3,13 +3,20 @@ import { useNavigate } from "react-router";
 import { motion } from "framer-motion";
 import {
   CalendarDays,
+  CalendarPlus,
   CircleDollarSign,
+  FileText,
+  ContactRound,
   GripVertical,
   LayoutGrid,
   List,
+  Mail,
   MoreVertical,
   Plus,
+  Phone,
   Search,
+  Star,
+  SquareCheckBig,
   Settings2,
   Target,
   TrendingUp,
@@ -20,6 +27,14 @@ import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Card, CardContent } from "@/shared/ui/card";
 import { Input } from "@/shared/ui/input";
+import { Textarea } from "@/shared/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/shared/ui/dialog";
 import {
   useContacts,
   useContactOwners,
@@ -29,9 +44,11 @@ import { OpportunityDialog } from "../components/opportunity-dialog";
 import { PipelineSettingsDialog } from "../components/pipeline-settings-dialog";
 import {
   useOpportunities,
+  useMoveOpportunity,
+  useAddOpportunityActivity,
   useSalesPipeline,
   useUpdateOpportunityColor,
-  useUpdateOpportunityStage,
+  useUpdateOpportunityPriority,
   useUpdateSalesPipeline,
 } from "../hooks/use-opportunities";
 import type {
@@ -56,6 +73,34 @@ const OPPORTUNITY_COLORS: Record<
   emerald: { swatch: "bg-emerald-300", border: "border-l-emerald-300" },
 };
 
+const ACTIVITY_CATEGORY_META = {
+  todo: {
+    label: "To-Do",
+    icon: SquareCheckBig,
+    iconColor: "text-cyan-500",
+  },
+  email: {
+    label: "Email",
+    icon: Mail,
+    iconColor: "text-violet-500",
+  },
+  call: {
+    label: "Call",
+    icon: Phone,
+    iconColor: "text-emerald-500",
+  },
+  meeting: {
+    label: "Meeting",
+    icon: ContactRound,
+    iconColor: "text-blue-500",
+  },
+  document: {
+    label: "Document",
+    icon: FileText,
+    iconColor: "text-orange-500",
+  },
+} as const;
+
 const formatMoney = (value: number, currency: Opportunity["currency"]) =>
   new Intl.NumberFormat(undefined, {
     style: "currency",
@@ -71,7 +116,9 @@ export function PipelinePage() {
   const { data: pipeline, isLoading: pipelineLoading } = useSalesPipeline();
   const { data: contacts = [] } = useContacts();
   const { data: owners = [] } = useContactOwners();
-  const updateStage = useUpdateOpportunityStage();
+  const moveOpportunityMutation = useMoveOpportunity();
+  const addActivity = useAddOpportunityActivity();
+  const updatePriority = useUpdateOpportunityPriority();
   const updateColor = useUpdateOpportunityColor();
   const updatePipeline = useUpdateSalesPipeline();
   const [createOpen, setCreateOpen] = useState(false);
@@ -81,6 +128,13 @@ export function PipelinePage() {
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [draggedStageId, setDraggedStageId] = useState<string>();
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string>();
+  const [scheduleForId, setScheduleForId] = useState<string>();
+  const [scheduleTitle, setScheduleTitle] = useState("");
+  const [scheduleAt, setScheduleAt] = useState("");
+  const [scheduleCategory, setScheduleCategory] = useState<
+    "todo" | "email" | "call" | "meeting" | "document"
+  >("todo");
   const [view, setView] = useState<"board" | "list">("board");
   const [search, setSearch] = useState("");
   const [ownerFilter, setOwnerFilter] = useState("all");
@@ -161,11 +215,21 @@ export function PipelinePage() {
     setSettingsOpen(true);
   };
 
-  const moveOpportunity = async (id: string, stage: string) => {
+  const openNewStage = () => {
+    setSettingsOpen(false);
+    setSettingsStageId(undefined);
+    requestAnimationFrame(() => setSettingsOpen(true));
+  };
+
+  const moveOpportunity = async (
+    id: string,
+    stage: string,
+    position: number,
+  ) => {
     const item = opportunities.find((opportunity) => opportunity.id === id);
-    if (!item || item.stage === stage) return;
+    if (!item) return;
     try {
-      await updateStage.mutateAsync({ id, stage });
+      await moveOpportunityMutation.mutateAsync({ id, stage, position });
       toast.success(`Moved to ${stageMap.get(stage)?.label || "stage"}`);
     } catch (error: unknown) {
       toast.error(
@@ -214,7 +278,7 @@ export function PipelinePage() {
     }
   };
 
-  const drop = (event: DragEvent, stage: string) => {
+  const drop = (event: DragEvent, stage: string, position?: number) => {
     event.preventDefault();
     if (draggedStageId) {
       void reorderStage(stage);
@@ -225,7 +289,13 @@ export function PipelinePage() {
     const id = draggedId;
     setDraggedId(null);
     setDragOverStage(null);
-    if (id) void moveOpportunity(id, stage);
+    setDropTargetId(undefined);
+    if (id) {
+      const bottomPosition = opportunities.filter(
+        (item) => item.stage === stage && item.id !== id,
+      ).length;
+      void moveOpportunity(id, stage, position ?? bottomPosition);
+    }
   };
 
   return (
@@ -344,9 +414,11 @@ export function PipelinePage() {
 
       {view === "board" ? (
         <div className="overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <div className="grid min-w-max grid-flow-col auto-cols-[minmax(270px,1fr)] items-start gap-2">
+          <div className="flex min-w-max items-start gap-2">
             {stages.map((stage) => {
-              const items = filtered.filter((item) => item.stage === stage.id);
+              const items = filtered
+                .filter((item) => item.stage === stage.id)
+                .sort((left, right) => left.position - right.position);
               const currencies = new Set(items.map((item) => item.currency));
               const stageValue = items.reduce(
                 (sum, item) => sum + item.value,
@@ -367,10 +439,10 @@ export function PipelinePage() {
                     scaleY: { type: "spring", stiffness: 500, damping: 30 },
                     opacity: { duration: 0.16 },
                   }}
-                  className={`flex h-128 min-w-0 flex-col overflow-hidden rounded-lg border bg-muted/10 transition-colors ${
+                  className={`flex min-h-32 w-[300px] min-w-0 max-w-[300px] shrink-0 flex-col self-start overflow-visible border-x bg-muted/10 transition-colors ${
                     dragOverStage === stage.id
-                      ? "border-primary bg-primary/[0.04]"
-                      : "border-x-border border-b-border"
+                      ? "border-x-primary bg-primary/[0.04]"
+                      : "border-x-border"
                   }`}
                   onDragOver={(event) => {
                     event.preventDefault();
@@ -396,7 +468,7 @@ export function PipelinePage() {
                       setDraggedStageId(undefined);
                       setDragOverStage(null);
                     }}
-                    className={`border-b bg-card/70 px-3 py-3 ${
+                    className={`bg-card/70 px-3 py-3 ${
                       canCustomizePipeline
                         ? "cursor-grab active:cursor-grabbing"
                         : ""
@@ -444,7 +516,7 @@ export function PipelinePage() {
                       )}
                     </div>
                   </header>
-                  <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2.5">
+                  <div className="space-y-2 p-2.5">
                     {items.map((item) => (
                       <motion.article
                         key={item.id}
@@ -478,22 +550,68 @@ export function PipelinePage() {
                           setColorMenuId(undefined);
                           navigate(`/dashboard/crm/pipeline/${item.id}`);
                         }}
-                        onDragStart={() => {
+                        onDragStart={(event) => {
                           wasDragging.current = true;
+                          event.stopPropagation();
                           setDraggedStageId(undefined);
                           setDraggedId(item.id);
+                        }}
+                        onDragOver={(event) => {
+                          if (
+                            !draggedId ||
+                            draggedStageId ||
+                            draggedId === item.id
+                          )
+                            return;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          event.dataTransfer.dropEffect = "move";
+                          setDragOverStage(stage.id);
+                          const bounds =
+                            event.currentTarget.getBoundingClientRect();
+                          const edge =
+                            event.clientY > bounds.top + bounds.height / 2
+                              ? "after"
+                              : "before";
+                          setDropTargetId(`${edge}:${item.id}`);
+                        }}
+                        onDrop={(event) => {
+                          if (!draggedId || draggedStageId) return;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          const targetItems = items.filter(
+                            (candidate) => candidate.id !== draggedId,
+                          );
+                          const targetPosition = targetItems.findIndex(
+                            (candidate) => candidate.id === item.id,
+                          );
+                          const insertAfter =
+                            dropTargetId === `after:${item.id}` ? 1 : 0;
+                          drop(
+                            event,
+                            stage.id,
+                            targetPosition < 0
+                              ? targetItems.length
+                              : targetPosition + insertAfter,
+                          );
                         }}
                         onDragEnd={() => {
                           setDraggedId(null);
                           setDragOverStage(null);
+                          setDropTargetId(undefined);
                           setTimeout(() => {
                             wasDragging.current = false;
                           }, 0);
                         }}
-                        className={`relative cursor-grab rounded-md border border-l-4 bg-card p-3 shadow-xs hover:shadow-md active:cursor-grabbing ${OPPORTUNITY_COLORS[item.color || "slate"].border}`}
+                        className={`relative min-w-0 max-w-full cursor-grab overflow-visible rounded-md border border-l-4 bg-card p-3 shadow-xs hover:z-20 hover:shadow-md active:cursor-grabbing ${OPPORTUNITY_COLORS[item.color || "slate"].border} ${
+                          dropTargetId?.endsWith(`:${item.id}`) &&
+                          draggedId !== item.id
+                            ? "ring-2 ring-primary/40"
+                            : ""
+                        }`}
                       >
                         <div className="flex items-start justify-between gap-2">
-                          <h3 className="text-sm font-semibold leading-snug">
+                          <h3 className="min-w-0 break-words text-sm font-semibold leading-snug [overflow-wrap:anywhere]">
                             {item.title}
                           </h3>
                           <div className="relative -mr-1 -mt-1 flex shrink-0 items-center">
@@ -557,6 +675,112 @@ export function PipelinePage() {
                         <p className="mt-3 text-base font-semibold">
                           {formatMoney(item.value, item.currency)}
                         </p>
+                        <div className="mt-2 flex items-center justify-between">
+                          <div
+                            className="flex"
+                            aria-label={`Priority ${item.priority || 1} of 3`}
+                          >
+                            {[1, 2, 3].map((priority) => (
+                              <button
+                                key={priority}
+                                type="button"
+                                draggable={false}
+                                onPointerDown={(event) =>
+                                  event.stopPropagation()
+                                }
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void updatePriority.mutateAsync({
+                                    id: item.id,
+                                    priority: priority as 1 | 2 | 3,
+                                  });
+                                }}
+                                className="p-0.5"
+                                title={`${priority === 1 ? "Low" : priority === 2 ? "Medium" : "High"} priority`}
+                              >
+                                <Star
+                                  className={`h-4 w-4 ${priority <= (item.priority || 1) ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40"}`}
+                                />
+                              </button>
+                            ))}
+                          </div>
+                          <button
+                            type="button"
+                            draggable={false}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setScheduleForId(item.id);
+                            }}
+                            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                            title="Schedule activity"
+                          >
+                            <CalendarPlus className="h-4 w-4" />
+                          </button>
+                        </div>
+                        {(item.activities || []).some(
+                          (activity) =>
+                            activity.type === "planned" &&
+                            !activity.completedAt,
+                        ) && (
+                          <div className="mt-2 flex flex-wrap items-center gap-1 border-t pt-2">
+                            {(item.activities || [])
+                              .filter(
+                                (activity) =>
+                                  activity.type === "planned" &&
+                                  !activity.completedAt,
+                              )
+                              .slice(0, 5)
+                              .map((activity) => {
+                                const meta =
+                                  ACTIVITY_CATEGORY_META[
+                                    activity.category || "todo"
+                                  ];
+                                const ActivityIcon = meta.icon;
+                                return (
+                                  <span
+                                    key={activity.id}
+                                    className="group/activity relative flex h-6 w-6 items-center justify-center rounded border bg-background shadow-xs transition-colors hover:border-primary/35 hover:bg-muted"
+                                  >
+                                    <ActivityIcon
+                                      className={`h-3.5 w-3.5 ${meta.iconColor}`}
+                                    />
+                                    <span className="pointer-events-none absolute bottom-full right-0 z-40 mb-2 w-60 translate-y-1 rounded-lg border bg-popover p-3 text-left text-popover-foreground opacity-0 shadow-xl transition-all duration-150 group-hover/activity:translate-y-0 group-hover/activity:opacity-100">
+                                      <span className="mb-2 flex items-center justify-between gap-2">
+                                        <span className="flex items-center gap-1.5 text-xs font-semibold">
+                                          <ActivityIcon
+                                            className={`h-3.5 w-3.5 ${meta.iconColor}`}
+                                          />
+                                          {meta.label}
+                                        </span>
+                                        <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-300">
+                                          Scheduled
+                                        </span>
+                                      </span>
+                                      <span className="block whitespace-pre-wrap break-words text-xs leading-5">
+                                        {activity.content}
+                                      </span>
+                                      {activity.dueAt && (
+                                        <span className="mt-2 flex items-center gap-1.5 border-t pt-2 text-[11px] text-muted-foreground">
+                                          <CalendarDays className="h-3.5 w-3.5" />
+                                          {new Date(
+                                            activity.dueAt,
+                                          ).toLocaleString(undefined, {
+                                            day: "numeric",
+                                            month: "short",
+                                            year: "numeric",
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                          })}
+                                        </span>
+                                      )}
+                                      <span className="absolute -bottom-1.5 right-2.5 h-3 w-3 rotate-45 border-b border-r bg-popover" />
+                                    </span>
+                                  </span>
+                                );
+                              })}
+                          </div>
+                        )}
                         <div className="mt-3 grid gap-1.5 text-xs text-muted-foreground">
                           <p className="flex items-center gap-1.5">
                             <UserRound className="h-3.5 w-3.5" />
@@ -572,7 +796,7 @@ export function PipelinePage() {
                           </p>
                         </div>
                         {item.nextAction && (
-                          <p className="mt-3 border-t pt-2 text-xs text-muted-foreground">
+                          <p className="mt-3 min-w-0 break-words border-t pt-2 text-xs text-muted-foreground [overflow-wrap:anywhere]">
                             <span className="font-medium text-foreground">
                               Next:
                             </span>{" "}
@@ -586,6 +810,36 @@ export function PipelinePage() {
                         No opportunities in this stage
                       </div>
                     )}
+                    <div
+                      onDragOver={(event) => {
+                        if (!draggedId || draggedStageId) return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        event.dataTransfer.dropEffect = "move";
+                        setDragOverStage(stage.id);
+                        setDropTargetId(`bottom:${stage.id}`);
+                      }}
+                      onDrop={(event) => {
+                        if (!draggedId || draggedStageId) return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        drop(
+                          event,
+                          stage.id,
+                          items.filter((item) => item.id !== draggedId).length,
+                        );
+                      }}
+                      aria-label={`Drop opportunity at the bottom of ${stage.label}`}
+                      className={`h-16 rounded-md transition-[background-color,box-shadow] duration-150 ${
+                        draggedId && !draggedStageId
+                          ? "pointer-events-auto"
+                          : "pointer-events-none"
+                      } ${
+                        dropTargetId === `bottom:${stage.id}`
+                          ? "bg-primary/10 ring-2 ring-inset ring-primary/30"
+                          : "bg-transparent"
+                      }`}
+                    />
                   </div>
                 </motion.section>
               );
@@ -594,15 +848,23 @@ export function PipelinePage() {
               <motion.button
                 layout
                 type="button"
-                onClick={() => openStageSettings()}
-                className="flex h-128 min-w-0 flex-col items-center justify-center rounded-lg border border-dashed bg-muted/5 px-6 text-center text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/[0.03] hover:text-foreground"
+                onClick={openNewStage}
+                whileHover={{ y: -2 }}
+                whileTap={{ scale: 0.98 }}
+                className="group relative flex h-36 w-20 shrink-0 flex-col items-center justify-center self-start overflow-hidden rounded-xl border bg-gradient-to-b from-card to-muted/30 px-2 text-center text-muted-foreground shadow-xs transition-colors hover:border-primary/40 hover:text-primary hover:shadow-md"
+                title="Add pipeline stage"
               >
-                <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-full border bg-background">
-                  <Plus className="h-5 w-5" />
+                <span className="absolute inset-y-3 left-0 w-0.5 rounded-r-full bg-primary/35 transition-colors group-hover:bg-primary" />
+                <span className="mb-2.5 flex h-9 w-9 items-center justify-center rounded-lg border bg-background text-foreground shadow-sm transition-all group-hover:border-primary/30 group-hover:bg-primary group-hover:text-primary-foreground">
+                  <Plus className="h-4 w-4 transition-transform group-hover:rotate-90" />
                 </span>
-                <span className="text-sm font-semibold">Add stage</span>
-                <span className="mt-1 text-xs">
-                  Create the next pipeline step
+                <span className="text-xs font-semibold leading-4">
+                  Add
+                  <br />
+                  stage
+                </span>
+                <span className="mt-1 text-[10px] text-muted-foreground/70">
+                  New step
                 </span>
               </motion.button>
             )}
@@ -642,7 +904,15 @@ export function PipelinePage() {
                         value={item.stage}
                         onClick={(event) => event.stopPropagation()}
                         onChange={(event) =>
-                          void moveOpportunity(item.id, event.target.value)
+                          void moveOpportunity(
+                            item.id,
+                            event.target.value,
+                            opportunities.filter(
+                              (opportunity) =>
+                                opportunity.stage === event.target.value &&
+                                opportunity.id !== item.id,
+                            ).length,
+                          )
                         }
                         className="h-8 rounded-md border border-input bg-background px-2 text-xs"
                       >
@@ -691,6 +961,7 @@ export function PipelinePage() {
       )}
       {settingsOpen && pipeline && (
         <PipelineSettingsDialog
+          key={settingsStageId || "new-stage"}
           open={settingsOpen}
           onOpenChange={setSettingsOpen}
           pipeline={pipeline}
@@ -698,6 +969,74 @@ export function PipelinePage() {
           countsByStage={countsByStage}
         />
       )}
+      <Dialog
+        open={Boolean(scheduleForId)}
+        onOpenChange={(open) => !open && setScheduleForId(undefined)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Schedule an activity</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-5 gap-1 rounded-md bg-muted/40 p-1">
+            {(["todo", "email", "call", "meeting", "document"] as const).map(
+              (category) => {
+                const meta = ACTIVITY_CATEGORY_META[category];
+                const CategoryIcon = meta.icon;
+                return (
+                  <Button
+                    key={category}
+                    type="button"
+                    size="sm"
+                    variant={
+                      scheduleCategory === category ? "default" : "ghost"
+                    }
+                    onClick={() => setScheduleCategory(category)}
+                    className="px-1 text-[11px]"
+                  >
+                    <CategoryIcon
+                      className={`mr-1.5 h-4 w-4 ${meta.iconColor}`}
+                    />
+                    {meta.label}
+                  </Button>
+                );
+              },
+            )}
+          </div>
+          <Textarea
+            value={scheduleTitle}
+            onChange={(event) => setScheduleTitle(event.target.value)}
+            placeholder="Call, email, demo, follow-up…"
+            className="resize-none"
+          />
+          <Input
+            type="datetime-local"
+            value={scheduleAt}
+            onChange={(event) => setScheduleAt(event.target.value)}
+          />
+          <DialogFooter>
+            <Button
+              disabled={
+                !scheduleTitle.trim() || !scheduleAt || addActivity.isPending
+              }
+              onClick={async () => {
+                if (!scheduleForId) return;
+                await addActivity.mutateAsync({
+                  id: scheduleForId,
+                  content: scheduleTitle.trim(),
+                  dueAt: new Date(scheduleAt).toISOString(),
+                  category: scheduleCategory,
+                });
+                setScheduleForId(undefined);
+                setScheduleTitle("");
+                setScheduleAt("");
+                toast.success("Activity scheduled");
+              }}
+            >
+              Schedule activity
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

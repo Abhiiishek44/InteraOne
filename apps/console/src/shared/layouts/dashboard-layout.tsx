@@ -377,10 +377,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       const label =
         index === 0 && part === "dashboard"
           ? "Dashboard"
-          : part
-              .split("-")
-              .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-              .join(" ");
+          : part === "crm"
+            ? "CRM"
+            : part
+                .split("-")
+                .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+                .join(" ");
 
       items.push({ label, to: currentPath });
     });

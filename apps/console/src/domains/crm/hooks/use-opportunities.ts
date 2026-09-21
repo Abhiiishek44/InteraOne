@@ -56,6 +56,118 @@ export function useUpdateOpportunityColor() {
   });
 }
 
+export function useMoveOpportunity() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      stage,
+      position,
+    }: {
+      id: string;
+      stage: OpportunityStage;
+      position: number;
+    }) => opportunitiesApi.move(id, stage, position),
+    onMutate: async ({ id, stage, position }) => {
+      await queryClient.cancelQueries({
+        queryKey: ["opportunities"],
+        exact: true,
+      });
+      const previous = queryClient.getQueryData<
+        import("../types/types").Opportunity[]
+      >(["opportunities"]);
+      if (!previous) return { previous };
+      const moving = previous.find((item) => item.id === id);
+      if (!moving) return { previous };
+      const withoutMoving = previous.filter((item) => item.id !== id);
+      const targetItems = withoutMoving
+        .filter((item) => item.stage === stage)
+        .sort((a, b) => a.position - b.position);
+      targetItems.splice(Math.min(position, targetItems.length), 0, {
+        ...moving,
+        stage,
+      });
+      const targetMap = new Map(
+        targetItems.map((item, index) => [
+          item.id,
+          { ...item, position: index },
+        ]),
+      );
+      queryClient.setQueryData(
+        ["opportunities"],
+        withoutMoving
+          .filter((item) => item.stage !== stage)
+          .concat(targetItems.map((item) => targetMap.get(item.id)!)),
+      );
+      return { previous };
+    },
+    onError: (_error, _payload, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["opportunities"], context.previous);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["opportunities"],
+        exact: true,
+      });
+      queryClient.invalidateQueries({ queryKey: ["contacts"], exact: true });
+    },
+  });
+}
+
+export function useUpdateOpportunityNextAction() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, nextAction }: { id: string; nextAction: string }) =>
+      opportunitiesApi.updateNextAction(id, nextAction),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["opportunities"] });
+    },
+  });
+}
+
+export function useAddOpportunityActivity() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      content,
+      dueAt,
+      category,
+    }: {
+      id: string;
+      content: string;
+      dueAt?: string;
+      category?: "todo" | "email" | "call" | "meeting" | "document";
+    }) => opportunitiesApi.addActivity(id, content, dueAt, category),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["opportunities"] });
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+    },
+  });
+}
+
+export function useUpdateOpportunityPriority() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, priority }: { id: string; priority: 1 | 2 | 3 }) =>
+      opportunitiesApi.updatePriority(id, priority),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["opportunities"] }),
+  });
+}
+
+export function useCompleteOpportunityActivity() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, activityId }: { id: string; activityId: string }) =>
+      opportunitiesApi.completeActivity(id, activityId),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["opportunities"] }),
+  });
+}
+
 export function useUpdateSalesPipeline() {
   const queryClient = useQueryClient();
   return useMutation({

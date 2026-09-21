@@ -82,4 +82,77 @@ export class OpportunitiesController {
       sendError(res, status, error.message || "Failed to update color");
     }
   }
+
+  static async move(req: Request, res: Response) {
+    try {
+      const opportunity = await service.move(
+        getOrgId(req),
+        req.params.id as string,
+        req.body.stage,
+        req.body.position,
+      );
+      sendResponse(res, 200, true, "Opportunity moved", { opportunity });
+    } catch (error: any) {
+      const status = error.message === "Opportunity not found" ? 404 : 400;
+      sendError(res, status, error.message || "Failed to move opportunity");
+    }
+  }
+
+  static async updateNextAction(req: Request, res: Response) {
+    try {
+      const opportunity = await service.updateNextAction(
+        getOrgId(req),
+        req.params.id as string,
+        req.body.nextAction,
+      );
+      sendResponse(res, 200, true, "Next action updated", { opportunity });
+    } catch (error: any) {
+      const status = error.message === "Opportunity not found" ? 404 : 400;
+      sendError(res, status, error.message || "Failed to update next action");
+    }
+  }
+
+  static async addActivity(req: Request, res: Response) {
+    try {
+      const activity = await service.addActivity(
+        getOrgId(req),
+        req.params.id as string,
+        req.body.content,
+        req.body.dueAt,
+        req.body.category,
+      );
+      sendResponse(res, 201, true, "Activity recorded", { activity });
+    } catch (error: any) {
+      const status = error.message === "Opportunity not found" ? 404 : 400;
+      sendError(res, status, error.message || "Failed to record activity");
+    }
+  }
+
+  static async updatePriority(req: Request, res: Response) {
+    try {
+      const opportunity = await service.updatePriority(
+        getOrgId(req),
+        req.params.id as string,
+        req.body.priority,
+      );
+      sendResponse(res, 200, true, "Priority updated", { opportunity });
+    } catch (error: any) {
+      const status = error.message === "Opportunity not found" ? 404 : 400;
+      sendError(res, status, error.message || "Failed to update priority");
+    }
+  }
+
+  static async completeActivity(req: Request, res: Response) {
+    try {
+      const opportunity = await service.completeActivity(
+        getOrgId(req),
+        req.params.id as string,
+        req.params.activityId as string,
+      );
+      sendResponse(res, 200, true, "Activity completed", { opportunity });
+    } catch (error: any) {
+      const status = error.message === "Activity not found" ? 404 : 400;
+      sendError(res, status, error.message || "Failed to complete activity");
+    }
+  }
 }

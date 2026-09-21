@@ -49,4 +49,39 @@ export const opportunitiesApi = {
   async updateColor(id: string, color: OpportunityColor): Promise<void> {
     await apiClient.patch(`/opportunities/${id}/color`, { color });
   },
+
+  async move(
+    id: string,
+    stage: OpportunityStage,
+    position: number,
+  ): Promise<void> {
+    await apiClient.patch(`/opportunities/${id}/move`, { stage, position });
+  },
+
+  async updateNextAction(id: string, nextAction: string): Promise<void> {
+    await apiClient.patch(`/opportunities/${id}/next-action`, { nextAction });
+  },
+
+  async addActivity(
+    id: string,
+    content: string,
+    dueAt?: string,
+    category?: "todo" | "email" | "call" | "meeting" | "document",
+  ): Promise<void> {
+    await apiClient.post(`/opportunities/${id}/activities`, {
+      content,
+      dueAt,
+      category,
+    });
+  },
+
+  async updatePriority(id: string, priority: 1 | 2 | 3): Promise<void> {
+    await apiClient.patch(`/opportunities/${id}/priority`, { priority });
+  },
+
+  async completeActivity(id: string, activityId: string): Promise<void> {
+    await apiClient.patch(
+      `/opportunities/${id}/activities/${activityId}/complete`,
+    );
+  },
 };

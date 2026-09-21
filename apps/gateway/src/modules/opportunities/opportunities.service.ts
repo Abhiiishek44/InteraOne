@@ -114,7 +114,7 @@ export class OpportunitiesService {
     const opportunities = await Opportunity.find({ organizationId })
       .populate("contactId", "name email phone company lifecycleStage")
       .populate("ownerId", "name email")
-      .sort({ updatedAt: -1 })
+      .sort({ stage: 1, position: 1, updatedAt: -1 })
       .lean();
 
     return opportunities.map((opportunity: any) => ({
@@ -125,8 +125,21 @@ export class OpportunitiesService {
       currency: opportunity.currency,
       stage: opportunity.stage,
       color: opportunity.color || "slate",
+      position: opportunity.position || 0,
+      priority: opportunity.priority || 1,
       expectedCloseAt: opportunity.expectedCloseAt?.toISOString() || null,
       nextAction: opportunity.nextAction || "",
+      activities: (opportunity.activities || []).map((activity: any) => ({
+        id: activity.id,
+        type: activity.type || "note",
+        content: activity.content,
+        category: activity.category || "todo",
+        dueAt: activity.dueAt ? new Date(activity.dueAt).toISOString() : null,
+        completedAt: activity.completedAt
+          ? new Date(activity.completedAt).toISOString()
+          : null,
+        createdAt: new Date(activity.createdAt).toISOString(),
+      })),
       contact: opportunity.contactId
         ? {
             id: opportunity.contactId._id.toString(),
@@ -151,6 +164,10 @@ export class OpportunitiesService {
   async create(organizationId: string, input: CreateOpportunityInput) {
     const orgId = new Types.ObjectId(organizationId);
     const pipelineStage = await this.getStage(organizationId, input.stage);
+    const position = await Opportunity.countDocuments({
+      organizationId: orgId,
+      stage: pipelineStage.id,
+    });
     const contact = await Contact.findOne({
       _id: new Types.ObjectId(input.contactId),
       organizationId: orgId,
@@ -177,6 +194,7 @@ export class OpportunitiesService {
       value: input.value || 0,
       currency: input.currency || "USD",
       stage: pipelineStage.id,
+      position,
       ownerId: input.ownerId
         ? new Types.ObjectId(input.ownerId)
         : contact.ownerId || null,
@@ -200,9 +218,30 @@ export class OpportunitiesService {
     stage: OpportunityStage,
   ) {
     const pipelineStage = await this.getStage(organizationId, stage);
+    const existing = await Opportunity.findOne({
+      _id: opportunityId,
+      organizationId,
+    });
+    if (!existing) throw new Error("Opportunity not found");
+    const previousStage = existing.stage;
     const opportunity = await Opportunity.findOneAndUpdate(
       { _id: opportunityId, organizationId },
-      { $set: { stage: pipelineStage.id } },
+      {
+        $set: { stage: pipelineStage.id },
+        $push: {
+          activities: {
+            $each: [
+              {
+                id: `activity-${Date.now()}`,
+                type: "status",
+                content: `Stage changed: ${previousStage} → ${pipelineStage.id}`,
+                createdAt: new Date(),
+              },
+            ],
+            $position: 0,
+          },
+        },
+      },
       { new: true, runValidators: true },
     );
     if (!opportunity) throw new Error("Opportunity not found");
@@ -227,6 +266,135 @@ export class OpportunitiesService {
       { new: true, runValidators: true },
     );
     if (!opportunity) throw new Error("Opportunity not found");
+    return opportunity;
+  }
+
+  async updateNextAction(
+    organizationId: string,
+    opportunityId: string,
+    nextAction: string,
+  ) {
+    const opportunity = await Opportunity.findOneAndUpdate(
+      { _id: opportunityId, organizationId },
+      { $set: { nextAction: nextAction.trim() } },
+      { new: true, runValidators: true },
+    );
+    if (!opportunity) throw new Error("Opportunity not found");
+    return opportunity;
+  }
+
+  async addActivity(
+    organizationId: string,
+    opportunityId: string,
+    content: string,
+    dueAt?: string | null,
+    category?: "todo" | "email" | "call" | "meeting" | "document",
+  ) {
+    const activity = {
+      id: `activity-${Date.now()}`,
+      type: dueAt ? ("planned" as const) : ("note" as const),
+      content: content.trim(),
+      category: category || "todo",
+      dueAt: dueAt ? new Date(dueAt) : null,
+      completedAt: null,
+      createdAt: new Date(),
+    };
+    const opportunity = await Opportunity.findOneAndUpdate(
+      { _id: opportunityId, organizationId },
+      { $push: { activities: { $each: [activity], $position: 0 } } },
+      { new: true, runValidators: true },
+    );
+    if (!opportunity) throw new Error("Opportunity not found");
+    return activity;
+  }
+
+  async updatePriority(
+    organizationId: string,
+    opportunityId: string,
+    priority: 1 | 2 | 3,
+  ) {
+    const opportunity = await Opportunity.findOneAndUpdate(
+      { _id: opportunityId, organizationId },
+      { $set: { priority } },
+      { new: true, runValidators: true },
+    );
+    if (!opportunity) throw new Error("Opportunity not found");
+    return opportunity;
+  }
+
+  async completeActivity(
+    organizationId: string,
+    opportunityId: string,
+    activityId: string,
+  ) {
+    const opportunity = await Opportunity.findOneAndUpdate(
+      { _id: opportunityId, organizationId, "activities.id": activityId },
+      { $set: { "activities.$.completedAt": new Date() } },
+      { new: true },
+    );
+    if (!opportunity) throw new Error("Activity not found");
+    return opportunity;
+  }
+
+  async move(
+    organizationId: string,
+    opportunityId: string,
+    stage: OpportunityStage,
+    position: number,
+  ) {
+    const pipelineStage = await this.getStage(organizationId, stage);
+    const opportunity = await Opportunity.findOne({
+      _id: opportunityId,
+      organizationId,
+    });
+    if (!opportunity) throw new Error("Opportunity not found");
+
+    const targetItems = await Opportunity.find({
+      organizationId,
+      stage: pipelineStage.id,
+      _id: { $ne: opportunity._id },
+    }).sort({ position: 1, updatedAt: -1 });
+    const targetPosition = Math.min(Math.max(position, 0), targetItems.length);
+    targetItems.splice(targetPosition, 0, opportunity);
+
+    const previousStage = opportunity.stage;
+    opportunity.stage = pipelineStage.id;
+    await Opportunity.bulkWrite(
+      targetItems.map((item, index) => ({
+        updateOne: {
+          filter: { _id: item._id, organizationId },
+          update: { $set: { stage: pipelineStage.id, position: index } },
+        },
+      })),
+    );
+
+    if (previousStage !== pipelineStage.id) {
+      await Opportunity.updateOne(
+        { _id: opportunity._id, organizationId },
+        {
+          $push: {
+            activities: {
+              $each: [
+                {
+                  id: `activity-${Date.now()}`,
+                  type: "status",
+                  content: `Stage changed: ${previousStage} → ${pipelineStage.id}`,
+                  createdAt: new Date(),
+                },
+              ],
+              $position: 0,
+            },
+          },
+        },
+      );
+    }
+
+    await this.syncContactLifecycle(
+      organizationId,
+      opportunity.contactId.toString(),
+      pipelineStage,
+      opportunity._id.toString(),
+    );
     return opportunity;
   }
 
