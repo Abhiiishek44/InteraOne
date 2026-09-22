@@ -1,20 +1,60 @@
 import { Types } from "mongoose";
-import { Contact, Conversation, Message, ContactConflict } from "@shared/models";
-import { ListContactsOptions, UpsertFromAIInput } from "./contacts.types";
+import { randomUUID } from "crypto";
+import {
+  Contact,
+  Conversation,
+  Message,
+  ContactConflict,
+  Membership,
+  Opportunity,
+  SalesPipeline,
+  DEFAULT_PIPELINE_STAGES,
+  Account,
+} from "@shared/models";
+import {
+  ContactWriteInput,
+  ListContactsOptions,
+  UpsertFromAIInput,
+} from "./contacts.types";
 import logger from "@shared/core/logger";
 
 export class ContactsService {
-  async listContacts(organizationId: string, options: ListContactsOptions = {}) {
+  async listContacts(
+    organizationId: string,
+    options: ListContactsOptions = {},
+  ) {
     const limit = Math.min(Math.max(options.limit || 100, 1), 300);
+    const page = Math.max(options.page || 1, 1);
     const query: Record<string, unknown> = { organizationId };
 
     if (options.search?.trim()) {
       const term = options.search.trim();
-      const regex = new RegExp(term, "i");
-      query.$or = [{ name: regex }, { email: regex }, { phone: regex }, { company: regex }];
+      const regex = new RegExp(
+        term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+        "i",
+      );
+      query.$or = [
+        { name: regex },
+        { email: regex },
+        { phone: regex },
+        { company: regex },
+      ];
     }
 
-    const contacts = await Contact.find(query).sort({ lastActivityAt: -1 }).limit(limit).lean();
+    if (options.lifecycleStage) query.lifecycleStage = options.lifecycleStage;
+    if (options.leadStatus) query.leadStatus = options.leadStatus;
+    if (options.ownerId) query.ownerId = new Types.ObjectId(options.ownerId);
+    if (options.followUp === "overdue") {
+      query.nextFollowUpAt = { $ne: null, $lt: new Date() };
+    } else if (options.followUp === "upcoming") {
+      query.nextFollowUpAt = { $gte: new Date() };
+    }
+
+    const contacts = await Contact.find(query)
+      .populate("ownerId", "name email")
+      .populate("accountId", "name website industry")
+      .sort({ lastActivityAt: -1 })
+      .lean();
 
     const sessionIds = contacts.map((c) => c.sessionId).filter(Boolean);
     const emails = contacts.map((c) => c.email).filter(Boolean);
@@ -25,23 +65,31 @@ export class ContactsService {
       organizationId: new Types.ObjectId(organizationId),
       $or: [
         { sessionId: { $in: sessionIds } },
-        ...(emails.length > 0 ? [
-          { "metadata.customer.email": { $in: emails } },
-          { "metadata.senderEmail": { $in: emails } }
-        ] : []),
-        ...(phones.length > 0 ? [
-          { "metadata.customer.phone": { $in: phones } },
-          { "metadata.visitorPhone": { $in: phones } }
-        ] : [])
-      ]
-    }).sort({ updatedAt: -1 }).lean();
+        ...(emails.length > 0
+          ? [
+              { "metadata.customer.email": { $in: emails } },
+              { "metadata.senderEmail": { $in: emails } },
+            ]
+          : []),
+        ...(phones.length > 0
+          ? [
+              { "metadata.customer.phone": { $in: phones } },
+              { "metadata.visitorPhone": { $in: phones } },
+            ]
+          : []),
+      ],
+    })
+      .sort({ updatedAt: -1 })
+      .lean();
 
     const convIds = conversations.map((c) => c._id);
     // Find the earliest message for each conversation
     const messages = await Message.find({
       organizationId: new Types.ObjectId(organizationId),
       conversationId: { $in: convIds },
-    }).sort({ createdAt: 1 }).lean();
+    })
+      .sort({ createdAt: 1 })
+      .lean();
 
     const firstMessageMap = new Map<string, string>();
     for (const msg of messages) {
@@ -54,13 +102,22 @@ export class ContactsService {
     // Helper to filter conversations for a specific contact
     const getContactConversations = (contact: any) => {
       return conversations.filter((conv) => {
-        if (contact.sessionId && conv.sessionId === contact.sessionId) return true;
-        
-        const convEmail = conv.metadata?.customer?.email || conv.metadata?.senderEmail;
-        if (contact.email && convEmail && convEmail.toLowerCase() === contact.email.toLowerCase()) return true;
+        if (contact.sessionId && conv.sessionId === contact.sessionId)
+          return true;
 
-        const convPhone = conv.metadata?.customer?.phone || conv.metadata?.visitorPhone;
-        if (contact.phone && convPhone && convPhone === contact.phone) return true;
+        const convEmail =
+          conv.metadata?.customer?.email || conv.metadata?.senderEmail;
+        if (
+          contact.email &&
+          convEmail &&
+          convEmail.toLowerCase() === contact.email.toLowerCase()
+        )
+          return true;
+
+        const convPhone =
+          conv.metadata?.customer?.phone || conv.metadata?.visitorPhone;
+        if (contact.phone && convPhone && convPhone === contact.phone)
+          return true;
 
         return false;
       });
@@ -88,12 +145,15 @@ export class ContactsService {
       });
     }
 
-    return contacts.map((contact) => {
+    let items = contacts.map((contact) => {
       const contactConversations = getContactConversations(contact);
       const contactConflicts = conflictsMap.get(contact._id.toString()) || [];
 
       const convListItems = contactConversations.map((conv) => {
-        const firstMsg = firstMessageMap.get(conv._id.toString()) || conv.subject || "Conversation context is still syncing.";
+        const firstMsg =
+          firstMessageMap.get(conv._id.toString()) ||
+          conv.subject ||
+          "Conversation context is still syncing.";
         return {
           id: conv._id.toString(),
           status: conv.status,
@@ -103,23 +163,31 @@ export class ContactsService {
         };
       });
 
-      const convTags = contactConversations.flatMap(c => c.tags || []);
-      
+      const convTags = contactConversations.flatMap((c) => c.tags || []);
+
       // Combine contact's tags and all associated conversation tags
       const combinedTags = [...(contact.tags || []), ...convTags];
-      
+
       // Normalize (lowercase, trimmed) and deduplicate
       const aggregatedTags = Array.from(
         new Set(
           combinedTags
-            .map((tag) => String(tag || "").trim().toLowerCase())
-            .filter(Boolean)
-        )
+            .map((tag) =>
+              String(tag || "")
+                .trim()
+                .toLowerCase(),
+            )
+            .filter(Boolean),
+        ),
       );
 
       let lastActivityAt = contact.lastActivityAt || contact.updatedAt;
       if (contactConversations.length > 0) {
-        const maxUpdated = new Date(Math.max(...contactConversations.map(c => new Date(c.updatedAt).getTime())));
+        const maxUpdated = new Date(
+          Math.max(
+            ...contactConversations.map((c) => new Date(c.updatedAt).getTime()),
+          ),
+        );
         if (maxUpdated > lastActivityAt) {
           lastActivityAt = maxUpdated;
         }
@@ -131,9 +199,31 @@ export class ContactsService {
         name: contact.name,
         email: contact.email,
         phone: contact.phone,
-        company: contact.company,
+        company: (contact.accountId as any)?.name || contact.company,
+        account: contact.accountId && typeof contact.accountId === "object"
+          ? {
+              id: String((contact.accountId as any)._id),
+              name: (contact.accountId as any).name,
+              website: (contact.accountId as any).website || "",
+              industry: (contact.accountId as any).industry || "",
+            }
+          : null,
         tags: aggregatedTags,
         source: contact.source,
+        lifecycleStage: contact.lifecycleStage || "new",
+        leadStatus: contact.leadStatus || "needs_review",
+        owner:
+          contact.ownerId && typeof contact.ownerId === "object"
+            ? {
+                id: String((contact.ownerId as any)._id),
+                name: (contact.ownerId as any).name || "Unknown member",
+                email: (contact.ownerId as any).email || "",
+              }
+            : null,
+        acquisitionSource: contact.acquisitionSource || "unknown",
+        preferredChannel: contact.preferredChannel || null,
+        nextFollowUpAt: contact.nextFollowUpAt?.toISOString() || null,
+        lastContactedAt: contact.lastContactedAt?.toISOString() || null,
         notes: (contact.notes || []).map((note: any) => ({
           id: note.id,
           author: note.author,
@@ -153,6 +243,154 @@ export class ContactsService {
         updatedAt: (contact.updatedAt || contact.createdAt).toISOString(),
       };
     });
+
+    if (options.tags?.length) {
+      const selectedTags = new Set(
+        options.tags.map((tag) => tag.trim().toLowerCase()),
+      );
+      items = items.filter((contact) =>
+        contact.tags.some((tag) => selectedTags.has(tag.toLowerCase())),
+      );
+    }
+
+    if (options.activityRange) {
+      const hoursByRange = { "24h": 24, "7d": 168, "30d": 720, "90d": 2160 };
+      const cutoff =
+        Date.now() - hoursByRange[options.activityRange] * 60 * 60 * 1000;
+      items = items.filter(
+        (contact) => new Date(contact.lastActivity).getTime() >= cutoff,
+      );
+    }
+
+    if (options.conversationRange) {
+      items = items.filter((contact) => {
+        if (options.conversationRange === "1-2") {
+          return (
+            contact.conversationCount >= 1 && contact.conversationCount <= 2
+          );
+        }
+        if (options.conversationRange === "3-10") {
+          return (
+            contact.conversationCount >= 3 && contact.conversationCount <= 10
+          );
+        }
+        return contact.conversationCount >= 10;
+      });
+    }
+
+    items.sort((left, right) => {
+      if (options.sort === "name") return left.name.localeCompare(right.name);
+      if (options.sort === "conversations") {
+        return right.conversationCount - left.conversationCount;
+      }
+      if (options.sort === "created") {
+        return (
+          new Date(right.createdAt).getTime() -
+          new Date(left.createdAt).getTime()
+        );
+      }
+      return (
+        new Date(right.lastActivity).getTime() -
+        new Date(left.lastActivity).getTime()
+      );
+    });
+
+    const total = items.length;
+    const totalPages = Math.max(Math.ceil(total / limit), 1);
+    const resolvedPage = Math.min(page, totalPages);
+    const start = (resolvedPage - 1) * limit;
+    return {
+      contacts: items.slice(start, start + limit),
+      total,
+      page: resolvedPage,
+      limit,
+      totalPages,
+    };
+  }
+
+  private async validateOwner(
+    organizationId: string,
+    ownerId?: string | null,
+  ): Promise<void> {
+    if (!ownerId) return;
+    const membership = await Membership.exists({
+      organizationId: new Types.ObjectId(organizationId),
+      userId: new Types.ObjectId(ownerId),
+      inviteStatus: "accepted",
+    });
+    if (!membership)
+      throw new Error("Contact owner must be an active organization member");
+  }
+
+  async listContactOwners(organizationId: string): Promise<any[]> {
+    const memberships = await Membership.find({
+      organizationId: new Types.ObjectId(organizationId),
+      inviteStatus: "accepted",
+    })
+      .populate("userId", "name email isActive")
+      .sort({ role: 1, createdAt: 1 })
+      .lean();
+
+    return memberships
+      .filter((membership: any) => membership.userId?.isActive !== false)
+      .map((membership: any) => ({
+        id: String(membership.userId._id),
+        name: membership.userId.name || membership.userId.email,
+        email: membership.userId.email,
+        role: membership.role,
+      }));
+  }
+
+  async createContact(
+    organizationId: string,
+    data: ContactWriteInput,
+    source: "agent" | "admin" | "owner",
+  ): Promise<any> {
+    await this.validateOwner(organizationId, data.ownerId);
+
+    const account = data.accountId
+      ? await Account.findOne({
+          _id: new Types.ObjectId(data.accountId),
+          organizationId: new Types.ObjectId(organizationId),
+          archivedAt: null,
+        })
+      : null;
+    if (data.accountId && !account) throw new Error("Company not found");
+
+    const tags = (data.tags || [])
+      .map((tag) => tag.trim().toLowerCase())
+      .filter(Boolean);
+    const contact = await Contact.create({
+      organizationId: new Types.ObjectId(organizationId),
+      sessionId: `manual:${randomUUID()}`,
+      name: data.name?.trim(),
+      ...(data.email?.trim() ? { email: data.email.trim().toLowerCase() } : {}),
+      ...(data.phone?.trim() ? { phone: data.phone.trim() } : {}),
+      ...(account?.name
+        ? { company: account.name, accountId: account._id }
+        : data.company?.trim()
+          ? { company: data.company.trim() }
+          : {}),
+      tags,
+      source,
+      lifecycleStage: data.lifecycleStage || "new",
+      leadStatus: data.leadStatus || "needs_review",
+      ownerId: data.ownerId ? new Types.ObjectId(data.ownerId) : null,
+      acquisitionSource: data.acquisitionSource || "manual",
+      preferredChannel: data.preferredChannel || null,
+      nextFollowUpAt: data.nextFollowUpAt
+        ? new Date(data.nextFollowUpAt)
+        : null,
+      manualNextFollowUpAt: data.nextFollowUpAt
+        ? new Date(data.nextFollowUpAt)
+        : null,
+      lastContactedAt: data.lastContactedAt
+        ? new Date(data.lastContactedAt)
+        : null,
+      lastActivityAt: new Date(),
+    });
+
+    return contact;
   }
 
   async upsertFromAI(input: UpsertFromAIInput) {
@@ -175,8 +413,14 @@ export class ContactsService {
     const existingName = "";
     const existingEmail = "";
 
-    const resolvedName = (input.name || existingName || "Anonymous User").trim();
-    const resolvedEmail = (input.email || existingEmail || "").trim().toLowerCase();
+    const resolvedName = (
+      input.name ||
+      existingName ||
+      "Anonymous User"
+    ).trim();
+    const resolvedEmail = (input.email || existingEmail || "")
+      .trim()
+      .toLowerCase();
     const resolvedPhone = (input.phone || "").trim();
     const normalizedTags = (input.tags || [])
       .map((tag) => String(tag || "").trim())
@@ -187,11 +431,19 @@ export class ContactsService {
       .filter(Boolean)
       .slice(0, 20);
     const sentiment =
-      input.sentiment && ["positive", "neutral", "negative"].includes(input.sentiment)
+      input.sentiment &&
+      ["positive", "neutral", "negative"].includes(input.sentiment)
         ? input.sentiment
         : undefined;
     const note = (input.note || "").trim();
     const company = (input.company || "").trim();
+    const conversationChannel = String(
+      conversation.channel || conversation.metadata?.source || "unknown",
+    ).toLowerCase();
+    const supportedChannels = ["widget", "email", "whatsapp", "telegram"];
+    const acquisitionSource = supportedChannels.includes(conversationChannel)
+      ? conversationChannel
+      : "unknown";
 
     const conversationUpdate: Record<string, unknown> = {
       "metadata.contactCapturedByAIAt": new Date(),
@@ -202,7 +454,7 @@ export class ContactsService {
         summary: input.summary || "No insights yet.",
         sentiment: sentiment || "neutral",
         topics: normalizedTopics,
-      }
+      },
     };
 
     if (resolvedEmail) {
@@ -213,7 +465,10 @@ export class ContactsService {
       conversationUpdate["metadata.visitorPhone"] = resolvedPhone;
     }
 
-    await Conversation.updateOne({ _id: conversationId }, { $set: conversationUpdate });
+    await Conversation.updateOne(
+      { _id: conversationId },
+      { $set: conversationUpdate },
+    );
 
     const orgObjectId = new Types.ObjectId(organizationId);
 
@@ -234,7 +489,9 @@ export class ContactsService {
 
     // Do not create a Contact document for anonymous conversations (no existing contact and no email/phone)
     if (!contactDoc && !resolvedEmail && !resolvedPhone) {
-      logger.debug(`[upsertFromAI] Conversation ${conversationId} is anonymous and has no existing contact. Skipping contact creation.`);
+      logger.debug(
+        `[upsertFromAI] Conversation ${conversationId} is anonymous and has no existing contact. Skipping contact creation.`,
+      );
       return;
     }
 
@@ -245,7 +502,13 @@ export class ContactsService {
 
     if (contactDoc) {
       // Check Name mismatch
-      if (resolvedName && resolvedName !== "Anonymous User" && contactDoc.name && contactDoc.name !== "Anonymous User" && contactDoc.name !== resolvedName) {
+      if (
+        resolvedName &&
+        resolvedName !== "Anonymous User" &&
+        contactDoc.name &&
+        contactDoc.name !== "Anonymous User" &&
+        contactDoc.name !== resolvedName
+      ) {
         finalName = contactDoc.name; // Retain current
         const exists = await ContactConflict.findOne({
           contactId: contactDoc._id,
@@ -271,7 +534,11 @@ export class ContactsService {
       }
 
       // Check Phone mismatch
-      if (resolvedPhone && contactDoc.phone && contactDoc.phone !== resolvedPhone) {
+      if (
+        resolvedPhone &&
+        contactDoc.phone &&
+        contactDoc.phone !== resolvedPhone
+      ) {
         finalPhone = contactDoc.phone; // Retain current
         const exists = await ContactConflict.findOne({
           contactId: contactDoc._id,
@@ -360,6 +627,13 @@ export class ContactsService {
             conversationId,
           },
         },
+        $setOnInsert: {
+          lifecycleStage: "new",
+          leadStatus: "needs_review",
+          acquisitionSource,
+          preferredChannel:
+            acquisitionSource === "unknown" ? null : acquisitionSource,
+        },
         ...(normalizedTags.length > 0
           ? {
               $addToSet: {
@@ -394,6 +668,13 @@ export class ContactsService {
       company: contact.company,
       tags: contact.tags || [],
       source: contact.source,
+      lifecycleStage: contact.lifecycleStage || "new",
+      leadStatus: contact.leadStatus || "needs_review",
+      owner: null,
+      acquisitionSource: contact.acquisitionSource || "unknown",
+      preferredChannel: contact.preferredChannel || null,
+      nextFollowUpAt: contact.nextFollowUpAt?.toISOString() || null,
+      lastContactedAt: contact.lastContactedAt?.toISOString() || null,
       notes: (contact.notes || []).map((note: any) => ({
         id: note.id,
         author: note.author,
@@ -404,7 +685,8 @@ export class ContactsService {
         id: conversation.id,
         status: conversation.status,
         lastMessage: conversation.lastMessage,
-        channel: conversation.channel || conversation.metadata?.source || "widget",
+        channel:
+          conversation.channel || conversation.metadata?.source || "widget",
         updatedAt: new Date(conversation.updatedAt).toISOString(),
       })),
       insights: {
@@ -412,12 +694,23 @@ export class ContactsService {
         sentiment: contact.insights?.sentiment || "neutral",
         topics: contact.insights?.topics || [],
       },
-      createdAt: (contact.createdAt || contact.updatedAt || new Date()).toISOString(),
-      updatedAt: (contact.updatedAt || contact.createdAt || new Date()).toISOString(),
+      createdAt: (
+        contact.createdAt ||
+        contact.updatedAt ||
+        new Date()
+      ).toISOString(),
+      updatedAt: (
+        contact.updatedAt ||
+        contact.createdAt ||
+        new Date()
+      ).toISOString(),
     };
   }
 
-  async deleteContacts(organizationId: string, ids: string[]): Promise<{ deletedCount: number }> {
+  async deleteContacts(
+    organizationId: string,
+    ids: string[],
+  ): Promise<{ deletedCount: number }> {
     const objectIds = ids.map((id) => new Types.ObjectId(id));
     const result = await Contact.deleteMany({
       organizationId: new Types.ObjectId(organizationId),
@@ -431,13 +724,19 @@ export class ContactsService {
         contactId: { $in: objectIds },
       });
     } catch (err: any) {
-      logger.warn(`[deleteContacts] Failed to delete associated contact conflicts: ${err.message}`);
+      logger.warn(
+        `[deleteContacts] Failed to delete associated contact conflicts: ${err.message}`,
+      );
     }
 
     return { deletedCount: result.deletedCount || 0 };
   }
 
-  async bulkAddTags(organizationId: string, ids: string[], tags: string[]): Promise<{ modifiedCount: number }> {
+  async bulkAddTags(
+    organizationId: string,
+    ids: string[],
+    tags: string[],
+  ): Promise<{ modifiedCount: number }> {
     const objectIds = ids.map((id) => new Types.ObjectId(id));
     const result = await Contact.updateMany(
       {
@@ -446,14 +745,21 @@ export class ContactsService {
       },
       {
         $addToSet: {
-          tags: { $each: tags.map((t) => t.trim().toLowerCase()).filter(Boolean) },
+          tags: {
+            $each: tags.map((t) => t.trim().toLowerCase()).filter(Boolean),
+          },
         },
-      }
+      },
     );
     return { modifiedCount: result.modifiedCount || 0 };
   }
 
-  async addNote(organizationId: string, contactId: string, author: string, content: string): Promise<any> {
+  async addNote(
+    organizationId: string,
+    contactId: string,
+    author: string,
+    content: string,
+  ): Promise<any> {
     const note = {
       id: `note-${Date.now()}`,
       author,
@@ -468,7 +774,7 @@ export class ContactsService {
       {
         $push: { notes: { $each: [note], $position: 0 } },
       },
-      { new: true }
+      { new: true },
     );
     if (!updated) throw new Error("Contact not found");
     return note;
@@ -524,7 +830,11 @@ export class ContactsService {
     if (result.modifiedCount === 0) throw new Error("Contact note not found");
   }
 
-  async addTag(organizationId: string, contactId: string, tag: string): Promise<string> {
+  async addTag(
+    organizationId: string,
+    contactId: string,
+    tag: string,
+  ): Promise<string> {
     // Normalize: trim whitespace and lowercase so stored value matches UI display
     const cleanedTag = tag.trim().toLowerCase();
     if (!cleanedTag) throw new Error("Tag cannot be empty");
@@ -536,13 +846,17 @@ export class ContactsService {
       {
         $addToSet: { tags: cleanedTag },
       },
-      { new: true }
+      { new: true },
     );
     if (!updated) throw new Error("Contact not found");
     return cleanedTag;
   }
 
-  async removeTag(organizationId: string, contactId: string, tag: string): Promise<void> {
+  async removeTag(
+    organizationId: string,
+    contactId: string,
+    tag: string,
+  ): Promise<void> {
     // Normalize the tag the same way it was stored: trim + lowercase
     const normalizedTag = tag.trim().toLowerCase();
     const updated = await Contact.findOneAndUpdate(
@@ -553,7 +867,7 @@ export class ContactsService {
       {
         $pull: { tags: normalizedTag },
       },
-      { new: true }
+      { new: true },
     );
     if (!updated) throw new Error("Contact not found");
   }
@@ -584,7 +898,7 @@ export class ContactsService {
     organizationId: string,
     conflictId: string,
     action: "apply" | "dismiss",
-    agentName: string
+    agentName: string,
   ): Promise<void> {
     const conflict = await ContactConflict.findOne({
       _id: new Types.ObjectId(conflictId),
@@ -607,7 +921,7 @@ export class ContactsService {
         {
           $set: updateField,
         },
-        { new: true }
+        { new: true },
       );
       if (!updatedContact) {
         throw new Error("Target contact not found");
@@ -626,7 +940,7 @@ export class ContactsService {
             resolvedAt: new Date(),
             resolvedBy: agentName,
           },
-        }
+        },
       );
     } else {
       // Dismiss
@@ -640,15 +954,72 @@ export class ContactsService {
   async updateContact(
     organizationId: string,
     contactId: string,
-    data: { name?: string; email?: string; phone?: string; company?: string; tags?: string[] }
+    data: ContactWriteInput,
   ): Promise<any> {
-    const { name, email, phone, company, tags } = data;
+    await this.validateOwner(organizationId, data.ownerId);
+    const {
+      name,
+      email,
+      phone,
+      company,
+      accountId,
+      tags,
+      lifecycleStage,
+      leadStatus,
+      ownerId,
+      acquisitionSource,
+      preferredChannel,
+      nextFollowUpAt,
+      lastContactedAt,
+    } = data;
     const updateFields: any = {};
-    if (name) updateFields.name = name;
-    if (email) updateFields.email = email;
+    const unsetFields: Record<string, 1> = {};
+    if (name !== undefined) updateFields.name = name;
+    if (email) updateFields.email = email.toLowerCase();
+    else if (email === "") unsetFields.email = 1;
     if (phone) updateFields.phone = phone;
+    else if (phone === "") unsetFields.phone = 1;
     if (company !== undefined) updateFields.company = company;
-    if (tags !== undefined) updateFields.tags = tags;
+    if (accountId !== undefined) {
+      if (accountId) {
+        const account = await Account.findOne({
+          _id: new Types.ObjectId(accountId),
+          organizationId: new Types.ObjectId(organizationId),
+          archivedAt: null,
+        });
+        if (!account) throw new Error("Company not found");
+        updateFields.accountId = account._id;
+        updateFields.company = account.name;
+      } else {
+        updateFields.accountId = null;
+      }
+    }
+    if (tags !== undefined) {
+      updateFields.tags = tags
+        .map((tag) => tag.trim().toLowerCase())
+        .filter(Boolean);
+    }
+    if (lifecycleStage !== undefined)
+      updateFields.lifecycleStage = lifecycleStage;
+    if (leadStatus !== undefined) updateFields.leadStatus = leadStatus;
+    if (ownerId !== undefined) {
+      updateFields.ownerId = ownerId ? new Types.ObjectId(ownerId) : null;
+    }
+    if (acquisitionSource !== undefined)
+      updateFields.acquisitionSource = acquisitionSource;
+    if (preferredChannel !== undefined)
+      updateFields.preferredChannel = preferredChannel || null;
+    if (nextFollowUpAt !== undefined) {
+      updateFields.manualNextFollowUpAt = nextFollowUpAt
+        ? new Date(nextFollowUpAt)
+        : null;
+      updateFields.nextFollowUpAt = updateFields.manualNextFollowUpAt;
+    }
+    if (lastContactedAt !== undefined) {
+      updateFields.lastContactedAt = lastContactedAt
+        ? new Date(lastContactedAt)
+        : null;
+    }
 
     const updated = await Contact.findOneAndUpdate(
       {
@@ -657,12 +1028,66 @@ export class ContactsService {
       },
       {
         $set: updateFields,
+        ...(Object.keys(unsetFields).length > 0 ? { $unset: unsetFields } : {}),
       },
-      { new: true }
-    );
+      { new: true, runValidators: true },
+    ).populate("ownerId", "name email");
     if (!updated) throw new Error("Contact not found");
 
+    if (nextFollowUpAt !== undefined) {
+      const opportunities = await Opportunity.find({
+        organizationId: new Types.ObjectId(organizationId),
+        contactId: new Types.ObjectId(contactId),
+      })
+        .select("activities")
+        .lean();
+      const pendingDates = opportunities.flatMap((opportunity) =>
+        (opportunity.activities || [])
+          .filter(
+            (activity) =>
+              activity.type === "planned" &&
+              !activity.completedAt &&
+              activity.dueAt,
+          )
+          .map((activity) => new Date(activity.dueAt!)),
+      );
+      if (nextFollowUpAt) pendingDates.push(new Date(nextFollowUpAt));
+      updated.nextFollowUpAt = pendingDates.length
+        ? new Date(Math.min(...pendingDates.map((date) => date.getTime())))
+        : null;
+      await updated.save();
+    }
 
+    if (
+      (lifecycleStage !== undefined || leadStatus !== undefined) &&
+      updated.lifecycleStage !== "customer"
+    ) {
+      const [pipeline, linkedOpportunities] = await Promise.all([
+        SalesPipeline.findOne({ organizationId }).lean(),
+        Opportunity.find({ organizationId, contactId }).select("stage").lean(),
+      ]);
+      if (linkedOpportunities.length > 0) {
+        const stages = pipeline?.stages?.length
+          ? pipeline.stages
+          : DEFAULT_PIPELINE_STAGES;
+        const stageTypes = linkedOpportunities.map(
+          (opportunity) =>
+            stages.find((stage) => stage.id === opportunity.stage)?.type ||
+            "open",
+        );
+        if (stageTypes.includes("won")) {
+          updated.lifecycleStage = "customer";
+          updated.leadStatus = "converted";
+        } else if (stageTypes.includes("open")) {
+          updated.lifecycleStage = "opportunity";
+          updated.leadStatus = "follow_up";
+        } else {
+          updated.lifecycleStage = "lost";
+          updated.leadStatus = "unqualified";
+        }
+        await updated.save();
+      }
+    }
 
     return updated;
   }

@@ -3,7 +3,7 @@ import { useMemo, useState, useEffect } from "react";
 export function usePagination<T>(
   items: T[],
   itemsPerPage: number,
-  dependencies: unknown[] = []
+  dependencies: unknown[] = [],
 ) {
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -16,6 +16,15 @@ export function usePagination<T>(
 
   const totalItems = items.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+  // Keep the current page valid when a mutation changes the result count.
+  useEffect(() => {
+    const timeout = setTimeout(
+      () => setCurrentPage((page) => Math.min(page, Math.max(totalPages, 1))),
+      0,
+    );
+    return () => clearTimeout(timeout);
+  }, [totalPages]);
 
   const startItem = (currentPage - 1) * itemsPerPage + 1;
   const endItem = Math.min(currentPage * itemsPerPage, totalItems);

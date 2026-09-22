@@ -1,3 +1,50 @@
+export type ContactLifecycleStage =
+  | "new"
+  | "qualified"
+  | "opportunity"
+  | "customer"
+  | "inactive"
+  | "lost";
+export type ContactLeadStatus =
+  | "needs_review"
+  | "contacted"
+  | "follow_up"
+  | "converted"
+  | "unqualified";
+export type ContactChannel =
+  | "widget"
+  | "email"
+  | "whatsapp"
+  | "telegram"
+  | "phone";
+export type ContactAcquisitionSource =
+  | ContactChannel
+  | "qr"
+  | "manual"
+  | "unknown";
+
+export interface ContactOwner {
+  id: string;
+  name: string;
+  email: string;
+}
+
+export interface ContactWritePayload {
+  name?: string;
+  email?: string;
+  phone?: string;
+  company?: string;
+  accountId?: string | null;
+  tags?: string[];
+  lifecycleStage?: ContactLifecycleStage;
+  leadStatus?: ContactLeadStatus;
+  ownerId?: string | null;
+  acquisitionSource?: ContactAcquisitionSource;
+  preferredChannel?: ContactChannel | null;
+  nextFollowUpAt?: string | null;
+  lastContactedAt?: string | null;
+}
+
 export interface ContactNote {
   id: string;
   author: string;
@@ -34,7 +81,15 @@ export interface Contact {
   email?: string;
   phone?: string;
   company?: string;
+  account?: { id: string; name: string; website?: string; industry?: string } | null;
   tags: string[];
+  lifecycleStage: ContactLifecycleStage;
+  leadStatus: ContactLeadStatus;
+  owner: ContactOwner | null;
+  acquisitionSource: ContactAcquisitionSource;
+  preferredChannel: ContactChannel | null;
+  nextFollowUpAt: string | null;
+  lastContactedAt: string | null;
   lastActivity: string;
   createdAt: string;
   isOnline: boolean;
@@ -52,8 +107,16 @@ export interface ContactListItem {
   email?: string;
   phone?: string;
   company?: string;
+  account?: { id: string; name: string; website?: string; industry?: string } | null;
   tags: string[];
   source: "ai" | "widget" | "agent" | "owner" | "admin";
+  lifecycleStage: ContactLifecycleStage;
+  leadStatus: ContactLeadStatus;
+  owner: ContactOwner | null;
+  acquisitionSource: ContactAcquisitionSource;
+  preferredChannel: ContactChannel | null;
+  nextFollowUpAt: string | null;
+  lastContactedAt: string | null;
   notes: Array<{
     id: string;
     author: string;
@@ -104,7 +167,15 @@ export const toContactViewModel = (item: ContactListItem): Contact => ({
   email: item.email,
   phone: item.phone,
   company: item.company,
+  account: item.account || null,
   tags: item.tags || [],
+  lifecycleStage: item.lifecycleStage || "new",
+  leadStatus: item.leadStatus || "needs_review",
+  owner: item.owner || null,
+  acquisitionSource: item.acquisitionSource || "unknown",
+  preferredChannel: item.preferredChannel || null,
+  nextFollowUpAt: item.nextFollowUpAt || null,
+  lastContactedAt: item.lastContactedAt || null,
   lastActivity: item.lastActivity,
   createdAt: item.createdAt,
   isOnline: false,
