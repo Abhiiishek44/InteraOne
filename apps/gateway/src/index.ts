@@ -36,6 +36,7 @@ import { observabilityRouter } from "@modules/observability/observability.routes
 import { templatesRouter } from "@modules/templates";
 import { opportunitiesRouter } from "@modules/opportunities";
 import { crmViewsRouter } from "@modules/crm-views";
+import { accountsRouter } from "@modules/accounts";
 import { setupSwagger } from "@shared/infra/swagger";
 
 class Application {
@@ -154,6 +155,7 @@ class Application {
     router.use("/templates", templatesRouter);
     router.use("/opportunities", opportunitiesRouter);
     router.use("/crm/views", crmViewsRouter);
+    router.use("/accounts", accountsRouter);
 
     // Public config endpoint
     router.get("/config", (req, res) => {

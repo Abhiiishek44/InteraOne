@@ -17,6 +17,7 @@ export interface ContactWriteInput {
   email?: string;
   phone?: string;
   company?: string;
+  accountId?: string | null;
   tags?: string[];
   lifecycleStage?: string;
   leadStatus?: string;

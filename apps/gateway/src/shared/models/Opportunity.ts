@@ -26,7 +26,9 @@ export interface IOpportunityActivity {
 export interface IOpportunity extends Document {
   _id: Types.ObjectId;
   organizationId: Types.ObjectId;
-  contactId: Types.ObjectId;
+  contactId?: Types.ObjectId | null;
+  primaryContactId?: Types.ObjectId | null;
+  accountId?: Types.ObjectId | null;
   title: string;
   company?: string;
   value: number;
@@ -53,7 +55,17 @@ const opportunitySchema = new Schema<IOpportunity>(
     contactId: {
       type: Schema.Types.ObjectId,
       ref: "Contact",
-      required: true,
+      default: null,
+    },
+    primaryContactId: {
+      type: Schema.Types.ObjectId,
+      ref: "Contact",
+      default: null,
+    },
+    accountId: {
+      type: Schema.Types.ObjectId,
+      ref: "Account",
+      default: null,
     },
     title: { type: String, required: true, trim: true, maxlength: 160 },
     company: { type: String, trim: true, maxlength: 160 },
@@ -126,6 +138,8 @@ const opportunitySchema = new Schema<IOpportunity>(
 
 opportunitySchema.index({ organizationId: 1, stage: 1, updatedAt: -1 });
 opportunitySchema.index({ organizationId: 1, contactId: 1 });
+opportunitySchema.index({ organizationId: 1, primaryContactId: 1 });
+opportunitySchema.index({ organizationId: 1, accountId: 1 });
 opportunitySchema.index({ organizationId: 1, ownerId: 1 });
 
 export const Opportunity = mongoose.model<IOpportunity>(

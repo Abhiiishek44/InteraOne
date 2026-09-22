@@ -9,6 +9,7 @@ import {
   Opportunity,
   SalesPipeline,
   DEFAULT_PIPELINE_STAGES,
+  Account,
 } from "@shared/models";
 import {
   ContactWriteInput,
@@ -51,6 +52,7 @@ export class ContactsService {
 
     const contacts = await Contact.find(query)
       .populate("ownerId", "name email")
+      .populate("accountId", "name website industry")
       .sort({ lastActivityAt: -1 })
       .lean();
 
@@ -197,7 +199,15 @@ export class ContactsService {
         name: contact.name,
         email: contact.email,
         phone: contact.phone,
-        company: contact.company,
+        company: (contact.accountId as any)?.name || contact.company,
+        account: contact.accountId && typeof contact.accountId === "object"
+          ? {
+              id: String((contact.accountId as any)._id),
+              name: (contact.accountId as any).name,
+              website: (contact.accountId as any).website || "",
+              industry: (contact.accountId as any).industry || "",
+            }
+          : null,
         tags: aggregatedTags,
         source: contact.source,
         lifecycleStage: contact.lifecycleStage || "new",
@@ -338,6 +348,15 @@ export class ContactsService {
   ): Promise<any> {
     await this.validateOwner(organizationId, data.ownerId);
 
+    const account = data.accountId
+      ? await Account.findOne({
+          _id: new Types.ObjectId(data.accountId),
+          organizationId: new Types.ObjectId(organizationId),
+          archivedAt: null,
+        })
+      : null;
+    if (data.accountId && !account) throw new Error("Company not found");
+
     const tags = (data.tags || [])
       .map((tag) => tag.trim().toLowerCase())
       .filter(Boolean);
@@ -347,7 +366,11 @@ export class ContactsService {
       name: data.name?.trim(),
       ...(data.email?.trim() ? { email: data.email.trim().toLowerCase() } : {}),
       ...(data.phone?.trim() ? { phone: data.phone.trim() } : {}),
-      ...(data.company?.trim() ? { company: data.company.trim() } : {}),
+      ...(account?.name
+        ? { company: account.name, accountId: account._id }
+        : data.company?.trim()
+          ? { company: data.company.trim() }
+          : {}),
       tags,
       source,
       lifecycleStage: data.lifecycleStage || "new",
@@ -939,6 +962,7 @@ export class ContactsService {
       email,
       phone,
       company,
+      accountId,
       tags,
       lifecycleStage,
       leadStatus,
@@ -956,6 +980,20 @@ export class ContactsService {
     if (phone) updateFields.phone = phone;
     else if (phone === "") unsetFields.phone = 1;
     if (company !== undefined) updateFields.company = company;
+    if (accountId !== undefined) {
+      if (accountId) {
+        const account = await Account.findOne({
+          _id: new Types.ObjectId(accountId),
+          organizationId: new Types.ObjectId(organizationId),
+          archivedAt: null,
+        });
+        if (!account) throw new Error("Company not found");
+        updateFields.accountId = account._id;
+        updateFields.company = account.name;
+      } else {
+        updateFields.accountId = null;
+      }
+    }
     if (tags !== undefined) {
       updateFields.tags = tags
         .map((tag) => tag.trim().toLowerCase())

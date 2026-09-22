@@ -53,6 +53,7 @@ export interface IContact extends Document {
   organizationId: Types.ObjectId | IOrganization;
   sessionId: string;
   conversationId?: Types.ObjectId | null;
+  accountId?: Types.ObjectId | null;
   name: string;
   email?: string;
   phone?: string;
@@ -89,6 +90,12 @@ const contactSchema = new Schema<IContact>(
       type: Schema.Types.ObjectId,
       ref: "Conversation",
       default: null,
+    },
+    accountId: {
+      type: Schema.Types.ObjectId,
+      ref: "Account",
+      default: null,
+      index: true,
     },
     name: { type: String, required: true, trim: true, maxlength: 120 },
     email: { type: String, trim: true, lowercase: true },
@@ -182,5 +189,6 @@ contactSchema.index(
 contactSchema.index({ organizationId: 1, lastActivityAt: -1 });
 contactSchema.index({ organizationId: 1, lifecycleStage: 1, leadStatus: 1 });
 contactSchema.index({ organizationId: 1, ownerId: 1, nextFollowUpAt: 1 });
+contactSchema.index({ organizationId: 1, accountId: 1 });
 
 export const Contact = mongoose.model<IContact>("Contact", contactSchema);

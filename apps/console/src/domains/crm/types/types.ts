@@ -38,6 +38,7 @@ export interface Opportunity {
   id: string;
   title: string;
   company?: string;
+  account?: { id: string; name: string; website?: string; industry?: string } | null;
   value: number;
   currency: "USD" | "INR" | "EUR" | "GBP";
   stage: OpportunityStage;
@@ -77,7 +78,9 @@ export interface UpdatePipelinePayload {
 }
 
 export interface CreateOpportunityPayload {
-  contactId: string;
+  contactId?: string | null;
+  primaryContactId?: string | null;
+  accountId?: string | null;
   title: string;
   company?: string;
   value: number;

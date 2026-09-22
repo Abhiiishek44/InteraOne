@@ -24,6 +24,7 @@ import type {
   ContactOwner,
 } from "@/domains/contacts/types/types";
 import { useContactsPage } from "@/domains/contacts/hooks/use-contacts";
+import { useAccounts } from "@/domains/accounts/hooks/use-accounts";
 import {
   useCreateOpportunity,
   useUpdateOpportunity,
@@ -45,6 +46,8 @@ interface OpportunityDialogProps {
 
 const emptyForm: CreateOpportunityPayload = {
   contactId: "",
+  primaryContactId: null,
+  accountId: null,
   title: "",
   company: "",
   value: 0,
@@ -72,6 +75,7 @@ export function OpportunityDialog({
   const [contactPage, setContactPage] = useState(1);
   const [selectedContact, setSelectedContact] =
     useState<ContactListItem | null>(null);
+  const { data: accountsData } = useAccounts("", 100);
   const [form, setForm] = useState<CreateOpportunityPayload>(() => {
     const firstOpen = stages.find((stage) => stage.type === "open");
     return {
@@ -111,6 +115,8 @@ export function OpportunityDialog({
         opportunity
           ? {
               contactId: opportunity.contact?.id || "",
+              primaryContactId: opportunity.contact?.id || null,
+              accountId: opportunity.account?.id || null,
               title: opportunity.title,
               company: opportunity.company || "",
               value: opportunity.value,
@@ -136,6 +142,8 @@ export function OpportunityDialog({
     setForm((current) => ({
       ...current,
       contactId: contact.id,
+      primaryContactId: contact.id,
+      accountId: contact.account?.id || current.accountId,
       company: contact.company || current.company,
       title: current.title || `${contact.name} opportunity`,
       ownerId: contact.owner?.id || current.ownerId,
@@ -159,6 +167,8 @@ export function OpportunityDialog({
           id: opportunity.id,
           title: form.title,
           company: form.company,
+          accountId: form.accountId,
+          primaryContactId: form.primaryContactId || form.contactId || null,
           value: form.value,
           currency: form.currency,
           ownerId: form.ownerId,
@@ -190,19 +200,34 @@ export function OpportunityDialog({
           <DialogDescription>
             {isEditing
               ? "Update the opportunity details and ownership."
-              : "Connect a sales opportunity to an existing CRM contact."}
+              : "Connect a sales opportunity to a company, a primary contact, or both."}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
-              <Label htmlFor="opportunity-contact">Contact</Label>
+              <Label htmlFor="opportunity-company">Company</Label>
+              <select
+                id="opportunity-company"
+                value={form.accountId || ""}
+                onChange={(event) => {
+                  const accountId = event.target.value || null;
+                  const account = accountsData?.accounts.find((item) => item.id === accountId);
+                  setForm((current) => ({ ...current, accountId, company: account?.name || current.company }));
+                }}
+                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">No company selected</option>
+                {(accountsData?.accounts || []).map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+              </select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="opportunity-contact">Primary contact</Label>
               <div className="relative" onBlur={closeContactPickerOnBlur}>
                 <Button
                   id="opportunity-contact"
                   type="button"
                   variant="outline"
-                  disabled={isEditing}
                   aria-haspopup="listbox"
                   aria-expanded={contactPickerOpen}
                   className="h-9 w-full justify-between px-3 font-normal"
@@ -221,7 +246,7 @@ export function OpportunityDialog({
                   </span>
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" />
                 </Button>
-                {contactPickerOpen && !isEditing && (
+                {contactPickerOpen && (
                   <div className="absolute z-50 mt-1 w-full min-w-72 overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md">
                     <div className="relative border-b p-2">
                       <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -461,7 +486,7 @@ export function OpportunityDialog({
               disabled={
                 createOpportunity.isPending ||
                 updateOpportunity.isPending ||
-                !form.contactId ||
+                (!form.contactId && !form.accountId) ||
                 !form.title.trim() ||
                 !form.stage
               }

@@ -1,5 +1,6 @@
 const availableScripts = [
   "seed:email-templates",
+  "migrate:companies",
 ];
 
 console.log("Available scripts:");

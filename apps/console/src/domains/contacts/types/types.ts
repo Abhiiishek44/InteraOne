@@ -34,6 +34,7 @@ export interface ContactWritePayload {
   email?: string;
   phone?: string;
   company?: string;
+  accountId?: string | null;
   tags?: string[];
   lifecycleStage?: ContactLifecycleStage;
   leadStatus?: ContactLeadStatus;
@@ -80,6 +81,7 @@ export interface Contact {
   email?: string;
   phone?: string;
   company?: string;
+  account?: { id: string; name: string; website?: string; industry?: string } | null;
   tags: string[];
   lifecycleStage: ContactLifecycleStage;
   leadStatus: ContactLeadStatus;
@@ -105,6 +107,7 @@ export interface ContactListItem {
   email?: string;
   phone?: string;
   company?: string;
+  account?: { id: string; name: string; website?: string; industry?: string } | null;
   tags: string[];
   source: "ai" | "widget" | "agent" | "owner" | "admin";
   lifecycleStage: ContactLifecycleStage;
@@ -164,6 +167,7 @@ export const toContactViewModel = (item: ContactListItem): Contact => ({
   email: item.email,
   phone: item.phone,
   company: item.company,
+  account: item.account || null,
   tags: item.tags || [],
   lifecycleStage: item.lifecycleStage || "new",
   leadStatus: item.leadStatus || "needs_review",

@@ -30,6 +30,7 @@ import {
   BarChart3,
   type LucideIcon,
   Columns3,
+  Building2,
 } from "lucide-react";
 import { useAuth } from "@/domains/auth/hooks/useAuth";
 import { useLogout } from "@/domains/auth/hooks/useLogout";
@@ -75,6 +76,7 @@ const getBreadcrumbIcon = (path: string, label: string): LucideIcon | null => {
   if (path.startsWith("/dashboard/conversations")) return Inbox;
   if (path.startsWith("/dashboard/tickets")) return Ticket;
   if (path.startsWith("/dashboard/crm/pipeline")) return Columns3;
+  if (path.startsWith("/dashboard/crm/companies")) return Building2;
   if (
     path.startsWith("/dashboard/crm") ||
     path.startsWith("/dashboard/contacts")
@@ -272,6 +274,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     if (canAccessContacts) {
       base.push(
         { label: "CRM Contacts", to: "/dashboard/crm/contacts" },
+        { label: "CRM Companies", to: "/dashboard/crm/companies" },
         { label: "CRM Pipeline", to: "/dashboard/crm/pipeline" },
       );
     }
@@ -689,6 +692,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               </p>
               {[
                 {
+                  label: "Companies",
+                  to: "/dashboard/crm/companies",
+                  icon: Building2,
+                },
+                {
                   label: "Contacts",
                   to: "/dashboard/crm/contacts",
                   icon: Users2,
@@ -701,11 +709,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               ].map((item) => (
                 <Link key={item.to} to={item.to}>
                   <Button
-                    data-tour-id={
-                      item.label === "Contacts"
-                        ? "sidebar-nav-contacts"
-                        : "sidebar-nav-pipeline"
-                    }
+                    data-tour-id={`sidebar-nav-${item.label.toLowerCase()}`}
                     variant="ghost"
                     className={`w-full flex items-center px-3 py-2 text-sm cursor-pointer rounded-lg justify-start ${
                       isActive(item.to, true)

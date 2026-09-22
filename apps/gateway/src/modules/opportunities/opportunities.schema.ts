@@ -18,7 +18,9 @@ const pipelineStage = Joi.object({
 
 export const opportunitiesSchema = {
   create: Joi.object({
-    contactId: Joi.string().hex().length(24).required(),
+    contactId: Joi.string().hex().length(24).allow(null, ""),
+    primaryContactId: Joi.string().hex().length(24).allow(null, ""),
+    accountId: Joi.string().hex().length(24).allow(null, ""),
     title: Joi.string().trim().max(160).required(),
     company: Joi.string().trim().max(160).allow(""),
     value: Joi.number().min(0).default(0),
@@ -27,10 +29,12 @@ export const opportunitiesSchema = {
     ownerId: Joi.string().hex().length(24).allow(null, ""),
     expectedCloseAt: Joi.date().iso().allow(null, ""),
     nextAction: Joi.string().trim().max(500).allow(""),
-  }),
+  }).or("contactId", "primaryContactId", "accountId"),
   update: Joi.object({
     title: Joi.string().trim().max(160),
     company: Joi.string().trim().max(160).allow(""),
+    primaryContactId: Joi.string().hex().length(24).allow(null, ""),
+    accountId: Joi.string().hex().length(24).allow(null, ""),
     value: Joi.number().min(0),
     currency: Joi.string().valid("USD", "INR", "EUR", "GBP"),
     ownerId: Joi.string().hex().length(24).allow(null, ""),

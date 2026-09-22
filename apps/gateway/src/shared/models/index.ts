@@ -52,6 +52,12 @@ export {
   IChannelConfig,
 } from "./Channel";
 export { ContactConflict, IContactConflict } from "./ContactConflict";
+export {
+  Account,
+  IAccount,
+  IAccountNote,
+  AccountLifecycleStage,
+} from "./Account";
 export { UnansweredQuestion, IUnansweredQuestion } from "./UnansweredQuestion";
 export { Template, ITemplate } from "./Template";
 export {

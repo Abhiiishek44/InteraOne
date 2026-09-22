@@ -22,6 +22,7 @@ import { User, Loader2, Edit2 } from "lucide-react";
 import { toast } from "sonner";
 import { useContactOwners, useUpdateContact } from "../hooks/use-contacts";
 import { useUpdateContactAssociation } from "@/domains/conversation/hooks";
+import { useAccounts } from "@/domains/accounts/hooks/use-accounts";
 import type {
   ContactAcquisitionSource,
   ContactChannel,
@@ -50,6 +51,7 @@ interface ContactFormProps {
     email?: string;
     phone?: string;
     company?: string;
+    accountId?: string | null;
     tags?: string[];
     lifecycleStage?: ContactLifecycleStage;
     leadStatus?: ContactLeadStatus;
@@ -78,6 +80,8 @@ export function ContactForm({
   const [email, setEmail] = useState(initialValues?.email || "");
   const [phone, setPhone] = useState(initialValues?.phone || "");
   const [company, setCompany] = useState(initialValues?.company || "");
+  const [accountId, setAccountId] = useState(initialValues?.accountId || "");
+  const { data: accountsData } = useAccounts("", 100);
   const [tags, setTags] = useState<string[]>(initialValues?.tags || []);
   const [lifecycleStage, setLifecycleStage] = useState<ContactLifecycleStage>(
     initialValues?.lifecycleStage || "new",
@@ -104,6 +108,7 @@ export function ContactForm({
       email: email.trim() || undefined,
       phone: phone.trim() || undefined,
       company: company.trim() || undefined,
+      accountId: accountId || null,
       tags,
       lifecycleStage,
       leadStatus,
@@ -158,15 +163,34 @@ export function ContactForm({
         </div>
 
         <div className="grid gap-2">
-          <Label htmlFor="contact-company">Organization</Label>
-          <Input
-            id="contact-company"
-            value={company}
-            onChange={(event) => setCompany(event.target.value)}
-            placeholder="Organization name"
-            className="cursor-text"
+          <Label htmlFor="contact-company">Company</Label>
+          <Select
+            value={accountId || "legacy"}
+            onValueChange={(value) => {
+              const nextId = value === "legacy" ? "" : value;
+              setAccountId(nextId);
+              const selected = accountsData?.accounts.find((item) => item.id === nextId);
+              if (selected) setCompany(selected.name);
+            }}
             disabled={loading}
-          />
+          >
+            <SelectTrigger id="contact-company"><SelectValue placeholder="Select a company" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="legacy">No linked company</SelectItem>
+              {(accountsData?.accounts || []).map((account) => (
+                <SelectItem key={account.id} value={account.id}>{account.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {!accountId && (
+            <Input
+              value={company}
+              onChange={(event) => setCompany(event.target.value)}
+              placeholder="Legacy company name (optional)"
+              className="cursor-text"
+              disabled={loading}
+            />
+          )}
         </div>
       </div>
 
@@ -363,6 +387,7 @@ interface ContactDialogProps {
     email?: string;
     phone?: string;
     company?: string;
+    accountId?: string | null;
     tags?: string[];
     lifecycleStage?: ContactLifecycleStage;
     leadStatus?: ContactLeadStatus;

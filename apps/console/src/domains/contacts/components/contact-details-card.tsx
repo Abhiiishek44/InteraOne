@@ -230,6 +230,7 @@ export function ContactDetailsCard({
                       email: contact.email || "",
                       phone: displayPhone,
                       company: contact.company || "",
+                      accountId: contact.account?.id || null,
                       tags: contact.tags,
                       lifecycleStage: contact.lifecycleStage,
                       leadStatus: contact.leadStatus,
@@ -298,7 +299,17 @@ export function ContactDetailsCard({
             )}
             <div className="flex items-center gap-2">
               <Building2 className="h-3.5 w-3.5 shrink-0" />
-              <span className="min-w-0 truncate">{displayCompany}</span>
+              {contact.account ? (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/dashboard/crm/companies/${contact.account!.id}`)}
+                  className="min-w-0 cursor-pointer truncate text-primary hover:underline"
+                >
+                  {displayCompany}
+                </button>
+              ) : (
+                <span className="min-w-0 truncate">{displayCompany}</span>
+              )}
             </div>
           </div>
 

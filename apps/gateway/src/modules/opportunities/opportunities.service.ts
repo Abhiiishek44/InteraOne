@@ -7,10 +7,13 @@ import {
   SalesPipeline,
   DEFAULT_PIPELINE_STAGES,
   IPipelineStage,
+  Account,
 } from "@shared/models";
 
 interface CreateOpportunityInput {
-  contactId: string;
+  contactId?: string | null;
+  primaryContactId?: string | null;
+  accountId?: string | null;
   title: string;
   company?: string;
   value?: number;
@@ -21,9 +24,7 @@ interface CreateOpportunityInput {
   nextAction?: string;
 }
 
-type UpdateOpportunityInput = Partial<
-  Omit<CreateOpportunityInput, "contactId" | "stage">
->;
+type UpdateOpportunityInput = Partial<Omit<CreateOpportunityInput, "contactId" | "stage">>;
 
 export class OpportunitiesService {
   async getPipeline(organizationId: string) {
@@ -117,6 +118,8 @@ export class OpportunitiesService {
   async list(organizationId: string) {
     const opportunities = await Opportunity.find({ organizationId })
       .populate("contactId", "name email phone company lifecycleStage")
+      .populate("primaryContactId", "name email phone company lifecycleStage")
+      .populate("accountId", "name website industry")
       .populate("ownerId", "name email")
       .sort({ stage: 1, position: 1, updatedAt: -1 })
       .lean();
@@ -124,7 +127,15 @@ export class OpportunitiesService {
     return opportunities.map((opportunity: any) => ({
       id: opportunity._id.toString(),
       title: opportunity.title,
-      company: opportunity.company,
+      company: opportunity.accountId?.name || opportunity.company,
+      account: opportunity.accountId
+        ? {
+            id: opportunity.accountId._id.toString(),
+            name: opportunity.accountId.name,
+            website: opportunity.accountId.website || "",
+            industry: opportunity.accountId.industry || "",
+          }
+        : null,
       value: opportunity.value,
       currency: opportunity.currency,
       stage: opportunity.stage,
@@ -144,13 +155,13 @@ export class OpportunitiesService {
           : null,
         createdAt: new Date(activity.createdAt).toISOString(),
       })),
-      contact: opportunity.contactId
+      contact: (opportunity.primaryContactId || opportunity.contactId)
         ? {
-            id: opportunity.contactId._id.toString(),
-            name: opportunity.contactId.name,
-            email: opportunity.contactId.email,
-            phone: opportunity.contactId.phone,
-            company: opportunity.contactId.company,
+            id: (opportunity.primaryContactId || opportunity.contactId)._id.toString(),
+            name: (opportunity.primaryContactId || opportunity.contactId).name,
+            email: (opportunity.primaryContactId || opportunity.contactId).email,
+            phone: (opportunity.primaryContactId || opportunity.contactId).phone,
+            company: (opportunity.primaryContactId || opportunity.contactId).company,
           }
         : null,
       owner: opportunity.ownerId
@@ -172,11 +183,27 @@ export class OpportunitiesService {
       organizationId: orgId,
       stage: pipelineStage.id,
     });
-    const contact = await Contact.findOne({
-      _id: new Types.ObjectId(input.contactId),
-      organizationId: orgId,
-    });
-    if (!contact) throw new Error("Contact not found");
+    const primaryContactId = input.primaryContactId || input.contactId;
+    const contact = primaryContactId
+      ? await Contact.findOne({
+          _id: new Types.ObjectId(primaryContactId),
+          organizationId: orgId,
+        })
+      : null;
+    if (primaryContactId && !contact) throw new Error("Contact not found");
+    const resolvedAccountId = input.accountId || contact?.accountId?.toString();
+    const account = resolvedAccountId
+      ? await Account.findOne({
+          _id: new Types.ObjectId(resolvedAccountId),
+          organizationId: orgId,
+          archivedAt: null,
+        })
+      : null;
+    if (resolvedAccountId && !account) throw new Error("Company not found");
+    if (!contact && !account) throw new Error("A company or primary contact is required");
+    if (contact?.accountId && account && contact.accountId.toString() !== account._id.toString()) {
+      throw new Error("Primary contact must belong to the selected company");
+    }
 
     if (input.ownerId) {
       const membership = await Membership.exists({
@@ -192,27 +219,31 @@ export class OpportunitiesService {
 
     const opportunity = await Opportunity.create({
       organizationId: orgId,
-      contactId: contact._id,
+      contactId: contact?._id || null,
+      primaryContactId: contact?._id || null,
+      accountId: account?._id || null,
       title: input.title,
-      company: input.company || contact.company,
+      company: account?.name || input.company || contact?.company,
       value: input.value || 0,
       currency: input.currency || "USD",
       stage: pipelineStage.id,
       position,
       ownerId: input.ownerId
         ? new Types.ObjectId(input.ownerId)
-        : contact.ownerId || null,
+        : contact?.ownerId || account?.ownerId || null,
       expectedCloseAt: input.expectedCloseAt
         ? new Date(input.expectedCloseAt)
         : null,
       nextAction: input.nextAction || "",
     });
 
-    await this.syncContactLifecycle(
-      organizationId,
-      contact._id.toString(),
-      pipelineStage,
-    );
+    if (contact) {
+      await this.syncContactLifecycle(
+        organizationId,
+        contact._id.toString(),
+        pipelineStage,
+      );
+    }
     return opportunity;
   }
 
@@ -238,6 +269,34 @@ export class OpportunitiesService {
     const updates: Record<string, unknown> = {};
     if (input.title !== undefined) updates.title = input.title.trim();
     if (input.company !== undefined) updates.company = input.company.trim();
+    if (input.accountId !== undefined) {
+      if (input.accountId) {
+        const account = await Account.findOne({
+          _id: new Types.ObjectId(input.accountId),
+          organizationId: orgId,
+          archivedAt: null,
+        });
+        if (!account) throw new Error("Company not found");
+        updates.accountId = account._id;
+        updates.company = account.name;
+      } else {
+        updates.accountId = null;
+      }
+    }
+    if (input.primaryContactId !== undefined) {
+      if (input.primaryContactId) {
+        const contact = await Contact.findOne({
+          _id: new Types.ObjectId(input.primaryContactId),
+          organizationId: orgId,
+        });
+        if (!contact) throw new Error("Contact not found");
+        updates.primaryContactId = contact._id;
+        updates.contactId = contact._id;
+      } else {
+        updates.primaryContactId = null;
+        updates.contactId = null;
+      }
+    }
     if (input.value !== undefined) updates.value = input.value;
     if (input.currency !== undefined) updates.currency = input.currency;
     if (input.ownerId !== undefined) {
@@ -285,14 +344,11 @@ export class OpportunitiesService {
     });
     if (!opportunity) throw new Error("Opportunity not found");
 
-    await this.syncContactFromOpportunities(
-      organizationId,
-      opportunity.contactId.toString(),
-    );
-    await this.syncContactNextFollowUp(
-      organizationId,
-      opportunity.contactId.toString(),
-    );
+    const contactId = opportunity.primaryContactId || opportunity.contactId;
+    if (contactId) {
+      await this.syncContactFromOpportunities(organizationId, contactId.toString());
+      await this.syncContactNextFollowUp(organizationId, contactId.toString());
+    }
   }
 
   async updateStage(
@@ -329,12 +385,15 @@ export class OpportunitiesService {
     );
     if (!opportunity) throw new Error("Opportunity not found");
 
-    await this.syncContactLifecycle(
-      organizationId,
-      opportunity.contactId.toString(),
-      pipelineStage,
-      opportunity._id.toString(),
-    );
+    const contactId = opportunity.primaryContactId || opportunity.contactId;
+    if (contactId) {
+      await this.syncContactLifecycle(
+        organizationId,
+        contactId.toString(),
+        pipelineStage,
+        opportunity._id.toString(),
+      );
+    }
     return opportunity;
   }
 
@@ -388,10 +447,11 @@ export class OpportunitiesService {
       { new: true, runValidators: true },
     );
     if (!opportunity) throw new Error("Opportunity not found");
-    if (activity.dueAt) {
+    const contactId = opportunity.primaryContactId || opportunity.contactId;
+    if (activity.dueAt && contactId) {
       await this.syncContactNextFollowUp(
         organizationId,
-        opportunity.contactId.toString(),
+        contactId.toString(),
       );
     }
     return activity;
@@ -422,10 +482,10 @@ export class OpportunitiesService {
       { new: true },
     );
     if (!opportunity) throw new Error("Activity not found");
-    await this.syncContactNextFollowUp(
-      organizationId,
-      opportunity.contactId.toString(),
-    );
+    const contactId = opportunity.primaryContactId || opportunity.contactId;
+    if (contactId) {
+      await this.syncContactNextFollowUp(organizationId, contactId.toString());
+    }
     return opportunity;
   }
 
@@ -520,12 +580,15 @@ export class OpportunitiesService {
       );
     }
 
-    await this.syncContactLifecycle(
-      organizationId,
-      opportunity.contactId.toString(),
-      pipelineStage,
-      opportunity._id.toString(),
-    );
+    const contactId = opportunity.primaryContactId || opportunity.contactId;
+    if (contactId) {
+      await this.syncContactLifecycle(
+        organizationId,
+        contactId.toString(),
+        pipelineStage,
+        opportunity._id.toString(),
+      );
+    }
     return opportunity;
   }
 
@@ -550,7 +613,7 @@ export class OpportunitiesService {
         .map((item) => item.id);
       const otherActive = await Opportunity.exists({
         organizationId,
-        contactId,
+        $or: [{ contactId }, { primaryContactId: contactId }],
         stage: { $nin: closedStageIds },
         ...(currentOpportunityId ? { _id: { $ne: currentOpportunityId } } : {}),
       });
@@ -584,7 +647,7 @@ export class OpportunitiesService {
   ) {
     const opportunities = await Opportunity.find({
       organizationId,
-      contactId,
+      $or: [{ contactId }, { primaryContactId: contactId }],
       activities: {
         $elemMatch: {
           type: "planned",
@@ -634,7 +697,7 @@ export class OpportunitiesService {
     const pipeline = await this.getPipeline(organizationId);
     const opportunities = await Opportunity.find({
       organizationId,
-      contactId,
+      $or: [{ contactId }, { primaryContactId: contactId }],
     })
       .select("stage")
       .lean();
