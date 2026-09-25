@@ -238,6 +238,7 @@ export function ContactDetailsCard({
                       acquisitionSource: contact.acquisitionSource,
                       preferredChannel: contact.preferredChannel,
                       nextFollowUpAt: contact.nextFollowUpAt,
+                      customFields: contact.customFields,
                     }}
                     triggerType="icon"
                   />
@@ -302,7 +303,9 @@ export function ContactDetailsCard({
               {contact.account ? (
                 <button
                   type="button"
-                  onClick={() => navigate(`/dashboard/crm/companies/${contact.account!.id}`)}
+                  onClick={() =>
+                    navigate(`/dashboard/crm/companies/${contact.account!.id}`)
+                  }
                   className="min-w-0 cursor-pointer truncate text-primary hover:underline"
                 >
                   {displayCompany}

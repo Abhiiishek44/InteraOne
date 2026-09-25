@@ -21,6 +21,7 @@ export interface IOpportunityActivity {
   dueAt?: Date | null;
   completedAt?: Date | null;
   createdAt: Date;
+  customFields?: Record<string, unknown>;
 }
 
 export interface IOpportunity extends Document {
@@ -41,6 +42,7 @@ export interface IOpportunity extends Document {
   expectedCloseAt?: Date | null;
   nextAction?: string;
   activities: IOpportunityActivity[];
+  customFields: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -126,12 +128,14 @@ const opportunitySchema = new Schema<IOpportunity>(
             dueAt: { type: Date, default: null },
             completedAt: { type: Date, default: null },
             createdAt: { type: Date, required: true, default: Date.now },
+            customFields: { type: Map, of: Schema.Types.Mixed, default: {} },
           },
           { _id: false },
         ),
       ],
       default: [],
     },
+    customFields: { type: Map, of: Schema.Types.Mixed, default: {} },
   },
   { timestamps: true },
 );

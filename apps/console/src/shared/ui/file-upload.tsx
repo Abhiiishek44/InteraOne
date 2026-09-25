@@ -269,7 +269,11 @@ export function FileUpload({
           ) : (
             <>
               <Upload className="h-4 w-4 mr-2" />
-              {displayFileName || buttonText}
+              {displayFileName
+                ? accept.startsWith("image/")
+                  ? "Replace image"
+                  : "Replace file"
+                : buttonText}
             </>
           )}
         </Button>

@@ -9,6 +9,8 @@ import {
   IPipelineStage,
   Account,
 } from "@shared/models";
+import { CrmFieldsService } from "@modules/crm-fields";
+import { serializeCustomFields } from "@shared/utils/custom-fields";
 
 interface CreateOpportunityInput {
   contactId?: string | null;
@@ -22,9 +24,12 @@ interface CreateOpportunityInput {
   ownerId?: string | null;
   expectedCloseAt?: string | null;
   nextAction?: string;
+  customFields?: Record<string, unknown>;
 }
 
-type UpdateOpportunityInput = Partial<Omit<CreateOpportunityInput, "contactId" | "stage">>;
+type UpdateOpportunityInput = Partial<
+  Omit<CreateOpportunityInput, "contactId" | "stage">
+>;
 
 export class OpportunitiesService {
   async getPipeline(organizationId: string) {
@@ -119,7 +124,7 @@ export class OpportunitiesService {
     const opportunities = await Opportunity.find({ organizationId })
       .populate("contactId", "name email phone company lifecycleStage")
       .populate("primaryContactId", "name email phone company lifecycleStage")
-      .populate("accountId", "name website industry")
+      .populate("accountId", "name website industry customFields")
       .populate("ownerId", "name email")
       .sort({ stage: 1, position: 1, updatedAt: -1 })
       .lean();
@@ -134,6 +139,9 @@ export class OpportunitiesService {
             name: opportunity.accountId.name,
             website: opportunity.accountId.website || "",
             industry: opportunity.accountId.industry || "",
+            customFields: serializeCustomFields(
+              opportunity.accountId.customFields,
+            ),
           }
         : null,
       value: opportunity.value,
@@ -154,16 +162,24 @@ export class OpportunitiesService {
           ? new Date(activity.completedAt).toISOString()
           : null,
         createdAt: new Date(activity.createdAt).toISOString(),
+        customFields: serializeCustomFields(activity.customFields),
       })),
-      contact: (opportunity.primaryContactId || opportunity.contactId)
-        ? {
-            id: (opportunity.primaryContactId || opportunity.contactId)._id.toString(),
-            name: (opportunity.primaryContactId || opportunity.contactId).name,
-            email: (opportunity.primaryContactId || opportunity.contactId).email,
-            phone: (opportunity.primaryContactId || opportunity.contactId).phone,
-            company: (opportunity.primaryContactId || opportunity.contactId).company,
-          }
-        : null,
+      contact:
+        opportunity.primaryContactId || opportunity.contactId
+          ? {
+              id: (
+                opportunity.primaryContactId || opportunity.contactId
+              )._id.toString(),
+              name: (opportunity.primaryContactId || opportunity.contactId)
+                .name,
+              email: (opportunity.primaryContactId || opportunity.contactId)
+                .email,
+              phone: (opportunity.primaryContactId || opportunity.contactId)
+                .phone,
+              company: (opportunity.primaryContactId || opportunity.contactId)
+                .company,
+            }
+          : null,
       owner: opportunity.ownerId
         ? {
             id: opportunity.ownerId._id.toString(),
@@ -173,6 +189,7 @@ export class OpportunitiesService {
         : null,
       createdAt: opportunity.createdAt.toISOString(),
       updatedAt: opportunity.updatedAt.toISOString(),
+      customFields: serializeCustomFields(opportunity.customFields),
     }));
   }
 
@@ -183,6 +200,12 @@ export class OpportunitiesService {
       organizationId: orgId,
       stage: pipelineStage.id,
     });
+    const customFields = await new CrmFieldsService().validateValues(
+      organizationId,
+      "opportunities",
+      input.customFields,
+      true,
+    );
     const primaryContactId = input.primaryContactId || input.contactId;
     const contact = primaryContactId
       ? await Contact.findOne({
@@ -200,8 +223,13 @@ export class OpportunitiesService {
         })
       : null;
     if (resolvedAccountId && !account) throw new Error("Company not found");
-    if (!contact && !account) throw new Error("A company or primary contact is required");
-    if (contact?.accountId && account && contact.accountId.toString() !== account._id.toString()) {
+    if (!contact && !account)
+      throw new Error("A company or primary contact is required");
+    if (
+      contact?.accountId &&
+      account &&
+      contact.accountId.toString() !== account._id.toString()
+    ) {
       throw new Error("Primary contact must belong to the selected company");
     }
 
@@ -235,6 +263,7 @@ export class OpportunitiesService {
         ? new Date(input.expectedCloseAt)
         : null,
       nextAction: input.nextAction || "",
+      customFields,
     });
 
     if (contact) {
@@ -253,6 +282,13 @@ export class OpportunitiesService {
     input: UpdateOpportunityInput,
   ) {
     const orgId = new Types.ObjectId(organizationId);
+    if (input.customFields !== undefined) {
+      input.customFields = await new CrmFieldsService().validateValues(
+        organizationId,
+        "opportunities",
+        input.customFields,
+      );
+    }
     if (input.ownerId) {
       const membership = await Membership.exists({
         organizationId: orgId,
@@ -312,6 +348,8 @@ export class OpportunitiesService {
     if (input.nextAction !== undefined) {
       updates.nextAction = input.nextAction.trim();
     }
+    if (input.customFields !== undefined)
+      updates.customFields = input.customFields;
 
     const opportunity = await Opportunity.findOneAndUpdate(
       { _id: opportunityId, organizationId: orgId },
@@ -346,7 +384,10 @@ export class OpportunitiesService {
 
     const contactId = opportunity.primaryContactId || opportunity.contactId;
     if (contactId) {
-      await this.syncContactFromOpportunities(organizationId, contactId.toString());
+      await this.syncContactFromOpportunities(
+        organizationId,
+        contactId.toString(),
+      );
       await this.syncContactNextFollowUp(organizationId, contactId.toString());
     }
   }
@@ -431,7 +472,14 @@ export class OpportunitiesService {
     content: string,
     dueAt?: string | null,
     category?: "todo" | "email" | "call" | "meeting" | "document",
+    customFieldValues?: Record<string, unknown>,
   ) {
+    const customFields = await new CrmFieldsService().validateValues(
+      organizationId,
+      "activities",
+      customFieldValues,
+      true,
+    );
     const activity = {
       id: `activity-${Date.now()}`,
       type: dueAt ? ("planned" as const) : ("note" as const),
@@ -440,6 +488,7 @@ export class OpportunitiesService {
       dueAt: dueAt ? new Date(dueAt) : null,
       completedAt: null,
       createdAt: new Date(),
+      customFields,
     };
     const opportunity = await Opportunity.findOneAndUpdate(
       { _id: opportunityId, organizationId },
@@ -449,10 +498,7 @@ export class OpportunitiesService {
     if (!opportunity) throw new Error("Opportunity not found");
     const contactId = opportunity.primaryContactId || opportunity.contactId;
     if (activity.dueAt && contactId) {
-      await this.syncContactNextFollowUp(
-        organizationId,
-        contactId.toString(),
-      );
+      await this.syncContactNextFollowUp(organizationId, contactId.toString());
     }
     return activity;
   }

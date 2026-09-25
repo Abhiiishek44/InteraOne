@@ -29,6 +29,7 @@ import { Button } from "@/shared/ui/button";
 import { Card, CardContent } from "@/shared/ui/card";
 import { Textarea } from "@/shared/ui/textarea";
 import { Input } from "@/shared/ui/input";
+import { Label } from "@/shared/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -42,6 +43,10 @@ import {
 } from "@/domains/contacts/hooks/use-contacts";
 import { DeleteConfirmDialog } from "@/shared/components/delete-confirm-dialog";
 import { OpportunityDialog } from "../components/opportunity-dialog";
+import { InlineCustomFields } from "../components/inline-custom-fields";
+import { CrmFieldValues } from "../components/crm-field-values";
+import { useCrmFields } from "../hooks/use-crm-fields";
+import { storageApi } from "@/shared/lib/storage.api";
 import {
   useAddOpportunityActivity,
   useCompleteOpportunityActivity,
@@ -102,6 +107,7 @@ export function OpportunityDetailsPage() {
   const { data: contacts = [] } = useContacts();
   const { data: owners = [] } = useContactOwners();
   const { data: pipeline, isLoading: pipelineLoading } = useSalesPipeline();
+  const { data: opportunityFields = [] } = useCrmFields("opportunities");
   const updateStage = useUpdateOpportunityStage();
   const updateNextAction = useUpdateOpportunityNextAction();
   const addActivity = useAddOpportunityActivity();
@@ -136,8 +142,27 @@ export function OpportunityDetailsPage() {
   const [scheduleTitle, setScheduleTitle] = useState("");
   const [scheduleNote, setScheduleNote] = useState("");
   const [scheduleAt, setScheduleAt] = useState("");
+  const [activityCustomFields, setActivityCustomFields] = useState<
+    Record<string, unknown>
+  >({});
   const [currentTime] = useState(() => Date.now());
   const opportunity = opportunities.find((item) => item.id === opportunityId);
+  const visibleImageFields = opportunityFields.filter(
+    (field) => !field.isSystem && field.visible && field.type === "image",
+  );
+  const profileImageField =
+    visibleImageFields.find((field) => /profile|photo|avatar/i.test(field.label)) ||
+    visibleImageFields[0];
+  const profileImageValue = profileImageField
+    ? opportunity?.customFields?.[profileImageField.key]
+    : undefined;
+  const profileImageKey =
+    profileImageValue &&
+    typeof profileImageValue === "object" &&
+    !Array.isArray(profileImageValue) &&
+    typeof (profileImageValue as Record<string, unknown>).fileKey === "string"
+      ? ((profileImageValue as Record<string, unknown>).fileKey as string)
+      : undefined;
   const contact = contacts.find((item) => item.id === opportunity?.contact?.id);
   const conversation = contact?.conversations.find(
     (item) => !item.id.startsWith("conv-"),
@@ -167,11 +192,13 @@ export function OpportunityDetailsPage() {
         content,
         dueAt: new Date(scheduleAt).toISOString(),
         category: scheduleCategory,
+        customFields: activityCustomFields,
       });
       setScheduleOpen(false);
       setScheduleTitle("");
       setScheduleNote("");
       setScheduleAt("");
+      setActivityCustomFields({});
       toast.success("Activity scheduled");
     } catch (error: unknown) {
       toast.error(
@@ -357,6 +384,22 @@ export function OpportunityDetailsPage() {
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
+          {profileImageKey ? (
+            <img
+              src={storageApi.getProxyFileUrl(profileImageKey)}
+              alt={`${opportunity.title} profile`}
+              className="h-11 w-11 shrink-0 rounded-full border object-cover"
+            />
+          ) : (
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+              {opportunity.title
+                .split(/\s+/)
+                .slice(0, 2)
+                .map((part) => part[0])
+                .join("")
+                .toUpperCase()}
+            </div>
+          )}
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-bold">{opportunity.title}</h1>
@@ -491,6 +534,28 @@ export function OpportunityDetailsPage() {
           supporting={opportunity.owner?.email}
         />
       </div>
+
+      <Card>
+        <div className="border-b px-5 py-4">
+          <h2 className="font-semibold">Additional information</h2>
+        </div>
+        <CardContent className="p-5">
+          <InlineCustomFields
+            entityType="opportunities"
+            values={opportunity.customFields || {}}
+            onChange={() => undefined}
+            readOnly
+          />
+        </CardContent>
+      </Card>
+
+      {opportunity.account && (
+        <CrmFieldValues
+          entityType="accounts"
+          values={opportunity.account.customFields}
+          title={`${opportunity.account.name} information`}
+        />
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
         <Card>
@@ -1049,44 +1114,92 @@ export function OpportunityDetailsPage() {
         </DialogContent>
       </Dialog>
       <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
-        <DialogContent className="max-w-xl">
+        <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Schedule an activity</DialogTitle>
           </DialogHeader>
-          <div className="flex flex-wrap gap-2">
-            {(["todo", "email", "call", "meeting", "document"] as const).map(
-              (category) => {
-                const meta = ACTIVITY_CATEGORY_META[category];
-                const CategoryIcon = meta.icon;
-                return (
-                  <Button
-                    key={category}
-                    type="button"
-                    size="sm"
-                    variant={
-                      scheduleCategory === category ? "default" : "outline"
-                    }
-                    onClick={() => setScheduleCategory(category)}
-                  >
-                    <CategoryIcon
-                      className={`mr-1.5 h-4 w-4 ${meta.iconColor}`}
-                    />
-                    {meta.label}
-                  </Button>
-                );
-              },
-            )}
-          </div>
-          <Input
-            value={scheduleTitle}
-            onChange={(event) => setScheduleTitle(event.target.value)}
-            placeholder="Activity summary"
-            maxLength={200}
-          />
-          <Input
-            type="datetime-local"
-            value={scheduleAt}
-            onChange={(event) => setScheduleAt(event.target.value)}
+          <InlineCustomFields
+            entityType="activities"
+            values={activityCustomFields}
+            onChange={setActivityCustomFields}
+            disabled={addActivity.isPending}
+            systemFields={{
+              category: (field) => (
+                <div className="grid gap-2">
+                  <Label>
+                    {field.label}
+                    {field.required ? " *" : ""}
+                  </Label>
+                  <div className="flex flex-wrap gap-2">
+                    {(
+                      ["todo", "email", "call", "meeting", "document"] as const
+                    ).map((category) => {
+                      const meta = ACTIVITY_CATEGORY_META[category];
+                      const CategoryIcon = meta.icon;
+                      return (
+                        <Button
+                          key={category}
+                          type="button"
+                          size="sm"
+                          variant={
+                            scheduleCategory === category
+                              ? "default"
+                              : "outline"
+                          }
+                          onClick={() => setScheduleCategory(category)}
+                        >
+                          <CategoryIcon
+                            className={`mr-1.5 h-4 w-4 ${meta.iconColor}`}
+                          />
+                          {meta.label}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ),
+              content: (field) => (
+                <div className="grid gap-2">
+                  <Label>
+                    {field.label}
+                    {field.required ? " *" : ""}
+                  </Label>
+                  <Input
+                    value={scheduleTitle}
+                    onChange={(event) => setScheduleTitle(event.target.value)}
+                    placeholder={field.placeholder}
+                    required={field.required}
+                    maxLength={200}
+                  />
+                </div>
+              ),
+              dueAt: (field) => (
+                <div className="grid gap-2">
+                  <Label>
+                    {field.label}
+                    {field.required ? " *" : ""}
+                  </Label>
+                  <Input
+                    type="datetime-local"
+                    value={scheduleAt}
+                    onChange={(event) => setScheduleAt(event.target.value)}
+                    required={field.required}
+                  />
+                </div>
+              ),
+              notes: (field) => (
+                <div className="grid gap-2">
+                  <Label>{field.label}</Label>
+                  <Textarea
+                    value={scheduleNote}
+                    onChange={(event) => setScheduleNote(event.target.value)}
+                    placeholder={field.placeholder}
+                    maxLength={1500}
+                    className="min-h-24 resize-none"
+                  />
+                </div>
+              ),
+            }}
           />
           <div className="rounded-md border bg-muted/20 px-3 py-2 text-sm">
             Assigned to:{" "}
@@ -1094,13 +1207,6 @@ export function OpportunityDetailsPage() {
               {opportunity.owner?.name || "Unassigned"}
             </span>
           </div>
-          <Textarea
-            value={scheduleNote}
-            onChange={(event) => setScheduleNote(event.target.value)}
-            placeholder="Add a note or instructions…"
-            maxLength={1500}
-            className="min-h-24 resize-none"
-          />
           <DialogFooter>
             <Button variant="outline" onClick={() => setScheduleOpen(false)}>
               Discard

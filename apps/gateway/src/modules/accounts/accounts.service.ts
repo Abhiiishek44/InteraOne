@@ -1,6 +1,8 @@
 import { randomUUID } from "crypto";
 import { Types } from "mongoose";
 import { Account, Contact, Membership, Opportunity } from "@shared/models";
+import { CrmFieldsService } from "@modules/crm-fields";
+import { serializeCustomFields } from "@shared/utils/custom-fields";
 
 export interface AccountWriteInput {
   name?: string;
@@ -11,6 +13,7 @@ export interface AccountWriteInput {
   ownerId?: string | null;
   tags?: string[];
   lifecycleStage?: "prospect" | "qualified" | "customer" | "inactive" | "lost";
+  customFields?: Record<string, unknown>;
 }
 
 export function normalizeAccountName(value: string): string {
@@ -34,7 +37,8 @@ export class AccountsService {
       userId: new Types.ObjectId(ownerId),
       inviteStatus: "accepted",
     });
-    if (!exists) throw new Error("Company owner must be an active organization member");
+    if (!exists)
+      throw new Error("Company owner must be an active organization member");
   }
 
   async list(
@@ -57,9 +61,16 @@ export class AccountsService {
     if (options.lifecycleStage) query.lifecycleStage = options.lifecycleStage;
     if (options.ownerId) query.ownerId = new Types.ObjectId(options.ownerId);
     if (options.search?.trim()) {
-      const escaped = options.search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const escaped = options.search
+        .trim()
+        .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const regex = new RegExp(escaped, "i");
-      query.$or = [{ name: regex }, { domain: regex }, { industry: regex }, { tags: regex }];
+      query.$or = [
+        { name: regex },
+        { domain: regex },
+        { industry: regex },
+        { tags: regex },
+      ];
     }
 
     const [accounts, total] = await Promise.all([
@@ -74,16 +85,36 @@ export class AccountsService {
     const ids = accounts.map((account) => account._id);
     const [contactCounts, opportunityStats] = await Promise.all([
       Contact.aggregate([
-        { $match: { organizationId: new Types.ObjectId(organizationId), accountId: { $in: ids } } },
+        {
+          $match: {
+            organizationId: new Types.ObjectId(organizationId),
+            accountId: { $in: ids },
+          },
+        },
         { $group: { _id: "$accountId", count: { $sum: 1 } } },
       ]),
       Opportunity.aggregate([
-        { $match: { organizationId: new Types.ObjectId(organizationId), accountId: { $in: ids } } },
-        { $group: { _id: "$accountId", count: { $sum: 1 }, value: { $sum: "$value" } } },
+        {
+          $match: {
+            organizationId: new Types.ObjectId(organizationId),
+            accountId: { $in: ids },
+          },
+        },
+        {
+          $group: {
+            _id: "$accountId",
+            count: { $sum: 1 },
+            value: { $sum: "$value" },
+          },
+        },
       ]),
     ]);
-    const contactsByAccount = new Map(contactCounts.map((row) => [String(row._id), row.count]));
-    const opportunitiesByAccount = new Map(opportunityStats.map((row) => [String(row._id), row]));
+    const contactsByAccount = new Map(
+      contactCounts.map((row) => [String(row._id), row.count]),
+    );
+    const opportunitiesByAccount = new Map(
+      opportunityStats.map((row) => [String(row._id), row]),
+    );
 
     return {
       accounts: accounts.map((account: any) => ({
@@ -97,15 +128,22 @@ export class AccountsService {
         tags: account.tags || [],
         lifecycleStage: account.lifecycleStage,
         owner: account.ownerId
-          ? { id: String(account.ownerId._id), name: account.ownerId.name, email: account.ownerId.email }
+          ? {
+              id: String(account.ownerId._id),
+              name: account.ownerId.name,
+              email: account.ownerId.email,
+            }
           : null,
         contactCount: contactsByAccount.get(String(account._id)) || 0,
-        opportunityCount: opportunitiesByAccount.get(String(account._id))?.count || 0,
-        pipelineValue: opportunitiesByAccount.get(String(account._id))?.value || 0,
+        opportunityCount:
+          opportunitiesByAccount.get(String(account._id))?.count || 0,
+        pipelineValue:
+          opportunitiesByAccount.get(String(account._id))?.value || 0,
         lastActivityAt: account.lastActivityAt.toISOString(),
         archivedAt: account.archivedAt?.toISOString() || null,
         createdAt: account.createdAt.toISOString(),
         updatedAt: account.updatedAt.toISOString(),
+        customFields: serializeCustomFields(account.customFields),
       })),
       total,
       page,
@@ -155,11 +193,18 @@ export class AccountsService {
           id: `${opportunity._id}:${item.id}`,
           type: item.type,
           content: item.content,
-          opportunity: { id: String(opportunity._id), title: opportunity.title },
+          opportunity: {
+            id: String(opportunity._id),
+            title: opportunity.title,
+          },
           createdAt: item.createdAt.toISOString(),
         })),
       ),
-    ].sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+    ].sort(
+      (left, right) =>
+        new Date(right.createdAt).getTime() -
+        new Date(left.createdAt).getTime(),
+    );
 
     return {
       account: {
@@ -172,25 +217,49 @@ export class AccountsService {
         phone: account.phone || "",
         tags: account.tags || [],
         lifecycleStage: account.lifecycleStage,
-        owner: account.ownerId && typeof account.ownerId === "object"
-          ? { id: String((account.ownerId as any)._id), name: (account.ownerId as any).name, email: (account.ownerId as any).email }
-          : null,
+        owner:
+          account.ownerId && typeof account.ownerId === "object"
+            ? {
+                id: String((account.ownerId as any)._id),
+                name: (account.ownerId as any).name,
+                email: (account.ownerId as any).email,
+              }
+            : null,
         archivedAt: account.archivedAt?.toISOString() || null,
         createdAt: account.createdAt.toISOString(),
         updatedAt: account.updatedAt.toISOString(),
+        customFields: serializeCustomFields(account.customFields),
       },
       contacts: contacts.map((contact: any) => ({
-        id: String(contact._id), name: contact.name, email: contact.email || "", phone: contact.phone || "",
-        lifecycleStage: contact.lifecycleStage, owner: contact.ownerId ? { id: String(contact.ownerId._id), name: contact.ownerId.name } : null,
+        id: String(contact._id),
+        name: contact.name,
+        email: contact.email || "",
+        phone: contact.phone || "",
+        lifecycleStage: contact.lifecycleStage,
+        owner: contact.ownerId
+          ? { id: String(contact.ownerId._id), name: contact.ownerId.name }
+          : null,
         lastActivityAt: contact.lastActivityAt.toISOString(),
       })),
       opportunities: opportunities.map((opportunity: any) => {
-        const primaryContact = opportunity.primaryContactId || opportunity.contactId;
+        const primaryContact =
+          opportunity.primaryContactId || opportunity.contactId;
         return {
-          id: String(opportunity._id), title: opportunity.title, value: opportunity.value,
-          currency: opportunity.currency, stage: opportunity.stage, nextAction: opportunity.nextAction || "",
-          primaryContact: primaryContact ? { id: String(primaryContact._id), name: primaryContact.name } : null,
-          owner: opportunity.ownerId ? { id: String(opportunity.ownerId._id), name: opportunity.ownerId.name } : null,
+          id: String(opportunity._id),
+          title: opportunity.title,
+          value: opportunity.value,
+          currency: opportunity.currency,
+          stage: opportunity.stage,
+          nextAction: opportunity.nextAction || "",
+          primaryContact: primaryContact
+            ? { id: String(primaryContact._id), name: primaryContact.name }
+            : null,
+          owner: opportunity.ownerId
+            ? {
+                id: String(opportunity.ownerId._id),
+                name: opportunity.ownerId.name,
+              }
+            : null,
           updatedAt: opportunity.updatedAt.toISOString(),
         };
       }),
@@ -198,8 +267,18 @@ export class AccountsService {
     };
   }
 
-  async create(organizationId: string, userId: string, input: AccountWriteInput) {
+  async create(
+    organizationId: string,
+    userId: string,
+    input: AccountWriteInput,
+  ) {
     await this.validateOwner(organizationId, input.ownerId);
+    const customFields = await new CrmFieldsService().validateValues(
+      organizationId,
+      "accounts",
+      input.customFields,
+      true,
+    );
     const name = input.name!.trim().replace(/\s+/g, " ");
     return Account.create({
       organizationId: new Types.ObjectId(organizationId),
@@ -211,23 +290,51 @@ export class AccountsService {
       description: input.description?.trim() || undefined,
       phone: input.phone?.trim() || undefined,
       ownerId: input.ownerId ? new Types.ObjectId(input.ownerId) : null,
-      tags: [...new Set((input.tags || []).map((tag) => tag.trim().toLowerCase()).filter(Boolean))],
+      tags: [
+        ...new Set(
+          (input.tags || [])
+            .map((tag) => tag.trim().toLowerCase())
+            .filter(Boolean),
+        ),
+      ],
       lifecycleStage: input.lifecycleStage || "prospect",
       createdBy: new Types.ObjectId(userId),
       lastActivityAt: new Date(),
+      customFields,
     });
   }
 
-  async update(organizationId: string, accountId: string, input: AccountWriteInput) {
+  async update(
+    organizationId: string,
+    accountId: string,
+    input: AccountWriteInput,
+  ) {
     await this.validateOwner(organizationId, input.ownerId);
-    const set: Record<string, unknown> = { ...input, lastActivityAt: new Date() };
+    if (input.customFields !== undefined) {
+      input.customFields = await new CrmFieldsService().validateValues(
+        organizationId,
+        "accounts",
+        input.customFields,
+      );
+    }
+    const set: Record<string, unknown> = {
+      ...input,
+      lastActivityAt: new Date(),
+    };
     if (input.name !== undefined) {
       set.name = input.name.trim().replace(/\s+/g, " ");
       set.normalizedName = normalizeAccountName(input.name);
     }
-    if (input.website !== undefined) set.domain = domainFromWebsite(input.website);
-    if (input.ownerId !== undefined) set.ownerId = input.ownerId ? new Types.ObjectId(input.ownerId) : null;
-    if (input.tags !== undefined) set.tags = [...new Set(input.tags.map((tag) => tag.trim().toLowerCase()).filter(Boolean))];
+    if (input.website !== undefined)
+      set.domain = domainFromWebsite(input.website);
+    if (input.ownerId !== undefined)
+      set.ownerId = input.ownerId ? new Types.ObjectId(input.ownerId) : null;
+    if (input.tags !== undefined)
+      set.tags = [
+        ...new Set(
+          input.tags.map((tag) => tag.trim().toLowerCase()).filter(Boolean),
+        ),
+      ];
     const account = await Account.findOneAndUpdate(
       { _id: accountId, organizationId },
       { $set: set },
@@ -237,11 +344,17 @@ export class AccountsService {
     if (input.name !== undefined) {
       await Promise.all([
         Contact.updateMany(
-          { organizationId: new Types.ObjectId(organizationId), accountId: account._id },
+          {
+            organizationId: new Types.ObjectId(organizationId),
+            accountId: account._id,
+          },
           { $set: { company: account.name } },
         ),
         Opportunity.updateMany(
-          { organizationId: new Types.ObjectId(organizationId), accountId: account._id },
+          {
+            organizationId: new Types.ObjectId(organizationId),
+            accountId: account._id,
+          },
           { $set: { company: account.name } },
         ),
       ]);
@@ -258,7 +371,12 @@ export class AccountsService {
     if (!account) throw new Error("Company not found");
   }
 
-  async addNote(organizationId: string, accountId: string, user: { userId: string; email: string }, content: string) {
+  async addNote(
+    organizationId: string,
+    accountId: string,
+    user: { userId: string; email: string },
+    content: string,
+  ) {
     const note = {
       id: randomUUID(),
       authorId: new Types.ObjectId(user.userId),
@@ -268,7 +386,10 @@ export class AccountsService {
     };
     const account = await Account.findOneAndUpdate(
       { _id: accountId, organizationId },
-      { $push: { notes: { $each: [note], $position: 0 } }, $set: { lastActivityAt: new Date() } },
+      {
+        $push: { notes: { $each: [note], $position: 0 } },
+        $set: { lastActivityAt: new Date() },
+      },
       { new: true },
     );
     if (!account) throw new Error("Company not found");

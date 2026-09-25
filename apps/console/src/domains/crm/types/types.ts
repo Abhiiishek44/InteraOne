@@ -38,7 +38,13 @@ export interface Opportunity {
   id: string;
   title: string;
   company?: string;
-  account?: { id: string; name: string; website?: string; industry?: string } | null;
+  account?: {
+    id: string;
+    name: string;
+    website?: string;
+    industry?: string;
+    customFields?: Record<string, unknown>;
+  } | null;
   value: number;
   currency: "USD" | "INR" | "EUR" | "GBP";
   stage: OpportunityStage;
@@ -55,6 +61,7 @@ export interface Opportunity {
     dueAt: string | null;
     completedAt: string | null;
     createdAt: string;
+    customFields?: Record<string, unknown>;
   }>;
   contact: {
     id: string;
@@ -70,6 +77,7 @@ export interface Opportunity {
   } | null;
   createdAt: string;
   updatedAt: string;
+  customFields: Record<string, unknown>;
 }
 
 export interface UpdatePipelinePayload {
@@ -89,6 +97,7 @@ export interface CreateOpportunityPayload {
   ownerId?: string | null;
   expectedCloseAt?: string | null;
   nextAction?: string;
+  customFields?: Record<string, unknown>;
 }
 
 export type UpdateOpportunityPayload = Partial<

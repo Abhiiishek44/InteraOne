@@ -37,6 +37,7 @@ import { templatesRouter } from "@modules/templates";
 import { opportunitiesRouter } from "@modules/opportunities";
 import { crmViewsRouter } from "@modules/crm-views";
 import { accountsRouter } from "@modules/accounts";
+import { crmFieldsRouter } from "@modules/crm-fields";
 import { setupSwagger } from "@shared/infra/swagger";
 
 class Application {
@@ -155,6 +156,7 @@ class Application {
     router.use("/templates", templatesRouter);
     router.use("/opportunities", opportunitiesRouter);
     router.use("/crm/views", crmViewsRouter);
+    router.use("/crm/fields", crmFieldsRouter);
     router.use("/accounts", accountsRouter);
 
     // Public config endpoint

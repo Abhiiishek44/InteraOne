@@ -10,13 +10,18 @@ const lifecycleStage = Joi.string().valid(
 
 const accountFields = {
   name: Joi.string().trim().max(160),
-  website: Joi.string().trim().uri({ scheme: ["http", "https"] }).max(500).allow(""),
+  website: Joi.string()
+    .trim()
+    .uri({ scheme: ["http", "https"] })
+    .max(500)
+    .allow(""),
   industry: Joi.string().trim().max(120).allow(""),
   description: Joi.string().trim().max(4000).allow(""),
   phone: Joi.string().trim().max(40).allow(""),
   ownerId: Joi.string().hex().length(24).allow(null, ""),
   tags: Joi.array().items(Joi.string().trim().max(40)).max(30),
   lifecycleStage,
+  customFields: Joi.object().max(100),
 };
 
 export const accountsSchema = {

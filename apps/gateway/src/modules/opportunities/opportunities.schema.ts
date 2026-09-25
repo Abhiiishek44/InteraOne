@@ -29,6 +29,7 @@ export const opportunitiesSchema = {
     ownerId: Joi.string().hex().length(24).allow(null, ""),
     expectedCloseAt: Joi.date().iso().allow(null, ""),
     nextAction: Joi.string().trim().max(500).allow(""),
+    customFields: Joi.object().max(100),
   }).or("contactId", "primaryContactId", "accountId"),
   update: Joi.object({
     title: Joi.string().trim().max(160),
@@ -40,6 +41,7 @@ export const opportunitiesSchema = {
     ownerId: Joi.string().hex().length(24).allow(null, ""),
     expectedCloseAt: Joi.date().iso().allow(null, ""),
     nextAction: Joi.string().trim().max(500).allow(""),
+    customFields: Joi.object().max(100),
   })
     .min(1)
     .options({ stripUnknown: true }),
@@ -75,6 +77,7 @@ export const opportunitiesSchema = {
     category: Joi.string()
       .valid("todo", "email", "call", "meeting", "document")
       .default("todo"),
+    customFields: Joi.object().max(100),
   }),
   updateNote: Joi.object({
     content: Joi.string().trim().max(2000).required(),

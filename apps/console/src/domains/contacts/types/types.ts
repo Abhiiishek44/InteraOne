@@ -43,6 +43,7 @@ export interface ContactWritePayload {
   preferredChannel?: ContactChannel | null;
   nextFollowUpAt?: string | null;
   lastContactedAt?: string | null;
+  customFields?: Record<string, unknown>;
 }
 
 export interface ContactNote {
@@ -81,7 +82,12 @@ export interface Contact {
   email?: string;
   phone?: string;
   company?: string;
-  account?: { id: string; name: string; website?: string; industry?: string } | null;
+  account?: {
+    id: string;
+    name: string;
+    website?: string;
+    industry?: string;
+  } | null;
   tags: string[];
   lifecycleStage: ContactLifecycleStage;
   leadStatus: ContactLeadStatus;
@@ -98,6 +104,7 @@ export interface Contact {
   conversations: ContactConversation[];
   insights: ContactInsight;
   conflicts: ContactConflict[];
+  customFields?: Record<string, unknown>;
 }
 
 export interface ContactListItem {
@@ -107,7 +114,12 @@ export interface ContactListItem {
   email?: string;
   phone?: string;
   company?: string;
-  account?: { id: string; name: string; website?: string; industry?: string } | null;
+  account?: {
+    id: string;
+    name: string;
+    website?: string;
+    industry?: string;
+  } | null;
   tags: string[];
   source: "ai" | "widget" | "agent" | "owner" | "admin";
   lifecycleStage: ContactLifecycleStage;
@@ -147,6 +159,7 @@ export interface ContactListItem {
   lastActivity: string;
   createdAt: string;
   updatedAt: string;
+  customFields?: Record<string, unknown>;
 }
 
 export interface ContactConflictItem {
@@ -201,4 +214,5 @@ export const toContactViewModel = (item: ContactListItem): Contact => ({
     topics: item.insights?.topics || [],
   },
   conflicts: item.conflicts || [],
+  customFields: item.customFields || {},
 });

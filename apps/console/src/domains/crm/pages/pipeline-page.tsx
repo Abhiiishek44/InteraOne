@@ -27,6 +27,7 @@ import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Card, CardContent } from "@/shared/ui/card";
 import { Input } from "@/shared/ui/input";
+import { Label } from "@/shared/ui/label";
 import { Textarea } from "@/shared/ui/textarea";
 import {
   Dialog,
@@ -38,6 +39,7 @@ import {
 import { useContactOwners } from "@/domains/contacts/hooks/use-contacts";
 import { authApi } from "@/domains/auth/api/auth.api";
 import { OpportunityDialog } from "../components/opportunity-dialog";
+import { InlineCustomFields } from "../components/inline-custom-fields";
 import { PipelineSettingsDialog } from "../components/pipeline-settings-dialog";
 import {
   useOpportunities,
@@ -128,6 +130,9 @@ export function PipelinePage() {
   const [scheduleForId, setScheduleForId] = useState<string>();
   const [scheduleTitle, setScheduleTitle] = useState("");
   const [scheduleAt, setScheduleAt] = useState("");
+  const [activityCustomFields, setActivityCustomFields] = useState<
+    Record<string, unknown>
+  >({});
   const [scheduleCategory, setScheduleCategory] = useState<
     "todo" | "email" | "call" | "meeting" | "document"
   >("todo");
@@ -966,45 +971,81 @@ export function PipelinePage() {
         open={Boolean(scheduleForId)}
         onOpenChange={(open) => !open && setScheduleForId(undefined)}
       >
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>Schedule an activity</DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-5 gap-1 rounded-md bg-muted/40 p-1">
-            {(["todo", "email", "call", "meeting", "document"] as const).map(
-              (category) => {
-                const meta = ACTIVITY_CATEGORY_META[category];
-                const CategoryIcon = meta.icon;
-                return (
-                  <Button
-                    key={category}
-                    type="button"
-                    size="sm"
-                    variant={
-                      scheduleCategory === category ? "default" : "ghost"
+          <InlineCustomFields
+            entityType="activities"
+            values={activityCustomFields}
+            onChange={setActivityCustomFields}
+            disabled={addActivity.isPending}
+            systemFields={{
+              category: (field) => (
+                <div className="grid gap-2">
+                  <Label>
+                    {field.label}
+                    {field.required ? " *" : ""}
+                  </Label>
+                  <div className="grid grid-cols-5 gap-1 rounded-md bg-muted/40 p-1">
+                    {(
+                      ["todo", "email", "call", "meeting", "document"] as const
+                    ).map((category) => {
+                      const meta = ACTIVITY_CATEGORY_META[category];
+                      const CategoryIcon = meta.icon;
+                      return (
+                        <Button
+                          key={category}
+                          type="button"
+                          size="sm"
+                          variant={
+                            scheduleCategory === category ? "default" : "ghost"
+                          }
+                          onClick={() => setScheduleCategory(category)}
+                          className="px-1 text-[11px]"
+                        >
+                          <CategoryIcon
+                            className={`mr-1.5 h-4 w-4 ${meta.iconColor}`}
+                          />
+                          {meta.label}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ),
+              content: (field) => (
+                <div className="grid gap-2">
+                  <Label>
+                    {field.label}
+                    {field.required ? " *" : ""}
+                  </Label>
+                  <Textarea
+                    value={scheduleTitle}
+                    onChange={(event) => setScheduleTitle(event.target.value)}
+                    placeholder={
+                      field.placeholder || "Call, email, demo, follow-up…"
                     }
-                    onClick={() => setScheduleCategory(category)}
-                    className="px-1 text-[11px]"
-                  >
-                    <CategoryIcon
-                      className={`mr-1.5 h-4 w-4 ${meta.iconColor}`}
-                    />
-                    {meta.label}
-                  </Button>
-                );
-              },
-            )}
-          </div>
-          <Textarea
-            value={scheduleTitle}
-            onChange={(event) => setScheduleTitle(event.target.value)}
-            placeholder="Call, email, demo, follow-up…"
-            className="resize-none"
-          />
-          <Input
-            type="datetime-local"
-            value={scheduleAt}
-            onChange={(event) => setScheduleAt(event.target.value)}
+                    required={field.required}
+                    className="resize-none"
+                  />
+                </div>
+              ),
+              dueAt: (field) => (
+                <div className="grid gap-2">
+                  <Label>
+                    {field.label}
+                    {field.required ? " *" : ""}
+                  </Label>
+                  <Input
+                    type="datetime-local"
+                    value={scheduleAt}
+                    onChange={(event) => setScheduleAt(event.target.value)}
+                    required={field.required}
+                  />
+                </div>
+              ),
+            }}
           />
           <DialogFooter>
             <Button
@@ -1018,10 +1059,12 @@ export function PipelinePage() {
                   content: scheduleTitle.trim(),
                   dueAt: new Date(scheduleAt).toISOString(),
                   category: scheduleCategory,
+                  customFields: activityCustomFields,
                 });
                 setScheduleForId(undefined);
                 setScheduleTitle("");
                 setScheduleAt("");
+                setActivityCustomFields({});
                 toast.success("Activity scheduled");
               }}
             >

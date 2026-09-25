@@ -62,6 +62,7 @@ export const contactsSchema = {
     preferredChannel: contactChannel.allow(null, ""),
     nextFollowUpAt: Joi.date().iso().allow(null, ""),
     lastContactedAt: Joi.date().iso().allow(null, ""),
+    customFields: Joi.object().max(100),
   }),
 
   upsertFromAI: Joi.object({
@@ -120,6 +121,7 @@ export const contactsSchema = {
     preferredChannel: contactChannel.allow(null, ""),
     nextFollowUpAt: Joi.date().iso().allow(null, ""),
     lastContactedAt: Joi.date().iso().allow(null, ""),
+    customFields: Joi.object().max(100),
   })
     .min(1)
     .options({ stripUnknown: true }),

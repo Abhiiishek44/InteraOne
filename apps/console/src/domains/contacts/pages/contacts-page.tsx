@@ -118,6 +118,7 @@ const toContactViewModel = (item: ContactListItem): Contact => ({
     topics: item.insights?.topics || [],
   },
   conflicts: item.conflicts || [],
+  customFields: item.customFields || {},
 });
 
 const formatDate = (iso: string) =>

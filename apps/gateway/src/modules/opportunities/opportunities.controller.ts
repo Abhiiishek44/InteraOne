@@ -144,6 +144,7 @@ export class OpportunitiesController {
         req.body.content,
         req.body.dueAt,
         req.body.category,
+        req.body.customFields,
       );
       sendResponse(res, 201, true, "Activity recorded", { activity });
     } catch (error: any) {

@@ -26,6 +26,7 @@ export interface ContactWriteInput {
   preferredChannel?: string | null;
   nextFollowUpAt?: string | null;
   lastContactedAt?: string | null;
+  customFields?: Record<string, unknown>;
 }
 
 export interface UpsertFromAIInput {

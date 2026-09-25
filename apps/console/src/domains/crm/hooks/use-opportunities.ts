@@ -161,12 +161,15 @@ export function useAddOpportunityActivity() {
       content,
       dueAt,
       category,
+      customFields,
     }: {
       id: string;
       content: string;
       dueAt?: string;
       category?: "todo" | "email" | "call" | "meeting" | "document";
-    }) => opportunitiesApi.addActivity(id, content, dueAt, category),
+      customFields?: Record<string, unknown>;
+    }) =>
+      opportunitiesApi.addActivity(id, content, dueAt, category, customFields),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["opportunities"] });
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
