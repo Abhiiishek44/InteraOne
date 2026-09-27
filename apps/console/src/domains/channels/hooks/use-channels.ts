@@ -256,6 +256,40 @@ export const useConnectGoogleForms = () =>
     },
   });
 
+export const useConnectGoogleCalendar = () =>
+  useMutation({
+    mutationFn: () => channelsApi.beginGoogleCalendarOAuth(),
+    onSuccess: (response) => {
+      window.location.assign(response.data.authorizationUrl);
+    },
+  });
+
+export const useSyncGoogleCalendars = () => {
+  const invalidate = useInvalidateLeadSources();
+  return useMutation({
+    mutationFn: (connectionId: string) =>
+      channelsApi.syncGoogleCalendars(connectionId),
+    onSettled: invalidate,
+  });
+};
+
+export const useConnectGoogleTasks = () =>
+  useMutation({
+    mutationFn: () => channelsApi.beginGoogleTasksOAuth(),
+    onSuccess: (response) => {
+      window.location.assign(response.data.authorizationUrl);
+    },
+  });
+
+export const useSyncGoogleTaskLists = () => {
+  const invalidate = useInvalidateLeadSources();
+  return useMutation({
+    mutationFn: (connectionId: string) =>
+      channelsApi.syncGoogleTaskLists(connectionId),
+    onSettled: invalidate,
+  });
+};
+
 export const useSyncFacebookLeadForms = () => {
   const invalidate = useInvalidateLeadSources();
   return useMutation({

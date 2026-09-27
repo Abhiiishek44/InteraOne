@@ -69,6 +69,28 @@ export const channelsApi = {
       data: { authorizationUrl: string };
     }>("/lead-sources/google/connect"),
 
+  beginGoogleCalendarOAuth: () =>
+    apiClient.get<{
+      success: boolean;
+      data: { authorizationUrl: string };
+    }>("/lead-sources/google-calendar/connect"),
+
+  syncGoogleCalendars: (connectionId: string) =>
+    apiClient.post<{ success: boolean }>(
+      `/lead-sources/${connectionId}/calendars/sync`,
+    ),
+
+  beginGoogleTasksOAuth: () =>
+    apiClient.get<{
+      success: boolean;
+      data: { authorizationUrl: string };
+    }>("/lead-sources/google-tasks/connect"),
+
+  syncGoogleTaskLists: (connectionId: string) =>
+    apiClient.post<{ success: boolean }>(
+      `/lead-sources/${connectionId}/task-lists/sync`,
+    ),
+
   syncFacebookLeadForms: (connectionId: string) =>
     apiClient.post<{ success: boolean }>(
       `/lead-sources/${connectionId}/forms/sync`,

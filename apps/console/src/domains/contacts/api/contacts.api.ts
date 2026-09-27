@@ -34,6 +34,7 @@ export interface ContactListQuery {
   limit?: number;
   lifecycleStage?: string;
   leadStatus?: string;
+  acquisitionSource?: string;
   tags?: string[];
   activityRange?: string;
   conversationRange?: string;
@@ -72,6 +73,9 @@ class ContactsApi {
     }
     if (query.leadStatus && query.leadStatus !== "all") {
       params.set("leadStatus", query.leadStatus);
+    }
+    if (query.acquisitionSource && query.acquisitionSource !== "all") {
+      params.set("acquisitionSource", query.acquisitionSource);
     }
     if (query.tags?.length) params.set("tags", query.tags.join(","));
     if (query.activityRange && query.activityRange !== "all") {

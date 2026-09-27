@@ -19,6 +19,14 @@ import {
   GoogleFormsAdapter,
   type GoogleCredentials,
 } from "./google-forms.adapter";
+import {
+  GoogleCalendarAdapter,
+  type GoogleCalendarCredentials,
+} from "./google-calendar.adapter";
+import {
+  GoogleTasksAdapter,
+  type GoogleTasksCredentials,
+} from "./google-tasks.adapter";
 
 type FacebookWebhookPayload = {
   object?: string;
@@ -39,9 +47,11 @@ type FacebookWebhookPayload = {
   }>;
 };
 
+// Hashes one-time OAuth state before it is persisted for callback verification.
 const hashState = (state: string) =>
   createHash("sha256").update(state).digest("hex");
 
+// Converts a database connection document into the public integration response shape.
 const serializeConnection = (connection: any) => ({
   id: connection._id.toString(),
   provider: connection.provider,
@@ -55,6 +65,7 @@ const serializeConnection = (connection: any) => ({
   updatedAt: connection.updatedAt,
 });
 
+// Converts a stored lead form document into the public API response shape.
 const serializeForm = (form: any) => ({
   id: form._id.toString(),
   connectionId: form.connectionId.toString(),
@@ -68,12 +79,17 @@ const serializeForm = (form: any) => ({
   updatedAt: form.updatedAt,
 });
 
+// Coordinates OAuth, provider synchronization, webhooks, and lead-source persistence.
 export class LeadSourcesService {
+  // Injects provider adapters so external API behavior remains isolated and testable.
   constructor(
     private readonly facebook = new FacebookLeadAdsAdapter(),
     private readonly google = new GoogleFormsAdapter(),
+    private readonly googleCalendar = new GoogleCalendarAdapter(),
+    private readonly googleTasks = new GoogleTasksAdapter(),
   ) {}
 
+  // Creates a verified OAuth state and returns the Facebook authorization URL.
   async beginFacebookOAuth(organizationId: string, userId: string) {
     this.assertFacebookConfigured();
     const state = randomBytes(32).toString("base64url");
@@ -89,6 +105,7 @@ export class LeadSourcesService {
     return { authorizationUrl: this.facebook.getAuthorizationUrl(state) };
   }
 
+  // Completes Facebook OAuth, connects accessible Pages, and synchronizes their forms.
   async completeFacebookOAuth(code: string, state: string) {
     const oauthState = await FacebookOAuthState.findOneAndDelete({
       stateHash: hashState(state),
@@ -179,6 +196,7 @@ export class LeadSourcesService {
     };
   }
 
+  // Creates a verified OAuth state and returns the Google Forms authorization URL.
   async beginGoogleOAuth(organizationId: string, userId: string) {
     this.assertGoogleConfigured();
     const state = randomBytes(32).toString("base64url");
@@ -193,12 +211,14 @@ export class LeadSourcesService {
     return { authorizationUrl: this.google.getAuthorizationUrl(state) };
   }
 
+  // Completes Google Forms OAuth, stores credentials, and discovers available forms.
   async completeGoogleOAuth(code: string, state: string) {
     const oauthState = await FacebookOAuthState.findOneAndDelete({
       stateHash: hashState(state),
       expiresAt: { $gt: new Date() },
     });
-    if (!oauthState) throw new Error("Google OAuth state is invalid or expired");
+    if (!oauthState)
+      throw new Error("Google OAuth state is invalid or expired");
 
     const token = await this.google.exchangeCode(code);
     const profile = await this.google.getProfile(token.credentials.accessToken);
@@ -212,7 +232,9 @@ export class LeadSourcesService {
         $set: {
           name: profile.email,
           status: "active",
-          credentialsCiphertext: encryptCredential(JSON.stringify(token.credentials)),
+          credentialsCiphertext: encryptCredential(
+            JSON.stringify(token.credentials),
+          ),
           tokenExpiresAt: token.expiresIn
             ? new Date(Date.now() + token.expiresIn * 1000)
             : null,
@@ -224,9 +246,200 @@ export class LeadSourcesService {
       { upsert: true, returnDocument: "after" },
     );
     const forms = await this.syncGoogleForms(connection._id.toString());
-    return { redirectUri: oauthState.redirectUri, connectionId: connection._id.toString(), forms: forms.length };
+    return {
+      redirectUri: oauthState.redirectUri,
+      connectionId: connection._id.toString(),
+      forms: forms.length,
+    };
   }
 
+  // Creates a verified OAuth state and returns the Google Calendar authorization URL.
+  async beginGoogleCalendarOAuth(organizationId: string, userId: string) {
+    this.assertGoogleCalendarConfigured();
+    const state = randomBytes(32).toString("base64url");
+    const redirectUri = `${config.app.clientUrl}/dashboard/integrations`;
+    await FacebookOAuthState.create({
+      stateHash: hashState(state),
+      organizationId: new Types.ObjectId(organizationId),
+      userId: new Types.ObjectId(userId),
+      redirectUri,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    });
+    return {
+      authorizationUrl: this.googleCalendar.getAuthorizationUrl(state),
+    };
+  }
+
+  // Completes Calendar OAuth and stores the account with its accessible calendars.
+  async completeGoogleCalendarOAuth(code: string, state: string) {
+    const oauthState = await FacebookOAuthState.findOneAndDelete({
+      stateHash: hashState(state),
+      expiresAt: { $gt: new Date() },
+    });
+    if (!oauthState) {
+      throw new Error("Google Calendar OAuth state is invalid or expired");
+    }
+    const token = await this.googleCalendar.exchangeCode(code);
+    const profile = await this.googleCalendar.getProfile(
+      token.credentials.accessToken,
+    );
+    const calendars = await this.googleCalendar.listCalendars(
+      token.credentials.accessToken,
+    );
+    const connection = await LeadSourceConnection.findOneAndUpdate(
+      {
+        organizationId: oauthState.organizationId,
+        provider: "google_calendar",
+        externalAccountId: profile.id,
+      },
+      {
+        $set: {
+          name: profile.email,
+          status: "active",
+          credentialsCiphertext: encryptCredential(
+            JSON.stringify(token.credentials),
+          ),
+          tokenExpiresAt: token.expiresIn
+            ? new Date(Date.now() + token.expiresIn * 1000)
+            : null,
+          lastError: null,
+          metadata: { email: profile.email, calendars },
+        },
+        $setOnInsert: { createdBy: oauthState.userId },
+      },
+      { upsert: true, returnDocument: "after" },
+    );
+    return {
+      redirectUri: oauthState.redirectUri,
+      connectionId: connection._id.toString(),
+      calendars: calendars.length,
+    };
+  }
+
+  // Refreshes credentials and replaces the cached calendar list for one connection.
+  async syncGoogleCalendars(connectionId: string, organizationId?: string) {
+    const connection = await LeadSourceConnection.findOne({
+      _id: connectionId,
+      ...(organizationId ? { organizationId } : {}),
+      provider: "google_calendar",
+    }).select("+credentialsCiphertext");
+    if (!connection) throw new Error("Google Calendar connection not found");
+    if (connection.status !== "active") {
+      throw new Error("Connection is not active");
+    }
+    const stored = JSON.parse(
+      decryptCredential(connection.credentialsCiphertext),
+    ) as GoogleCalendarCredentials;
+    const credentials = await this.googleCalendar.refresh(stored);
+    const calendars = await this.googleCalendar.listCalendars(
+      credentials.accessToken,
+    );
+    await LeadSourceConnection.updateOne(
+      { _id: connection._id },
+      {
+        $set: {
+          credentialsCiphertext: encryptCredential(JSON.stringify(credentials)),
+          "metadata.calendars": calendars,
+          lastError: null,
+        },
+      },
+    );
+    return calendars;
+  }
+
+  // Creates a verified OAuth state and returns the Google Tasks authorization URL.
+  async beginGoogleTasksOAuth(organizationId: string, userId: string) {
+    this.assertGoogleTasksConfigured();
+    const state = randomBytes(32).toString("base64url");
+    const redirectUri = `${config.app.clientUrl}/dashboard/integrations`;
+    await FacebookOAuthState.create({
+      stateHash: hashState(state),
+      organizationId: new Types.ObjectId(organizationId),
+      userId: new Types.ObjectId(userId),
+      redirectUri,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    });
+    return { authorizationUrl: this.googleTasks.getAuthorizationUrl(state) };
+  }
+
+  // Completes Tasks OAuth and stores the account with its available task lists.
+  async completeGoogleTasksOAuth(code: string, state: string) {
+    const oauthState = await FacebookOAuthState.findOneAndDelete({
+      stateHash: hashState(state),
+      expiresAt: { $gt: new Date() },
+    });
+    if (!oauthState) {
+      throw new Error("Google Tasks OAuth state is invalid or expired");
+    }
+    const token = await this.googleTasks.exchangeCode(code);
+    const profile = await this.googleTasks.getProfile(
+      token.credentials.accessToken,
+    );
+    const taskLists = await this.googleTasks.listTaskLists(
+      token.credentials.accessToken,
+    );
+    const connection = await LeadSourceConnection.findOneAndUpdate(
+      {
+        organizationId: oauthState.organizationId,
+        provider: "google_tasks",
+        externalAccountId: profile.id,
+      },
+      {
+        $set: {
+          name: profile.email,
+          status: "active",
+          credentialsCiphertext: encryptCredential(
+            JSON.stringify(token.credentials),
+          ),
+          tokenExpiresAt: token.expiresIn
+            ? new Date(Date.now() + token.expiresIn * 1000)
+            : null,
+          lastError: null,
+          metadata: { email: profile.email, taskLists },
+        },
+        $setOnInsert: { createdBy: oauthState.userId },
+      },
+      { upsert: true, returnDocument: "after" },
+    );
+    return {
+      redirectUri: oauthState.redirectUri,
+      connectionId: connection._id.toString(),
+      taskLists: taskLists.length,
+    };
+  }
+
+  // Refreshes credentials and replaces the cached task lists for one connection.
+  async syncGoogleTaskLists(connectionId: string, organizationId?: string) {
+    const connection = await LeadSourceConnection.findOne({
+      _id: connectionId,
+      ...(organizationId ? { organizationId } : {}),
+      provider: "google_tasks",
+    }).select("+credentialsCiphertext");
+    if (!connection) throw new Error("Google Tasks connection not found");
+    if (connection.status !== "active") {
+      throw new Error("Connection is not active");
+    }
+    const stored = JSON.parse(
+      decryptCredential(connection.credentialsCiphertext),
+    ) as GoogleTasksCredentials;
+    const credentials = await this.googleTasks.refresh(stored);
+    const taskLists = await this.googleTasks.listTaskLists(
+      credentials.accessToken,
+    );
+    await LeadSourceConnection.updateOne(
+      { _id: connection._id },
+      {
+        $set: {
+          credentialsCiphertext: encryptCredential(JSON.stringify(credentials)),
+          "metadata.taskLists": taskLists,
+          lastError: null,
+        },
+      },
+    );
+    return taskLists;
+  }
+
+  // Lists all integration connections and attaches their synchronized forms.
   async list(organizationId: string) {
     const connections = await LeadSourceConnection.find({ organizationId })
       .sort({ createdAt: -1 })
@@ -248,6 +461,7 @@ export class LeadSourcesService {
     }));
   }
 
+  // Synchronizes Facebook instant forms into the local lead-form collection.
   async syncFacebookForms(connectionId: string, organizationId?: string) {
     const query: Record<string, unknown> = { _id: connectionId };
     if (organizationId) query.organizationId = organizationId;
@@ -298,6 +512,7 @@ export class LeadSourcesService {
       .then((items) => items.map(serializeForm));
   }
 
+  // Dispatches form synchronization to the adapter matching the connection provider.
   async syncForms(connectionId: string, organizationId?: string) {
     const connection = await LeadSourceConnection.findOne({
       _id: connectionId,
@@ -309,6 +524,7 @@ export class LeadSourcesService {
       : this.syncFacebookForms(connectionId, organizationId);
   }
 
+  // Refreshes Google credentials and synchronizes discoverable Forms locally.
   async syncGoogleForms(connectionId: string, organizationId?: string) {
     const connection = await LeadSourceConnection.findOne({
       _id: connectionId,
@@ -316,14 +532,17 @@ export class LeadSourcesService {
       provider: "google_forms",
     }).select("+credentialsCiphertext");
     if (!connection) throw new Error("Google Forms connection not found");
-    if (connection.status !== "active") throw new Error("Connection is not active");
+    if (connection.status !== "active")
+      throw new Error("Connection is not active");
 
     const stored = JSON.parse(
       decryptCredential(connection.credentialsCiphertext),
     ) as GoogleCredentials;
     const credentials = await this.google.refresh(stored);
     if (credentials.accessToken !== stored.accessToken) {
-      connection.credentialsCiphertext = encryptCredential(JSON.stringify(credentials));
+      connection.credentialsCiphertext = encryptCredential(
+        JSON.stringify(credentials),
+      );
       await connection.save();
     }
     const forms = await this.google.listForms(credentials.accessToken);
@@ -358,6 +577,7 @@ export class LeadSourcesService {
       .then((items) => items.map(serializeForm));
   }
 
+  // Updates a synchronized form’s status, mappings, and lead-creation defaults.
   async updateForm(
     organizationId: string,
     formId: string,
@@ -394,6 +614,7 @@ export class LeadSourcesService {
     return serializeForm(form);
   }
 
+  // Disconnects a provider account and removes its associated local resources.
   async deleteConnection(organizationId: string, connectionId: string) {
     const connection = await LeadSourceConnection.findOne({
       _id: connectionId,
@@ -418,6 +639,7 @@ export class LeadSourcesService {
     await connection.deleteOne();
   }
 
+  // Validates incoming Facebook lead events and enqueues new submissions for processing.
   async receiveFacebookWebhook(payload: FacebookWebhookPayload) {
     if (payload.object !== "page") return { accepted: 0 };
     let accepted = 0;
@@ -493,6 +715,7 @@ export class LeadSourcesService {
     return { accepted };
   }
 
+  // Returns a paginated, filterable history of lead-source submissions.
   async listSubmissions(
     organizationId: string,
     options: { status?: string; page?: number; limit?: number },
@@ -513,6 +736,7 @@ export class LeadSourcesService {
     return { submissions, total, page, limit };
   }
 
+  // Resets a failed submission and requeues it for provider-specific processing.
   async retrySubmission(organizationId: string, submissionId: string) {
     const submission = await LeadSubmission.findOneAndUpdate(
       { _id: submissionId, organizationId, status: "failed" },
@@ -521,13 +745,16 @@ export class LeadSourcesService {
     );
     if (!submission) throw new Error("Failed lead submission not found");
     await leadSourceQueue.add(
-      submission.provider === "google_forms" ? "google-form-response" : "facebook-lead",
+      submission.provider === "google_forms"
+        ? "google-form-response"
+        : "facebook-lead",
       { provider: submission.provider, submissionId },
       { jobId: `${submission.provider}-retry-${submissionId}-${Date.now()}` },
     );
     return submission;
   }
 
+  // Verifies that every required Facebook and encryption setting is configured.
   private assertFacebookConfigured() {
     const missing = [
       ["META_APP_ID", config.leadSources.facebook.appId],
@@ -544,6 +771,7 @@ export class LeadSourcesService {
     }
   }
 
+  // Verifies that Google Forms OAuth and encryption settings are configured.
   private assertGoogleConfigured() {
     const missing = [
       ["GOOGLE_CLIENT_ID", config.leadSources.google.clientId],
@@ -556,4 +784,35 @@ export class LeadSourcesService {
       throw new Error(`Google Forms is not configured: ${missing.join(", ")}`);
     }
   }
+
+  // Verifies that Google Calendar OAuth and encryption settings are configured.
+  private assertGoogleCalendarConfigured() {
+    const missing = [
+      ["GOOGLE_CLIENT_ID", config.leadSources.googleCalendar.clientId],
+      ["GOOGLE_CLIENT_SECRET", config.leadSources.googleCalendar.clientSecret],
+      ["LEAD_SOURCE_ENCRYPTION_KEY", config.leadSources.encryptionKey],
+    ]
+      .filter(([, value]) => !value)
+      .map(([name]) => name);
+    if (missing.length) {
+      throw new Error(
+        `Google Calendar is not configured: ${missing.join(", ")}`,
+      );
+    }
+  }
+
+  // Verifies that Google Tasks OAuth and encryption settings are configured.
+  private assertGoogleTasksConfigured() {
+    const missing = [
+      ["GOOGLE_CLIENT_ID", config.leadSources.googleTasks.clientId],
+      ["GOOGLE_CLIENT_SECRET", config.leadSources.googleTasks.clientSecret],
+      ["LEAD_SOURCE_ENCRYPTION_KEY", config.leadSources.encryptionKey],
+    ]
+      .filter(([, value]) => !value)
+      .map(([name]) => name);
+    if (missing.length) {
+      throw new Error(`Google Tasks is not configured: ${missing.join(", ")}`);
+    }
+  }
 }
+// Implements provider orchestration, persistence, synchronization, and webhook workflows.

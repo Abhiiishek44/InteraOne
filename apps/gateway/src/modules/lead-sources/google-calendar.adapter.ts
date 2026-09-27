@@ -1,23 +1,30 @@
 import config from "@shared/infra/config";
 
-type GoogleTokenResponse = {
-  access_token: string;
+type TokenResponse = {
+  access_token?: string;
   refresh_token?: string;
   expires_in?: number;
   error?: string;
   error_description?: string;
 };
 
-export type GoogleCredentials = {
+export type GoogleCalendarCredentials = {
   accessToken: string;
   refreshToken?: string;
 };
 
-export type GoogleFormSummary = { id: string; name: string };
+export type GoogleCalendarSummary = {
+  id: string;
+  summary: string;
+  primary: boolean;
+  accessRole: string;
+  backgroundColor?: string;
+  timeZone?: string;
+};
 
-// Wraps Google OAuth, Drive, and Forms operations for Google Forms lead capture.
-export class GoogleFormsAdapter {
-  // Builds the Google OAuth URL with offline access and Forms-related scopes.
+// Wraps Google OAuth and CalendarList operations for calendar connections.
+export class GoogleCalendarAdapter {
+  // Builds the Google Calendar OAuth URL with offline and incremental authorization.
   getAuthorizationUrl(state: string): string {
     const params = new URLSearchParams({
       client_id: this.requireConfig("clientId"),
@@ -27,16 +34,13 @@ export class GoogleFormsAdapter {
       access_type: "offline",
       prompt: "consent",
       include_granted_scopes: "true",
-      scope: config.leadSources.google.oauthScopes.join(" "),
+      scope: config.leadSources.googleCalendar.oauthScopes.join(" "),
     });
     return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
   }
 
-  // Exchanges a Google authorization code for encrypted-storable OAuth credentials.
-  async exchangeCode(code: string): Promise<{
-    credentials: GoogleCredentials;
-    expiresIn?: number;
-  }> {
+  // Exchanges a Google authorization code for Calendar OAuth credentials.
+  async exchangeCode(code: string) {
     const response = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -48,12 +52,12 @@ export class GoogleFormsAdapter {
         grant_type: "authorization_code",
       }),
     });
-    const payload = (await response.json()) as GoogleTokenResponse;
+    const payload = (await response.json()) as TokenResponse;
     if (!response.ok || !payload.access_token) {
       throw new Error(
         payload.error_description ||
           payload.error ||
-          "Google OAuth token exchange failed",
+          "Google Calendar token exchange failed",
       );
     }
     return {
@@ -65,15 +69,11 @@ export class GoogleFormsAdapter {
     };
   }
 
-  // Loads the stable Google account ID and email for a connected user.
-  async getProfile(
-    accessToken: string,
-  ): Promise<{ id: string; email: string }> {
+  // Loads the stable Google account ID and email for a calendar connection.
+  async getProfile(accessToken: string) {
     const response = await fetch(
       "https://openidconnect.googleapis.com/v1/userinfo",
-      {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      },
+      { headers: { Authorization: `Bearer ${accessToken}` } },
     );
     const payload = (await response.json().catch(() => ({}))) as {
       sub?: string;
@@ -88,42 +88,58 @@ export class GoogleFormsAdapter {
     return { id: payload.sub, email: payload.email };
   }
 
-  // Discovers all non-deleted Google Forms available through the connected Drive account.
-  async listForms(accessToken: string): Promise<GoogleFormSummary[]> {
-    const forms: GoogleFormSummary[] = [];
+  // Lists every accessible, non-deleted calendar for the connected Google account.
+  async listCalendars(accessToken: string): Promise<GoogleCalendarSummary[]> {
+    const calendars: GoogleCalendarSummary[] = [];
     let pageToken: string | undefined;
     do {
       const query = new URLSearchParams({
-        q: "mimeType='application/vnd.google-apps.form' and trashed=false",
-        fields: "nextPageToken,files(id,name)",
-        orderBy: "modifiedTime desc",
-        pageSize: "100",
+        maxResults: "250",
         ...(pageToken ? { pageToken } : {}),
       });
       const response = await fetch(
-        `https://www.googleapis.com/drive/v3/files?${query}`,
-        {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        },
+        `https://www.googleapis.com/calendar/v3/users/me/calendarList?${query}`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
       );
       const payload = (await response.json().catch(() => ({}))) as {
-        files?: GoogleFormSummary[];
+        items?: Array<{
+          id: string;
+          summary?: string;
+          primary?: boolean;
+          accessRole?: string;
+          backgroundColor?: string;
+          timeZone?: string;
+          deleted?: boolean;
+        }>;
         nextPageToken?: string;
         error?: { message?: string };
       };
       if (!response.ok) {
         throw new Error(
-          payload.error?.message || "Could not list Google Forms",
+          payload.error?.message || "Could not list Google Calendars",
         );
       }
-      forms.push(...(payload.files || []));
+      calendars.push(
+        ...(payload.items || [])
+          .filter((calendar) => !calendar.deleted)
+          .map((calendar) => ({
+            id: calendar.id,
+            summary: calendar.summary || calendar.id,
+            primary: Boolean(calendar.primary),
+            accessRole: calendar.accessRole || "reader",
+            backgroundColor: calendar.backgroundColor,
+            timeZone: calendar.timeZone,
+          })),
+      );
       pageToken = payload.nextPageToken;
     } while (pageToken);
-    return forms;
+    return calendars;
   }
 
-  // Refreshes an expired Google access token while preserving its refresh token.
-  async refresh(credentials: GoogleCredentials): Promise<GoogleCredentials> {
+  // Refreshes Google Calendar access credentials for background synchronization.
+  async refresh(
+    credentials: GoogleCalendarCredentials,
+  ): Promise<GoogleCalendarCredentials> {
     if (!credentials.refreshToken) return credentials;
     const response = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
@@ -135,33 +151,32 @@ export class GoogleFormsAdapter {
         grant_type: "refresh_token",
       }),
     });
-    const payload = (await response
-      .json()
-      .catch(() => ({}))) as GoogleTokenResponse;
+    const payload = (await response.json().catch(() => ({}))) as TokenResponse;
     if (!response.ok || !payload.access_token) {
       throw new Error(
-        payload.error_description || "Could not refresh Google access",
+        payload.error_description || "Could not refresh Google Calendar access",
       );
     }
     return { ...credentials, accessToken: payload.access_token };
   }
 
-  // Resolves the configured Google Forms callback URL with a safe API fallback.
-  private get callbackUrl(): string {
+  // Resolves the configured Google Calendar callback URL with a safe API fallback.
+  private get callbackUrl() {
     return (
-      config.leadSources.google.redirectUri ||
-      `${config.app.apiUrl}/api/v1/lead-sources/google/callback`
+      config.leadSources.googleCalendar.redirectUri ||
+      `${config.app.apiUrl}/api/v1/lead-sources/google-calendar/callback`
     );
   }
 
-  // Returns a required Google OAuth configuration value or throws a setup error.
-  private requireConfig(key: "clientId" | "clientSecret"): string {
-    const value = config.leadSources.google[key];
-    if (!value)
+  // Returns a required Google Calendar OAuth setting or throws a setup error.
+  private requireConfig(key: "clientId" | "clientSecret") {
+    const value = config.leadSources.googleCalendar[key];
+    if (!value) {
       throw new Error(
         `GOOGLE_${key === "clientId" ? "CLIENT_ID" : "CLIENT_SECRET"} is required`,
       );
+    }
     return value;
   }
 }
-// Encapsulates Google Forms OAuth, account lookup, token refresh, and discovery.
+// Encapsulates Google Calendar OAuth, account lookup, token refresh, and discovery.

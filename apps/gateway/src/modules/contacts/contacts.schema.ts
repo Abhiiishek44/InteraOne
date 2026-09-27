@@ -30,6 +30,8 @@ const acquisitionSource = Joi.string().valid(
   "phone",
   "qr",
   "manual",
+  "facebook_lead_ads",
+  "google_forms",
   "unknown",
 );
 
@@ -40,6 +42,7 @@ export const contactsSchema = {
     limit: Joi.number().integer().min(1).max(300),
     lifecycleStage,
     leadStatus,
+    acquisitionSource,
     ownerId: Joi.string().hex().length(24),
     followUp: Joi.string().valid("overdue", "upcoming"),
     tags: Joi.string().trim().max(500).allow(""),

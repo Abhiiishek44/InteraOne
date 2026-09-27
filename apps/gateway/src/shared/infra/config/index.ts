@@ -72,6 +72,18 @@ interface Config {
       redirectUri?: string;
       oauthScopes: string[];
     };
+    googleCalendar: {
+      clientId?: string;
+      clientSecret?: string;
+      redirectUri?: string;
+      oauthScopes: string[];
+    };
+    googleTasks: {
+      clientId?: string;
+      clientSecret?: string;
+      redirectUri?: string;
+      oauthScopes: string[];
+    };
   };
 }
 
@@ -211,6 +223,30 @@ const config: Config = {
       oauthScopes: (
         process.env.META_OAUTH_SCOPES ||
         "leads_retrieval,pages_show_list,pages_read_engagement,pages_manage_ads,pages_manage_metadata"
+      )
+        .split(",")
+        .map((scope) => scope.trim())
+        .filter(Boolean),
+    },
+    googleCalendar: {
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      redirectUri: process.env.GOOGLE_CALENDAR_REDIRECT_URI,
+      oauthScopes: (
+        process.env.GOOGLE_CALENDAR_OAUTH_SCOPES ||
+        "openid,email,https://www.googleapis.com/auth/calendar.calendarlist.readonly"
+      )
+        .split(",")
+        .map((scope) => scope.trim())
+        .filter(Boolean),
+    },
+    googleTasks: {
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      redirectUri: process.env.GOOGLE_TASKS_REDIRECT_URI,
+      oauthScopes: (
+        process.env.GOOGLE_TASKS_OAUTH_SCOPES ||
+        "openid,email,https://www.googleapis.com/auth/tasks.readonly"
       )
         .split(",")
         .map((scope) => scope.trim())

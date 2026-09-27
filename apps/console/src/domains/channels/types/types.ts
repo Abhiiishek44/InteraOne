@@ -93,12 +93,32 @@ export interface LeadSourceForm {
 
 export interface LeadSourceConnection {
   id: string;
-  provider: "facebook_lead_ads" | "google_forms";
+  provider:
+    | "facebook_lead_ads"
+    | "google_forms"
+    | "google_calendar"
+    | "google_tasks";
   name: string;
   status: "active" | "expired" | "error";
   externalAccountId: string;
   tokenExpiresAt?: string | null;
   lastError?: string | null;
+  metadata?: {
+    email?: string;
+    calendars?: Array<{
+      id: string;
+      summary: string;
+      primary: boolean;
+      accessRole: string;
+      backgroundColor?: string;
+      timeZone?: string;
+    }>;
+    taskLists?: Array<{
+      id: string;
+      title: string;
+      updated?: string;
+    }>;
+  };
   forms: LeadSourceForm[];
 }
 

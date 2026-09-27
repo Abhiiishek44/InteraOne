@@ -10,6 +10,7 @@ import {
   SalesPipeline,
   DEFAULT_PIPELINE_STAGES,
   Account,
+  LeadSourceForm,
 } from "@shared/models";
 import {
   ContactWriteInput,
@@ -45,6 +46,9 @@ export class ContactsService {
 
     if (options.lifecycleStage) query.lifecycleStage = options.lifecycleStage;
     if (options.leadStatus) query.leadStatus = options.leadStatus;
+    if (options.acquisitionSource) {
+      query.acquisitionSource = options.acquisitionSource;
+    }
     if (options.ownerId) query.ownerId = new Types.ObjectId(options.ownerId);
     if (options.followUp === "overdue") {
       query.nextFollowUpAt = { $ne: null, $lt: new Date() };
@@ -57,6 +61,29 @@ export class ContactsService {
       .populate("accountId", "name website industry")
       .sort({ lastActivityAt: -1 })
       .lean();
+
+    const externalFormIds = contacts.flatMap((contact) => {
+      const sources = Array.isArray((contact.metadata as any)?.leadSources)
+        ? ((contact.metadata as any).leadSources as Array<{
+            formId?: string;
+          }>)
+        : [];
+      return sources.map((source) => source.formId).filter(Boolean) as string[];
+    });
+    const leadSourceForms = externalFormIds.length
+      ? await LeadSourceForm.find({
+          organizationId: new Types.ObjectId(organizationId),
+          externalFormId: { $in: [...new Set(externalFormIds)] },
+        })
+          .select("provider externalFormId externalFormName")
+          .lean()
+      : [];
+    const formNames = new Map(
+      leadSourceForms.map((form) => [
+        `${form.provider}:${form.externalFormId}`,
+        form.externalFormName,
+      ]),
+    );
 
     const sessionIds = contacts.map((c) => c.sessionId).filter(Boolean);
     const emails = contacts.map((c) => c.email).filter(Boolean);
@@ -195,6 +222,54 @@ export class ContactsService {
         }
       }
 
+      const rawIntegrationSources = Array.isArray(
+        (contact.metadata as any)?.leadSources,
+      )
+        ? ((contact.metadata as any).leadSources as Array<{
+            provider?: string;
+            formId?: string;
+            formName?: string;
+            receivedAt?: Date | string;
+          }>)
+        : [];
+      const integrationSources = Array.from(
+        new Map(
+          rawIntegrationSources
+            .filter((source) => source.provider && source.formId)
+            .sort(
+              (left, right) =>
+                new Date(left.receivedAt || 0).getTime() -
+                new Date(right.receivedAt || 0).getTime(),
+            )
+            .map((source) => {
+              const provider = source.provider!;
+              const formId = source.formId!;
+              const value = {
+                provider,
+                providerLabel:
+                  provider === "google_forms"
+                    ? "Google Forms"
+                    : provider === "facebook_lead_ads"
+                      ? "Facebook Lead Ads"
+                      : provider,
+                formId,
+                formName:
+                  source.formName ||
+                  formNames.get(`${provider}:${formId}`) ||
+                  "Unknown form",
+                receivedAt: source.receivedAt
+                  ? new Date(source.receivedAt).toISOString()
+                  : null,
+              };
+              return [`${provider}:${formId}`, value] as const;
+            }),
+        ).values(),
+      ).sort(
+        (left, right) =>
+          new Date(right.receivedAt || 0).getTime() -
+          new Date(left.receivedAt || 0).getTime(),
+      );
+
       return {
         id: contact._id.toString(),
         sessionId: contact.sessionId,
@@ -224,6 +299,7 @@ export class ContactsService {
               }
             : null,
         acquisitionSource: contact.acquisitionSource || "unknown",
+        integrationSources,
         preferredChannel: contact.preferredChannel || null,
         nextFollowUpAt: contact.nextFollowUpAt?.toISOString() || null,
         lastContactedAt: contact.lastContactedAt?.toISOString() || null,

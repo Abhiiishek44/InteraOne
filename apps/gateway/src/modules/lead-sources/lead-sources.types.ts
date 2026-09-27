@@ -44,3 +44,4 @@ export interface NormalizedLead {
   answers: Record<string, string | string[]>;
   attribution: Record<string, unknown>;
 }
+// Defines shared normalized payload types used by lead-source adapters and workers.

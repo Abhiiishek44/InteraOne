@@ -9,13 +9,16 @@ type GraphErrorPayload = {
   error?: { message?: string; type?: string; code?: number };
 };
 
+// Wraps Meta Graph API operations used by the Facebook Lead Ads integration.
 export class FacebookLeadAdsAdapter {
   private readonly baseUrl: string;
 
+  // Initializes the adapter with the configured Meta Graph API base URL.
   constructor() {
     this.baseUrl = `https://graph.facebook.com/${config.leadSources.facebook.graphApiVersion}`;
   }
 
+  // Builds the Meta OAuth authorization URL with the required lead permissions.
   getAuthorizationUrl(state: string): string {
     const appId = this.requireConfig("appId");
     const params = new URLSearchParams({
@@ -31,6 +34,7 @@ export class FacebookLeadAdsAdapter {
     return `https://www.facebook.com/${config.leadSources.facebook.graphApiVersion}/dialog/oauth?${params}`;
   }
 
+  // Exchanges an OAuth code for a long-lived Meta user access token.
   async exchangeCodeForLongLivedToken(code: string): Promise<{
     accessToken: string;
     expiresIn?: number;
@@ -63,6 +67,7 @@ export class FacebookLeadAdsAdapter {
     };
   }
 
+  // Lists Facebook Pages the authorized user can manage for lead collection.
   async listPages(userAccessToken: string): Promise<FacebookPage[]> {
     type AccountsResponse = {
       data?: Array<{
@@ -100,6 +105,7 @@ export class FacebookLeadAdsAdapter {
       }));
   }
 
+  // Reads the grant status of each Meta permission requested by the integration.
   async listPermissionStatuses(
     userAccessToken: string,
   ): Promise<Record<string, string>> {
@@ -114,12 +120,14 @@ export class FacebookLeadAdsAdapter {
     );
   }
 
+  // Subscribes a Facebook Page to lead-generation webhook events.
   async subscribePage(pageId: string, pageAccessToken: string): Promise<void> {
     await this.graphPost(`/${pageId}/subscribed_apps`, pageAccessToken, {
       subscribed_fields: "leadgen",
     });
   }
 
+  // Removes the lead-generation webhook subscription from a Facebook Page.
   async unsubscribePage(
     pageId: string,
     pageAccessToken: string,
@@ -127,6 +135,7 @@ export class FacebookLeadAdsAdapter {
     await this.graphDelete(`/${pageId}/subscribed_apps`, pageAccessToken);
   }
 
+  // Lists active instant forms owned by a connected Facebook Page.
   async listForms(
     pageId: string,
     pageAccessToken: string,
@@ -142,6 +151,7 @@ export class FacebookLeadAdsAdapter {
     return result.data || [];
   }
 
+  // Retrieves the complete field payload for a Facebook lead submission.
   async fetchLead(
     leadId: string,
     pageAccessToken: string,
@@ -165,6 +175,7 @@ export class FacebookLeadAdsAdapter {
     });
   }
 
+  // Resolves the configured Facebook OAuth callback URL with a safe API fallback.
   private get callbackUrl(): string {
     return (
       config.leadSources.facebook.redirectUri ||
@@ -172,6 +183,7 @@ export class FacebookLeadAdsAdapter {
     );
   }
 
+  // Returns a required Meta configuration value or throws a setup error.
   private requireConfig(key: "appId" | "appSecret"): string {
     const value = config.leadSources.facebook[key];
     if (!value)
@@ -191,6 +203,7 @@ export class FacebookLeadAdsAdapter {
     return this.parseResponse<T>(response);
   }
 
+  // Sends an authenticated POST request to the configured Meta Graph API.
   private async graphPost(
     path: string,
     accessToken: string,
@@ -204,6 +217,7 @@ export class FacebookLeadAdsAdapter {
     await this.parseResponse(response);
   }
 
+  // Sends an authenticated DELETE request to the configured Meta Graph API.
   private async graphDelete(path: string, accessToken: string): Promise<void> {
     const response = await fetch(
       `${this.baseUrl}${path}?${new URLSearchParams({ access_token: accessToken })}`,
@@ -224,3 +238,4 @@ export class FacebookLeadAdsAdapter {
     return payload;
   }
 }
+// Encapsulates all direct communication with Meta’s Facebook Lead Ads APIs.

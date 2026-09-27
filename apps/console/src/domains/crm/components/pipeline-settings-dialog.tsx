@@ -12,6 +12,13 @@ import {
 } from "@/shared/ui/dialog";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/shared/ui/select";
 import { useUpdateSalesPipeline } from "../hooks/use-opportunities";
 import type {
   PipelineStage,
@@ -162,47 +169,53 @@ export function PipelineSettingsDialog({
           </div>
           <div className="grid gap-2">
             <Label htmlFor="stage-type">Stage type</Label>
-            <select
-              id="stage-type"
+            <Select
               value={draft.type}
-              onChange={(event) =>
+              onValueChange={(value) =>
                 setDraft((current) => ({
                   ...current,
-                  type: event.target.value as PipelineStageType,
+                  type: value as PipelineStageType,
                 }))
               }
               disabled={count > 0}
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
             >
-              {Object.entries(TYPE_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger id="stage-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(TYPE_LABELS).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="stage-position">Position</Label>
-            <select
-              id="stage-position"
-              value={draft.order}
-              onChange={(event) =>
+            <Select
+              value={String(draft.order)}
+              onValueChange={(value) =>
                 setDraft((current) => ({
                   ...current,
-                  order: Number(event.target.value),
+                  order: Number(value),
                 }))
               }
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
             >
-              {Array.from(
-                { length: pipeline.stages.length + (isCreating ? 1 : 0) },
-                (_, index) => (
-                  <option key={index} value={index}>
-                    Position {index + 1}
-                  </option>
-                ),
-              )}
-            </select>
+              <SelectTrigger id="stage-position">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from(
+                  { length: pipeline.stages.length + (isCreating ? 1 : 0) },
+                  (_, index) => (
+                    <SelectItem key={index} value={String(index)}>
+                      Position {index + 1}
+                    </SelectItem>
+                  ),
+                )}
+              </SelectContent>
+            </Select>
           </div>
           {existingStage && (
             <div className="flex items-center justify-between rounded-lg border bg-muted/20 p-3">

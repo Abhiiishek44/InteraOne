@@ -19,6 +19,14 @@ leadSourcesRouter.get(
   LeadSourcesController.completeGoogleOAuth,
 );
 leadSourcesRouter.get(
+  "/google-calendar/callback",
+  LeadSourcesController.completeGoogleCalendarOAuth,
+);
+leadSourcesRouter.get(
+  "/google-tasks/callback",
+  LeadSourcesController.completeGoogleTasksOAuth,
+);
+leadSourcesRouter.get(
   "/facebook/webhook",
   LeadSourcesController.verifyFacebookWebhook,
 );
@@ -38,6 +46,28 @@ leadSourcesRouter.get(
   "/google/connect",
   requireRole("admin"),
   LeadSourcesController.beginGoogleOAuth,
+);
+leadSourcesRouter.get(
+  "/google-calendar/connect",
+  requireRole("admin"),
+  LeadSourcesController.beginGoogleCalendarOAuth,
+);
+leadSourcesRouter.get(
+  "/google-tasks/connect",
+  requireRole("admin"),
+  LeadSourcesController.beginGoogleTasksOAuth,
+);
+leadSourcesRouter.post(
+  "/:connectionId/calendars/sync",
+  requireRole("admin"),
+  validateRequest(leadSourcesSchema.connectionParams, "params"),
+  LeadSourcesController.syncGoogleCalendars,
+);
+leadSourcesRouter.post(
+  "/:connectionId/task-lists/sync",
+  requireRole("admin"),
+  validateRequest(leadSourcesSchema.connectionParams, "params"),
+  LeadSourcesController.syncGoogleTaskLists,
 );
 leadSourcesRouter.post(
   "/:connectionId/forms/sync",
@@ -70,3 +100,4 @@ leadSourcesRouter.post(
   validateRequest(leadSourcesSchema.submissionParams, "params"),
   LeadSourcesController.retrySubmission,
 );
+// Registers public callbacks, protected integration routes, and role requirements.

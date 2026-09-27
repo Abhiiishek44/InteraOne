@@ -30,6 +30,13 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { Textarea } from "@/shared/ui/textarea";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/shared/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogFooter,
@@ -363,33 +370,36 @@ export function PipelinePage() {
               className="pl-9"
             />
           </div>
-          <select
-            value={ownerFilter}
-            onChange={(event) => setOwnerFilter(event.target.value)}
-            className="h-9 min-w-40 rounded-md border border-input bg-background px-3 text-sm"
-            aria-label="Filter by owner"
-          >
-            <option value="all">All owners</option>
-            <option value="unassigned">Unassigned</option>
-            {owners.map((owner) => (
-              <option key={owner.id} value={owner.id}>
-                {owner.name}
-              </option>
-            ))}
-          </select>
-          <select
+          <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+            <SelectTrigger className="w-40" aria-label="Filter by owner">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All owners</SelectItem>
+              <SelectItem value="unassigned">Unassigned</SelectItem>
+              {owners.map((owner) => (
+                <SelectItem key={owner.id} value={owner.id}>
+                  {owner.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
             value={typeFilter}
-            onChange={(event) =>
-              setTypeFilter(event.target.value as "all" | PipelineStageType)
+            onValueChange={(value) =>
+              setTypeFilter(value as "all" | PipelineStageType)
             }
-            className="h-9 min-w-36 rounded-md border border-input bg-background px-3 text-sm"
-            aria-label="Filter by outcome"
           >
-            <option value="all">All outcomes</option>
-            <option value="open">Open</option>
-            <option value="won">Closed won</option>
-            <option value="lost">Closed lost</option>
-          </select>
+            <SelectTrigger className="w-36" aria-label="Filter by outcome">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All outcomes</SelectItem>
+              <SelectItem value="open">Open</SelectItem>
+              <SelectItem value="won">Closed won</SelectItem>
+              <SelectItem value="lost">Closed lost</SelectItem>
+            </SelectContent>
+          </Select>
           <div className="flex rounded-md border border-input p-0.5">
             <Button
               variant={view === "board" ? "secondary" : "ghost"}
@@ -899,28 +909,36 @@ export function PipelinePage() {
                       </p>
                     </td>
                     <td className="px-4 py-3">
-                      <select
+                      <Select
                         value={item.stage}
-                        onClick={(event) => event.stopPropagation()}
-                        onChange={(event) =>
+                        onValueChange={(value) =>
                           void moveOpportunity(
                             item.id,
-                            event.target.value,
+                            value,
                             opportunities.filter(
                               (opportunity) =>
-                                opportunity.stage === event.target.value &&
+                                opportunity.stage === value &&
                                 opportunity.id !== item.id,
                             ).length,
                           )
                         }
-                        className="h-8 rounded-md border border-input bg-background px-2 text-xs"
                       >
-                        {stages.map((stage) => (
-                          <option key={stage.id} value={stage.id}>
-                            {stage.label}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger
+                          className="h-8 min-w-32 text-xs"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          {stages.map((stage) => (
+                            <SelectItem key={stage.id} value={stage.id}>
+                              {stage.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </td>
                     <td className="px-4 py-3 font-medium">
                       {formatMoney(item.value, item.currency)}

@@ -1,5 +1,5 @@
 import mongoose, { Document, Schema, Types } from "mongoose";
-import type { LeadSourceProvider } from "./LeadSourceConnection";
+type LeadSubmissionProvider = "facebook_lead_ads" | "google_forms";
 
 export type LeadSubmissionStatus =
   | "received"
@@ -12,7 +12,7 @@ export interface ILeadSubmission extends Document {
   organizationId: Types.ObjectId;
   connectionId: Types.ObjectId;
   formId?: Types.ObjectId | null;
-  provider: LeadSourceProvider;
+  provider: LeadSubmissionProvider;
   externalSubmissionId: string;
   externalFormId: string;
   submittedAt?: Date | null;

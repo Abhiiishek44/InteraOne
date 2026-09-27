@@ -1,6 +1,10 @@
 import mongoose, { Document, Schema, Types } from "mongoose";
 
-export type LeadSourceProvider = "facebook_lead_ads" | "google_forms";
+export type LeadSourceProvider =
+  | "facebook_lead_ads"
+  | "google_forms"
+  | "google_calendar"
+  | "google_tasks";
 export type LeadSourceConnectionStatus = "active" | "expired" | "error";
 
 export interface ILeadSourceConnection extends Document {
@@ -29,7 +33,12 @@ const leadSourceConnectionSchema = new Schema<ILeadSourceConnection>(
     },
     provider: {
       type: String,
-      enum: ["facebook_lead_ads", "google_forms"],
+      enum: [
+        "facebook_lead_ads",
+        "google_forms",
+        "google_calendar",
+        "google_tasks",
+      ],
       required: true,
     },
     name: { type: String, required: true, trim: true, maxlength: 160 },

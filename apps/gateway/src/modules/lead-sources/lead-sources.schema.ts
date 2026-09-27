@@ -38,3 +38,4 @@ export const leadSourcesSchema = {
     limit: Joi.number().integer().min(1).max(100).default(25),
   }),
 };
+// Defines request-validation schemas for lead-source routes and mutations.

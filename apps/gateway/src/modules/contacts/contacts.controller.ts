@@ -20,6 +20,7 @@ export class ContactsController {
           : undefined,
         lifecycleStage: (req.query.lifecycleStage as string) || undefined,
         leadStatus: (req.query.leadStatus as string) || undefined,
+        acquisitionSource: (req.query.acquisitionSource as string) || undefined,
         ownerId: (req.query.ownerId as string) || undefined,
         followUp: req.query.followUp as "overdue" | "upcoming" | undefined,
         tags: req.query.tags

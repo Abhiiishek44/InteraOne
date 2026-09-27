@@ -30,6 +30,7 @@ import {
   AlertTriangle,
   Loader2,
   Tag,
+  Cable,
 } from "lucide-react";
 import { ContactDialog } from "@/domains/contacts/components/contact-form";
 import {
@@ -79,6 +80,22 @@ const FILTER_CONVERSATIONS = [
   { value: "10+", label: "10+ conversations" },
 ];
 
+const SOURCE_OPTIONS = [
+  { value: "facebook_lead_ads", label: "Facebook Lead Ads" },
+  { value: "google_forms", label: "Google Forms" },
+  { value: "manual", label: "Manually added" },
+  { value: "widget", label: "Website widget" },
+  { value: "email", label: "Email" },
+  { value: "whatsapp", label: "WhatsApp" },
+  { value: "telegram", label: "Telegram" },
+  { value: "phone", label: "Phone" },
+  { value: "qr", label: "QR code" },
+];
+
+const formatSourceLabel = (value: string) =>
+  SOURCE_OPTIONS.find((option) => option.value === value)?.label ||
+  value.replaceAll("_", " ");
+
 const toContactViewModel = (item: ContactListItem): Contact => ({
   id: item.id,
   name: item.name,
@@ -90,6 +107,7 @@ const toContactViewModel = (item: ContactListItem): Contact => ({
   leadStatus: item.leadStatus || "needs_review",
   owner: item.owner || null,
   acquisitionSource: item.acquisitionSource || "unknown",
+  integrationSources: item.integrationSources || [],
   preferredChannel: item.preferredChannel || null,
   nextFollowUpAt: item.nextFollowUpAt || null,
   lastContactedAt: item.lastContactedAt || null,
@@ -156,6 +174,7 @@ export function ContactsPage() {
   const [conversationFilter, setConversationFilter] = useState<string>("all");
   const [lifecycleFilter, setLifecycleFilter] = useState<string>("all");
   const [leadStatusFilter, setLeadStatusFilter] = useState<string>("all");
+  const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [sortValue, setSortValue] = useState("recent");
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
@@ -173,6 +192,7 @@ export function ContactsPage() {
     limit: 10,
     lifecycleStage: lifecycleFilter,
     leadStatus: leadStatusFilter,
+    acquisitionSource: sourceFilter,
     tags: tagFilters,
     activityRange: activityFilter,
     conversationRange: conversationFilter,
@@ -241,6 +261,7 @@ export function ContactsPage() {
     conversationFilter,
     lifecycleFilter,
     leadStatusFilter,
+    sourceFilter,
     sortValue,
   ]);
 
@@ -255,6 +276,7 @@ export function ContactsPage() {
     conversationFilter,
     lifecycleFilter,
     leadStatusFilter,
+    sourceFilter,
     sortValue,
   ]);
 
@@ -310,6 +332,7 @@ export function ContactsPage() {
     setConversationFilter("all");
     setLifecycleFilter("all");
     setLeadStatusFilter("all");
+    setSourceFilter("all");
     setCurrentPage(1);
   };
 
@@ -319,7 +342,8 @@ export function ContactsPage() {
     activityFilter !== "all" ||
     conversationFilter !== "all" ||
     lifecycleFilter !== "all" ||
-    leadStatusFilter !== "all",
+    leadStatusFilter !== "all" ||
+    sourceFilter !== "all",
   );
 
   const savedViewState = useMemo(
@@ -330,6 +354,7 @@ export function ContactsPage() {
       conversations: conversationFilter,
       lifecycle: lifecycleFilter,
       leadStatus: leadStatusFilter,
+      source: sourceFilter,
       sort: sortValue,
     }),
     [
@@ -339,6 +364,7 @@ export function ContactsPage() {
       lifecycleFilter,
       searchValue,
       sortValue,
+      sourceFilter,
       tagFilters,
     ],
   );
@@ -362,6 +388,7 @@ export function ContactsPage() {
     setLeadStatusFilter(
       typeof state.leadStatus === "string" ? state.leadStatus : "all",
     );
+    setSourceFilter(typeof state.source === "string" ? state.source : "all");
     setSortValue(typeof state.sort === "string" ? state.sort : "recent");
     setCurrentPage(1);
   };
@@ -406,6 +433,8 @@ export function ContactsPage() {
       "Email",
       "Phone",
       "Company",
+      "Source",
+      "Source form",
       "Tags",
       "Conversation Count",
       "Last Activity",
@@ -419,6 +448,8 @@ export function ContactsPage() {
         `"${(c.email || "").replace(/"/g, '""')}"`,
         `"${(c.phone || "").replace(/"/g, '""')}"`,
         `"${(c.company || "").replace(/"/g, '""')}"`,
+        `"${(c.integrationSources[0]?.providerLabel || formatSourceLabel(c.acquisitionSource)).replace(/"/g, '""')}"`,
+        `"${(c.integrationSources[0]?.formName || "").replace(/"/g, '""')}"`,
         `"${(c.tags || []).join("; ").replace(/"/g, '""')}"`,
         c.conversationCount || 0,
         c.lastActivity,
@@ -500,7 +531,7 @@ export function ContactsPage() {
               Filters
             </CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+          <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7">
             <div className="space-y-3">
               <Label>Lifecycle stage</Label>
               <Select
@@ -538,6 +569,23 @@ export function ContactsPage() {
                   <SelectItem value="follow_up">Follow-up</SelectItem>
                   <SelectItem value="converted">Converted</SelectItem>
                   <SelectItem value="unqualified">Unqualified</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-3">
+              <Label>Contact source</Label>
+              <Select value={sourceFilter} onValueChange={setSourceFilter}>
+                <SelectTrigger className="cursor-pointer">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All sources</SelectItem>
+                  {SOURCE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -798,6 +846,31 @@ export function ContactsPage() {
                                 contact.phone ||
                                 "No contact info"}
                             </p>
+                            <div className="mt-1.5 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+                              <Cable className="h-3 w-3 shrink-0" />
+                              <span className="shrink-0 font-medium text-foreground/80">
+                                {contact.integrationSources[0]?.providerLabel ||
+                                  formatSourceLabel(contact.acquisitionSource)}
+                              </span>
+                              {contact.integrationSources[0] && (
+                                <>
+                                  <span aria-hidden="true">·</span>
+                                  <span
+                                    className="truncate"
+                                    title={
+                                      contact.integrationSources[0].formName
+                                    }
+                                  >
+                                    {contact.integrationSources[0].formName}
+                                  </span>
+                                  {contact.integrationSources.length > 1 && (
+                                    <span className="shrink-0">
+                                      +{contact.integrationSources.length - 1}
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                            </div>
                           </div>
                           <div className="min-w-0 text-sm text-muted-foreground">
                             <div className="truncate font-medium text-foreground">

@@ -1,5 +1,5 @@
 import mongoose, { Document, Schema, Types } from "mongoose";
-import type { LeadSourceProvider } from "./LeadSourceConnection";
+type LeadFormProvider = "facebook_lead_ads" | "google_forms";
 
 export interface ILeadSourceFormDefaults {
   ownerId?: Types.ObjectId | null;
@@ -15,7 +15,7 @@ export interface ILeadSourceForm extends Document {
   _id: Types.ObjectId;
   organizationId: Types.ObjectId;
   connectionId: Types.ObjectId;
-  provider: LeadSourceProvider;
+  provider: LeadFormProvider;
   externalFormId: string;
   externalFormName: string;
   status: "active" | "paused";
