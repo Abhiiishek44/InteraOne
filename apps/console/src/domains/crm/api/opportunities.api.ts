@@ -76,11 +76,13 @@ export const opportunitiesApi = {
     content: string,
     dueAt?: string,
     category?: "todo" | "email" | "call" | "meeting" | "document",
+    customFields?: Record<string, unknown>,
   ): Promise<void> {
     await apiClient.post(`/opportunities/${id}/activities`, {
       content,
       dueAt,
       category,
+      customFields,
     });
   },
 

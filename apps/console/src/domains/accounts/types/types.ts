@@ -1,4 +1,9 @@
-export type AccountLifecycleStage = "prospect" | "qualified" | "customer" | "inactive" | "lost";
+export type AccountLifecycleStage =
+  | "prospect"
+  | "qualified"
+  | "customer"
+  | "inactive"
+  | "lost";
 
 export interface AccountSummary {
   id: string;
@@ -18,22 +23,42 @@ export interface AccountSummary {
   archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  customFields: Record<string, unknown>;
 }
 
 export interface AccountDetail {
-  account: Omit<AccountSummary, "contactCount" | "opportunityCount" | "pipelineValue" | "lastActivityAt">;
+  account: Omit<
+    AccountSummary,
+    "contactCount" | "opportunityCount" | "pipelineValue" | "lastActivityAt"
+  >;
   contacts: Array<{
-    id: string; name: string; email: string; phone: string; lifecycleStage: string;
-    owner: { id: string; name: string } | null; lastActivityAt: string;
+    id: string;
+    name: string;
+    email: string;
+    phone: string;
+    lifecycleStage: string;
+    owner: { id: string; name: string } | null;
+    lastActivityAt: string;
   }>;
   opportunities: Array<{
-    id: string; title: string; value: number; currency: string; stage: string; nextAction: string;
+    id: string;
+    title: string;
+    value: number;
+    currency: string;
+    stage: string;
+    nextAction: string;
     primaryContact: { id: string; name: string } | null;
-    owner: { id: string; name: string } | null; updatedAt: string;
+    owner: { id: string; name: string } | null;
+    updatedAt: string;
   }>;
   activity: Array<{
-    id: string; type: string; content: string; actor?: string; createdAt: string;
-    contact?: { id: string; name: string }; opportunity?: { id: string; title: string };
+    id: string;
+    type: string;
+    content: string;
+    actor?: string;
+    createdAt: string;
+    contact?: { id: string; name: string };
+    opportunity?: { id: string; title: string };
   }>;
 }
 
@@ -46,4 +71,5 @@ export interface AccountWritePayload {
   ownerId?: string | null;
   tags?: string[];
   lifecycleStage?: AccountLifecycleStage;
+  customFields?: Record<string, unknown>;
 }

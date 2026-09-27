@@ -17,6 +17,8 @@ import {
   UpsertFromAIInput,
 } from "./contacts.types";
 import logger from "@shared/core/logger";
+import { CrmFieldsService } from "@modules/crm-fields";
+import { serializeCustomFields } from "@shared/utils/custom-fields";
 
 export class ContactsService {
   async listContacts(
@@ -200,14 +202,15 @@ export class ContactsService {
         email: contact.email,
         phone: contact.phone,
         company: (contact.accountId as any)?.name || contact.company,
-        account: contact.accountId && typeof contact.accountId === "object"
-          ? {
-              id: String((contact.accountId as any)._id),
-              name: (contact.accountId as any).name,
-              website: (contact.accountId as any).website || "",
-              industry: (contact.accountId as any).industry || "",
-            }
-          : null,
+        account:
+          contact.accountId && typeof contact.accountId === "object"
+            ? {
+                id: String((contact.accountId as any)._id),
+                name: (contact.accountId as any).name,
+                website: (contact.accountId as any).website || "",
+                industry: (contact.accountId as any).industry || "",
+              }
+            : null,
         tags: aggregatedTags,
         source: contact.source,
         lifecycleStage: contact.lifecycleStage || "new",
@@ -224,6 +227,7 @@ export class ContactsService {
         preferredChannel: contact.preferredChannel || null,
         nextFollowUpAt: contact.nextFollowUpAt?.toISOString() || null,
         lastContactedAt: contact.lastContactedAt?.toISOString() || null,
+        customFields: serializeCustomFields(contact.customFields),
         notes: (contact.notes || []).map((note: any) => ({
           id: note.id,
           author: note.author,
@@ -347,6 +351,12 @@ export class ContactsService {
     source: "agent" | "admin" | "owner",
   ): Promise<any> {
     await this.validateOwner(organizationId, data.ownerId);
+    const customFields = await new CrmFieldsService().validateValues(
+      organizationId,
+      "contacts",
+      data.customFields,
+      true,
+    );
 
     const account = data.accountId
       ? await Account.findOne({
@@ -388,6 +398,7 @@ export class ContactsService {
         ? new Date(data.lastContactedAt)
         : null,
       lastActivityAt: new Date(),
+      customFields,
     });
 
     return contact;
@@ -957,6 +968,13 @@ export class ContactsService {
     data: ContactWriteInput,
   ): Promise<any> {
     await this.validateOwner(organizationId, data.ownerId);
+    if (data.customFields !== undefined) {
+      data.customFields = await new CrmFieldsService().validateValues(
+        organizationId,
+        "contacts",
+        data.customFields,
+      );
+    }
     const {
       name,
       email,
@@ -971,6 +989,7 @@ export class ContactsService {
       preferredChannel,
       nextFollowUpAt,
       lastContactedAt,
+      customFields,
     } = data;
     const updateFields: any = {};
     const unsetFields: Record<string, 1> = {};
@@ -1020,6 +1039,7 @@ export class ContactsService {
         ? new Date(lastContactedAt)
         : null;
     }
+    if (customFields !== undefined) updateFields.customFields = customFields;
 
     const updated = await Contact.findOneAndUpdate(
       {

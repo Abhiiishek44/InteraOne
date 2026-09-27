@@ -34,6 +34,7 @@ import type {
   Opportunity,
   PipelineStage,
 } from "../types/types";
+import { InlineCustomFields } from "./inline-custom-fields";
 
 interface OpportunityDialogProps {
   open: boolean;
@@ -56,6 +57,7 @@ const emptyForm: CreateOpportunityPayload = {
   ownerId: null,
   expectedCloseAt: null,
   nextAction: "",
+  customFields: {},
 };
 
 export function OpportunityDialog({
@@ -91,7 +93,7 @@ export function OpportunityDialog({
       limit: 20,
       sort: "name",
     },
-    { enabled: open && !isEditing && contactPickerOpen },
+    { enabled: open },
   );
 
   useEffect(() => {
@@ -126,6 +128,7 @@ export function OpportunityDialog({
               expectedCloseAt:
                 opportunity.expectedCloseAt?.slice(0, 10) || null,
               nextAction: opportunity.nextAction || "",
+              customFields: opportunity.customFields || {},
             }
           : {
               ...emptyForm,
@@ -174,6 +177,7 @@ export function OpportunityDialog({
           ownerId: form.ownerId,
           expectedCloseAt,
           nextAction: form.nextAction,
+          customFields: form.customFields,
         });
         toast.success("Opportunity updated");
       } else {
@@ -192,7 +196,7 @@ export function OpportunityDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
             {isEditing ? "Edit opportunity" : "Create opportunity"}
@@ -204,275 +208,514 @@ export function OpportunityDialog({
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor="opportunity-company">Company</Label>
-              <select
-                id="opportunity-company"
-                value={form.accountId || ""}
-                onChange={(event) => {
-                  const accountId = event.target.value || null;
-                  const account = accountsData?.accounts.find((item) => item.id === accountId);
-                  setForm((current) => ({ ...current, accountId, company: account?.name || current.company }));
-                }}
-                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="">No company selected</option>
-                {(accountsData?.accounts || []).map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
-              </select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="opportunity-contact">Primary contact</Label>
-              <div className="relative" onBlur={closeContactPickerOnBlur}>
-                <Button
-                  id="opportunity-contact"
-                  type="button"
-                  variant="outline"
-                  aria-haspopup="listbox"
-                  aria-expanded={contactPickerOpen}
-                  className="h-9 w-full justify-between px-3 font-normal"
-                  onClick={() => setContactPickerOpen((current) => !current)}
-                >
-                  <span
-                    className={
-                      form.contactId
-                        ? "truncate"
-                        : "truncate text-muted-foreground"
-                    }
+          {false && (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="opportunity-company">Company</Label>
+                  <select
+                    id="opportunity-company"
+                    value={form.accountId || ""}
+                    onChange={(event) => {
+                      const accountId = event.target.value || null;
+                      const account = accountsData?.accounts.find(
+                        (item) => item.id === accountId,
+                      );
+                      setForm((current) => ({
+                        ...current,
+                        accountId,
+                        company: account?.name || current.company,
+                      }));
+                    }}
+                    className="h-9 rounded-md border border-input bg-background px-3 text-sm"
                   >
-                    {selectedContact?.name ||
-                      opportunity?.contact?.name ||
-                      "Search and select a contact"}
-                  </span>
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" />
-                </Button>
-                {contactPickerOpen && (
-                  <div className="absolute z-50 mt-1 w-full min-w-72 overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md">
-                    <div className="relative border-b p-2">
-                      <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        autoFocus
-                        value={contactSearch}
-                        onChange={(event) =>
-                          setContactSearch(event.target.value)
-                        }
-                        onKeyDown={(event) => {
-                          if (event.key === "Escape")
-                            setContactPickerOpen(false);
-                        }}
-                        placeholder="Search by name, email, phone…"
-                        className="pl-9"
-                        aria-label="Search contacts"
-                      />
-                    </div>
-                    <div
-                      role="listbox"
-                      aria-label="Contacts"
-                      className="max-h-60 overflow-y-auto p-1 [scrollbar-color:hsl(var(--muted-foreground)/0.35)_transparent] [scrollbar-width:thin]"
+                    <option value="">No company selected</option>
+                    {(accountsData?.accounts || []).map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="opportunity-contact">Primary contact</Label>
+                  <div className="relative" onBlur={closeContactPickerOnBlur}>
+                    <Button
+                      id="opportunity-contact"
+                      type="button"
+                      variant="outline"
+                      aria-haspopup="listbox"
+                      aria-expanded={contactPickerOpen}
+                      className="h-9 w-full justify-between px-3 font-normal"
+                      onClick={() =>
+                        setContactPickerOpen((current) => !current)
+                      }
                     >
-                      {contactsLoading && !contactResults ? (
-                        <div className="flex items-center justify-center gap-2 px-3 py-8 text-sm text-muted-foreground">
-                          <Loader2 className="h-4 w-4 animate-spin" /> Loading
-                          contacts…
-                        </div>
-                      ) : contactResults?.contacts.length ? (
-                        contactResults.contacts.map((contact) => (
-                          <button
-                            key={contact.id}
-                            type="button"
-                            role="option"
-                            aria-selected={form.contactId === contact.id}
-                            onClick={() => selectContact(contact)}
-                            className="flex w-full items-center gap-2 rounded-sm px-2 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:outline-none"
-                          >
-                            <Check
-                              className={`h-4 w-4 shrink-0 ${
-                                form.contactId === contact.id
-                                  ? "opacity-100"
-                                  : "opacity-0"
-                              }`}
-                            />
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate font-medium">
-                                {contact.name}
-                              </span>
-                              <span className="block truncate text-xs text-muted-foreground">
-                                {contact.email ||
-                                  contact.phone ||
-                                  contact.company ||
-                                  "No contact details"}
-                              </span>
-                            </span>
-                          </button>
-                        ))
-                      ) : (
-                        <div className="px-3 py-8 text-center text-sm text-muted-foreground">
-                          No contacts found.
-                        </div>
-                      )}
-                    </div>
-                    {contactResults && contactResults.total > 0 && (
-                      <div className="flex items-center justify-between border-t px-2 py-1.5">
-                        <span className="text-xs text-muted-foreground">
-                          {contactResults.total} contact
-                          {contactResults.total === 1 ? "" : "s"}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            disabled={contactPage <= 1 || contactsLoading}
-                            onClick={() => setContactPage((page) => page - 1)}
-                            aria-label="Previous contacts page"
-                          >
-                            <ChevronLeft className="h-4 w-4" />
-                          </Button>
-                          <span className="min-w-12 text-center text-xs">
-                            {contactResults.page}/{contactResults.totalPages}
-                          </span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            disabled={
-                              contactPage >= contactResults.totalPages ||
-                              contactsLoading
+                      <span
+                        className={
+                          form.contactId
+                            ? "truncate"
+                            : "truncate text-muted-foreground"
+                        }
+                      >
+                        {selectedContact?.name ||
+                          opportunity?.contact?.name ||
+                          "Search and select a contact"}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" />
+                    </Button>
+                    {contactPickerOpen && (
+                      <div className="absolute z-50 mt-1 w-full min-w-72 overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md">
+                        <div className="relative border-b p-2">
+                          <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                          <Input
+                            autoFocus
+                            value={contactSearch}
+                            onChange={(event) =>
+                              setContactSearch(event.target.value)
                             }
-                            onClick={() => setContactPage((page) => page + 1)}
-                            aria-label="Next contacts page"
-                          >
-                            <ChevronRight className="h-4 w-4" />
-                          </Button>
+                            onKeyDown={(event) => {
+                              if (event.key === "Escape")
+                                setContactPickerOpen(false);
+                            }}
+                            placeholder="Search by name, email, phone…"
+                            className="pl-9"
+                            aria-label="Search contacts"
+                          />
                         </div>
+                        <div
+                          role="listbox"
+                          aria-label="Contacts"
+                          className="max-h-60 overflow-y-auto p-1 [scrollbar-color:hsl(var(--muted-foreground)/0.35)_transparent] [scrollbar-width:thin]"
+                        >
+                          {contactsLoading && !contactResults ? (
+                            <div className="flex items-center justify-center gap-2 px-3 py-8 text-sm text-muted-foreground">
+                              <Loader2 className="h-4 w-4 animate-spin" />{" "}
+                              Loading contacts…
+                            </div>
+                          ) : contactResults?.contacts.length ? (
+                            contactResults!.contacts.map((contact) => (
+                              <button
+                                key={contact.id}
+                                type="button"
+                                role="option"
+                                aria-selected={form.contactId === contact.id}
+                                onClick={() => selectContact(contact)}
+                                className="flex w-full items-center gap-2 rounded-sm px-2 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:outline-none"
+                              >
+                                <Check
+                                  className={`h-4 w-4 shrink-0 ${
+                                    form.contactId === contact.id
+                                      ? "opacity-100"
+                                      : "opacity-0"
+                                  }`}
+                                />
+                                <span className="min-w-0 flex-1">
+                                  <span className="block truncate font-medium">
+                                    {contact.name}
+                                  </span>
+                                  <span className="block truncate text-xs text-muted-foreground">
+                                    {contact.email ||
+                                      contact.phone ||
+                                      contact.company ||
+                                      "No contact details"}
+                                  </span>
+                                </span>
+                              </button>
+                            ))
+                          ) : (
+                            <div className="px-3 py-8 text-center text-sm text-muted-foreground">
+                              No contacts found.
+                            </div>
+                          )}
+                        </div>
+                        {contactResults && contactResults!.total > 0 && (
+                          <div className="flex items-center justify-between border-t px-2 py-1.5">
+                            <span className="text-xs text-muted-foreground">
+                              {contactResults!.total} contact
+                              {contactResults!.total === 1 ? "" : "s"}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                disabled={contactPage <= 1 || contactsLoading}
+                                onClick={() =>
+                                  setContactPage((page) => page - 1)
+                                }
+                                aria-label="Previous contacts page"
+                              >
+                                <ChevronLeft className="h-4 w-4" />
+                              </Button>
+                              <span className="min-w-12 text-center text-xs">
+                                {contactResults!.page}/
+                                {contactResults!.totalPages}
+                              </span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                disabled={
+                                  contactPage >= contactResults!.totalPages ||
+                                  contactsLoading
+                                }
+                                onClick={() =>
+                                  setContactPage((page) => page + 1)
+                                }
+                                aria-label="Next contacts page"
+                              >
+                                <ChevronRight className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
-                )}
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="opportunity-title">Opportunity name</Label>
+                  <Input
+                    id="opportunity-title"
+                    required
+                    value={form.title}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        title: event.target.value,
+                      }))
+                    }
+                    placeholder="Enterprise plan renewal"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="opportunity-value">Value</Label>
+                  <div className="flex gap-2">
+                    <select
+                      value={form.currency}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          currency: event.target
+                            .value as Opportunity["currency"],
+                        }))
+                      }
+                      className="h-9 w-24 rounded-md border border-input bg-background px-2 text-sm"
+                    >
+                      <option>USD</option>
+                      <option>INR</option>
+                      <option>EUR</option>
+                      <option>GBP</option>
+                    </select>
+                    <Input
+                      id="opportunity-value"
+                      type="number"
+                      min="0"
+                      value={form.value}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          value: Number(event.target.value),
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="opportunity-stage">Stage</Label>
+                  <select
+                    id="opportunity-stage"
+                    value={form.stage}
+                    disabled={isEditing}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        stage: event.target.value,
+                      }))
+                    }
+                    className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    {stages.map((stage) => (
+                      <option key={stage.id} value={stage.id}>
+                        {stage.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="opportunity-owner">Owner</Label>
+                  <select
+                    id="opportunity-owner"
+                    value={form.ownerId || ""}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        ownerId: event.target.value || null,
+                      }))
+                    }
+                    className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    <option value="">
+                      {isEditing ? "Unassigned" : "Use contact owner"}
+                    </option>
+                    {owners.map((owner) => (
+                      <option key={owner.id} value={owner.id}>
+                        {owner.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="opportunity-close-date">Expected close</Label>
+                  <Input
+                    id="opportunity-close-date"
+                    type="date"
+                    value={form.expectedCloseAt || ""}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        expectedCloseAt: event.target.value || null,
+                      }))
+                    }
+                  />
+                </div>
               </div>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="opportunity-title">Opportunity name</Label>
-              <Input
-                id="opportunity-title"
-                required
-                value={form.title}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    title: event.target.value,
-                  }))
-                }
-                placeholder="Enterprise plan renewal"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="opportunity-value">Value</Label>
-              <div className="flex gap-2">
-                <select
-                  value={form.currency}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      currency: event.target.value as Opportunity["currency"],
-                    }))
-                  }
-                  className="h-9 w-24 rounded-md border border-input bg-background px-2 text-sm"
-                >
-                  <option>USD</option>
-                  <option>INR</option>
-                  <option>EUR</option>
-                  <option>GBP</option>
-                </select>
+              <div className="grid gap-2">
+                <Label htmlFor="opportunity-next-action">Next action</Label>
                 <Input
-                  id="opportunity-value"
-                  type="number"
-                  min="0"
-                  value={form.value}
+                  id="opportunity-next-action"
+                  value={form.nextAction || ""}
                   onChange={(event) =>
                     setForm((current) => ({
                       ...current,
-                      value: Number(event.target.value),
+                      nextAction: event.target.value,
                     }))
                   }
+                  placeholder="Schedule product demo"
                 />
               </div>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="opportunity-stage">Stage</Label>
-              <select
-                id="opportunity-stage"
-                value={form.stage}
-                disabled={isEditing}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    stage: event.target.value,
-                  }))
-                }
-                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-              >
-                {stages.map((stage) => (
-                  <option key={stage.id} value={stage.id}>
-                    {stage.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="opportunity-owner">Owner</Label>
-              <select
-                id="opportunity-owner"
-                value={form.ownerId || ""}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    ownerId: event.target.value || null,
-                  }))
-                }
-                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="">
-                  {isEditing ? "Unassigned" : "Use contact owner"}
-                </option>
-                {owners.map((owner) => (
-                  <option key={owner.id} value={owner.id}>
-                    {owner.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="opportunity-close-date">Expected close</Label>
-              <Input
-                id="opportunity-close-date"
-                type="date"
-                value={form.expectedCloseAt || ""}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    expectedCloseAt: event.target.value || null,
-                  }))
-                }
-              />
-            </div>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="opportunity-next-action">Next action</Label>
-            <Input
-              id="opportunity-next-action"
-              value={form.nextAction || ""}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  nextAction: event.target.value,
-                }))
-              }
-              placeholder="Schedule product demo"
-            />
-          </div>
+            </>
+          )}
+          <InlineCustomFields
+            entityType="opportunities"
+            values={form.customFields || {}}
+            onChange={(customFields) =>
+              setForm((current) => ({ ...current, customFields }))
+            }
+            disabled={
+              createOpportunity.isPending || updateOpportunity.isPending
+            }
+            systemFields={{
+              company: (field) => (
+                <div className="grid gap-2">
+                  <Label>
+                    {field.label}
+                    {field.required ? " *" : ""}
+                  </Label>
+                  <select
+                    value={form.accountId || ""}
+                    required={field.required}
+                    onChange={(event) => {
+                      const accountId = event.target.value || null;
+                      const account = accountsData?.accounts.find(
+                        (item) => item.id === accountId,
+                      );
+                      setForm((current) => ({
+                        ...current,
+                        accountId,
+                        company: account?.name || current.company,
+                      }));
+                    }}
+                    className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    <option value="">No company selected</option>
+                    {(accountsData?.accounts || []).map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ),
+              primaryContactId: (field) => (
+                <div className="grid gap-2">
+                  <Label>{field.label}</Label>
+                  <Input
+                    value={contactSearch}
+                    onChange={(event) => setContactSearch(event.target.value)}
+                    placeholder="Search contacts…"
+                  />
+                  <select
+                    value={form.primaryContactId || ""}
+                    onChange={(event) => {
+                      const contact = contactResults?.contacts.find(
+                        (item) => item.id === event.target.value,
+                      );
+                      if (contact) selectContact(contact);
+                      else
+                        setForm((current) => ({
+                          ...current,
+                          contactId: null,
+                          primaryContactId: null,
+                        }));
+                    }}
+                    className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    <option value="">No primary contact</option>
+                    {opportunity?.contact &&
+                      !contactResults?.contacts.some(
+                        (item) => item.id === opportunity.contact?.id,
+                      ) && (
+                        <option value={opportunity.contact.id}>
+                          {opportunity.contact.name}
+                        </option>
+                      )}
+                    {(contactResults?.contacts || []).map((contact) => (
+                      <option key={contact.id} value={contact.id}>
+                        {contact.name}
+                        {contact.email ? ` — ${contact.email}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ),
+              title: (field) => (
+                <div className="grid gap-2">
+                  <Label>
+                    {field.label}
+                    {field.required ? " *" : ""}
+                  </Label>
+                  <Input
+                    required={field.required}
+                    value={form.title}
+                    placeholder={field.placeholder || "Enterprise plan renewal"}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        title: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              ),
+              value: (field) => (
+                <div className="grid gap-2">
+                  <Label>{field.label}</Label>
+                  <div className="flex gap-2">
+                    <select
+                      value={form.currency}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          currency: event.target
+                            .value as Opportunity["currency"],
+                        }))
+                      }
+                      className="h-9 w-24 rounded-md border border-input bg-background px-2 text-sm"
+                    >
+                      {["USD", "INR", "EUR", "GBP"].map((currency) => (
+                        <option key={currency}>{currency}</option>
+                      ))}
+                    </select>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={form.value}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          value: Number(event.target.value),
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+              ),
+              stage: (field) => (
+                <div className="grid gap-2">
+                  <Label>
+                    {field.label}
+                    {field.required ? " *" : ""}
+                  </Label>
+                  <select
+                    value={form.stage}
+                    disabled={isEditing}
+                    required={field.required}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        stage: event.target.value,
+                      }))
+                    }
+                    className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    {stages.map((stage) => (
+                      <option key={stage.id} value={stage.id}>
+                        {stage.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ),
+              ownerId: (field) => (
+                <div className="grid gap-2">
+                  <Label>{field.label}</Label>
+                  <select
+                    value={form.ownerId || ""}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        ownerId: event.target.value || null,
+                      }))
+                    }
+                    className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    <option value="">
+                      {isEditing ? "Unassigned" : "Use contact owner"}
+                    </option>
+                    {owners.map((owner) => (
+                      <option key={owner.id} value={owner.id}>
+                        {owner.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ),
+              expectedCloseAt: (field) => (
+                <div className="grid gap-2">
+                  <Label>{field.label}</Label>
+                  <Input
+                    type="date"
+                    value={form.expectedCloseAt || ""}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        expectedCloseAt: event.target.value || null,
+                      }))
+                    }
+                  />
+                </div>
+              ),
+              nextAction: (field) => (
+                <div className="grid gap-2">
+                  <Label>{field.label}</Label>
+                  <Input
+                    value={form.nextAction || ""}
+                    placeholder={field.placeholder}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        nextAction: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              ),
+            }}
+          />
           <DialogFooter>
             <Button
               type="button"

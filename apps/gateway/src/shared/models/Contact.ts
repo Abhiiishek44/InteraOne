@@ -73,6 +73,7 @@ export interface IContact extends Document {
   conversations: IContactConversation[];
   insights: IContactInsights;
   metadata: Record<string, unknown>;
+  customFields: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -177,6 +178,7 @@ const contactSchema = new Schema<IContact>(
       topics: [{ type: String, trim: true, maxlength: 60 }],
     },
     metadata: { type: Schema.Types.Mixed, default: {} },
+    customFields: { type: Map, of: Schema.Types.Mixed, default: {} },
   },
   { timestamps: true },
 );

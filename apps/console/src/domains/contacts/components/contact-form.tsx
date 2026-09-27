@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/shared/ui/select";
-import { User, Loader2, Edit2 } from "lucide-react";
+import { User, Loader2, Edit2, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { useContactOwners, useUpdateContact } from "../hooks/use-contacts";
 import { useUpdateContactAssociation } from "@/domains/conversation/hooks";
@@ -30,6 +30,7 @@ import type {
   ContactLifecycleStage,
   ContactWritePayload,
 } from "../types/types";
+import { InlineCustomFields } from "@/domains/crm/components/inline-custom-fields";
 
 type ContactFormPayload = ContactWritePayload & {
   name: string;
@@ -59,6 +60,7 @@ interface ContactFormProps {
     acquisitionSource?: ContactAcquisitionSource;
     preferredChannel?: ContactChannel | null;
     nextFollowUpAt?: string | null;
+    customFields?: Record<string, unknown>;
   };
   onSubmit: (payload: ContactFormPayload) => void | Promise<void>;
   onCancel: () => void;
@@ -83,6 +85,7 @@ export function ContactForm({
   const [accountId, setAccountId] = useState(initialValues?.accountId || "");
   const { data: accountsData } = useAccounts("", 100);
   const [tags, setTags] = useState<string[]>(initialValues?.tags || []);
+  const [newTag, setNewTag] = useState("");
   const [lifecycleStage, setLifecycleStage] = useState<ContactLifecycleStage>(
     initialValues?.lifecycleStage || "new",
   );
@@ -99,6 +102,9 @@ export function ContactForm({
   );
   const [nextFollowUpAt, setNextFollowUpAt] = useState(
     toLocalDateTime(initialValues?.nextFollowUpAt),
+  );
+  const [customFields, setCustomFields] = useState<Record<string, unknown>>(
+    initialValues?.customFields || {},
   );
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -118,242 +124,324 @@ export function ContactForm({
       nextFollowUpAt: nextFollowUpAt
         ? new Date(nextFollowUpAt).toISOString()
         : null,
+      customFields,
     });
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="grid gap-2">
-          <Label htmlFor="contact-name">Name</Label>
-          <Input
-            id="contact-name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Full name"
-            className="cursor-text"
-            required
-            disabled={loading}
-          />
-        </div>
-
-        <div className="grid gap-2">
-          <Label htmlFor="contact-email">Email</Label>
-          <Input
-            id="contact-email"
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="email@company.com"
-            className="cursor-text"
-            disabled={loading}
-          />
-        </div>
-
-        <div className="grid gap-2">
-          <Label htmlFor="contact-phone">Phone</Label>
-          <Input
-            id="contact-phone"
-            value={phone}
-            onChange={(event) => setPhone(event.target.value)}
-            placeholder="+1 (555) 000-0000"
-            className="cursor-text"
-            disabled={loading}
-          />
-        </div>
-
-        <div className="grid gap-2">
-          <Label htmlFor="contact-company">Company</Label>
-          <Select
-            value={accountId || "legacy"}
-            onValueChange={(value) => {
-              const nextId = value === "legacy" ? "" : value;
-              setAccountId(nextId);
-              const selected = accountsData?.accounts.find((item) => item.id === nextId);
-              if (selected) setCompany(selected.name);
-            }}
-            disabled={loading}
-          >
-            <SelectTrigger id="contact-company"><SelectValue placeholder="Select a company" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="legacy">No linked company</SelectItem>
-              {(accountsData?.accounts || []).map((account) => (
-                <SelectItem key={account.id} value={account.id}>{account.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {!accountId && (
-            <Input
-              value={company}
-              onChange={(event) => setCompany(event.target.value)}
-              placeholder="Legacy company name (optional)"
-              className="cursor-text"
-              disabled={loading}
-            />
-          )}
-        </div>
-      </div>
-
-      <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
-        <div>
-          <h3 className="text-sm font-semibold">CRM details</h3>
-          <p className="text-xs text-muted-foreground">
-            Track ownership, qualification, and the next action.
-          </p>
-        </div>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div className="grid gap-2">
-            <Label htmlFor="contact-lifecycle-stage">Lifecycle stage</Label>
-            <Select
-              value={lifecycleStage}
-              onValueChange={(value) =>
-                setLifecycleStage(value as ContactLifecycleStage)
-              }
-              disabled={loading}
-            >
-              <SelectTrigger id="contact-lifecycle-stage">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="new">New</SelectItem>
-                <SelectItem value="qualified">Qualified</SelectItem>
-                <SelectItem value="opportunity">Opportunity</SelectItem>
-                <SelectItem value="customer">Customer</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-                <SelectItem value="lost">Lost</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="contact-lead-status">Lead status</Label>
-            <Select
-              value={leadStatus}
-              onValueChange={(value) =>
-                setLeadStatus(value as ContactLeadStatus)
-              }
-              disabled={loading}
-            >
-              <SelectTrigger id="contact-lead-status">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="needs_review">Needs review</SelectItem>
-                <SelectItem value="contacted">Contacted</SelectItem>
-                <SelectItem value="follow_up">Follow-up</SelectItem>
-                <SelectItem value="converted">Converted</SelectItem>
-                <SelectItem value="unqualified">Unqualified</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="contact-owner">Contact owner</Label>
-            <Select
-              value={ownerId || "unassigned"}
-              onValueChange={(value) =>
-                setOwnerId(value === "unassigned" ? "" : value)
-              }
-              disabled={loading}
-            >
-              <SelectTrigger id="contact-owner">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="unassigned">Unassigned</SelectItem>
-                {ownerOptions.map((owner) => (
-                  <SelectItem key={owner.id} value={owner.id}>
-                    {owner.name}
-                  </SelectItem>
+      <InlineCustomFields
+        entityType="contacts"
+        values={customFields}
+        onChange={setCustomFields}
+        disabled={loading}
+        systemFields={{
+          name: (field) => (
+            <div className="grid gap-2">
+              <Label htmlFor="contact-name">
+                {field.label}
+                {field.required ? " *" : ""}
+              </Label>
+              <Input
+                id="contact-name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder={field.placeholder}
+                required={field.required}
+                disabled={loading}
+              />
+            </div>
+          ),
+          email: (field) => (
+            <div className="grid gap-2">
+              <Label htmlFor="contact-email">{field.label}</Label>
+              <Input
+                id="contact-email"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder={field.placeholder}
+                disabled={loading}
+              />
+            </div>
+          ),
+          phone: (field) => (
+            <div className="grid gap-2">
+              <Label htmlFor="contact-phone">{field.label}</Label>
+              <Input
+                id="contact-phone"
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+                placeholder={field.placeholder}
+                disabled={loading}
+              />
+            </div>
+          ),
+          company: (field) => (
+            <div className="grid gap-2">
+              <Label>{field.label}</Label>
+              <Select
+                value={accountId || "legacy"}
+                onValueChange={(value) => {
+                  const nextId = value === "legacy" ? "" : value;
+                  setAccountId(nextId);
+                  const selected = accountsData?.accounts.find(
+                    (item) => item.id === nextId,
+                  );
+                  if (selected) setCompany(selected.name);
+                }}
+                disabled={loading}
+              >
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={field.placeholder || "Select a company"}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="legacy">No linked company</SelectItem>
+                  {(accountsData?.accounts || []).map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {account.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!accountId && (
+                <Input
+                  value={company}
+                  onChange={(event) => setCompany(event.target.value)}
+                  placeholder="Legacy company name (optional)"
+                  disabled={loading}
+                />
+              )}
+            </div>
+          ),
+          lifecycleStage: (field) => (
+            <div className="grid gap-2">
+              <Label>{field.label}</Label>
+              <Select
+                value={lifecycleStage}
+                onValueChange={(value) =>
+                  setLifecycleStage(value as ContactLifecycleStage)
+                }
+                disabled={loading}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[
+                    ["new", "New"],
+                    ["qualified", "Qualified"],
+                    ["opportunity", "Opportunity"],
+                    ["customer", "Customer"],
+                    ["inactive", "Inactive"],
+                    ["lost", "Lost"],
+                  ].map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ),
+          leadStatus: (field) => (
+            <div className="grid gap-2">
+              <Label>{field.label}</Label>
+              <Select
+                value={leadStatus}
+                onValueChange={(value) =>
+                  setLeadStatus(value as ContactLeadStatus)
+                }
+                disabled={loading}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[
+                    ["needs_review", "Needs review"],
+                    ["contacted", "Contacted"],
+                    ["follow_up", "Follow-up"],
+                    ["converted", "Converted"],
+                    ["unqualified", "Unqualified"],
+                  ].map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ),
+          ownerId: (field) => (
+            <div className="grid gap-2">
+              <Label>{field.label}</Label>
+              <Select
+                value={ownerId || "unassigned"}
+                onValueChange={(value) =>
+                  setOwnerId(value === "unassigned" ? "" : value)
+                }
+                disabled={loading}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                  {ownerOptions.map((owner) => (
+                    <SelectItem key={owner.id} value={owner.id}>
+                      {owner.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ),
+          acquisitionSource: (field) => (
+            <div className="grid gap-2">
+              <Label>{field.label}</Label>
+              <Select
+                value={acquisitionSource}
+                onValueChange={(value) =>
+                  setAcquisitionSource(value as ContactAcquisitionSource)
+                }
+                disabled={loading}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[
+                    "manual",
+                    "widget",
+                    "email",
+                    "whatsapp",
+                    "telegram",
+                    "phone",
+                    "qr",
+                    "unknown",
+                  ].map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {value}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ),
+          preferredChannel: (field) => (
+            <div className="grid gap-2">
+              <Label>{field.label}</Label>
+              <Select
+                value={preferredChannel || "not_set"}
+                onValueChange={(value) =>
+                  setPreferredChannel(
+                    value === "not_set" ? "" : (value as ContactChannel),
+                  )
+                }
+                disabled={loading}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="not_set">Not set</SelectItem>
+                  {["widget", "email", "whatsapp", "telegram", "phone"].map(
+                    (value) => (
+                      <SelectItem key={value} value={value}>
+                        {value}
+                      </SelectItem>
+                    ),
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          ),
+          nextFollowUpAt: (field) => (
+            <div className="grid gap-2">
+              <Label>{field.label}</Label>
+              <Input
+                type="datetime-local"
+                value={nextFollowUpAt}
+                onChange={(event) => setNextFollowUpAt(event.target.value)}
+                disabled={loading}
+              />
+            </div>
+          ),
+          tags: (field) => (
+            <div className="grid gap-2">
+              <Label>{field.label}</Label>
+              <div className="flex flex-wrap gap-2">
+                {Array.from(
+                  new Set([
+                    ...field.options.map((option) => option.label),
+                    ...tagOptions,
+                    ...tags,
+                  ]),
+                ).map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    disabled={loading}
+                    onClick={() =>
+                      setTags((previous) =>
+                        previous.includes(tag)
+                          ? previous.filter((item) => item !== tag)
+                          : [...previous, tag],
+                      )
+                    }
+                    className={`rounded-full border px-3 py-1 text-xs ${tags.includes(tag) ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+                  >
+                    {tag}
+                    {tags.includes(tag) && <X className="ml-1 inline h-3 w-3" />}
+                  </button>
                 ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="contact-source">Acquisition source</Label>
-            <Select
-              value={acquisitionSource}
-              onValueChange={(value) =>
-                setAcquisitionSource(value as ContactAcquisitionSource)
-              }
-              disabled={loading}
-            >
-              <SelectTrigger id="contact-source">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="manual">Manual</SelectItem>
-                <SelectItem value="widget">Widget</SelectItem>
-                <SelectItem value="email">Email</SelectItem>
-                <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                <SelectItem value="telegram">Telegram</SelectItem>
-                <SelectItem value="phone">Phone</SelectItem>
-                <SelectItem value="qr">QR</SelectItem>
-                <SelectItem value="unknown">Unknown</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="contact-preferred-channel">Preferred channel</Label>
-            <Select
-              value={preferredChannel || "not_set"}
-              onValueChange={(value) =>
-                setPreferredChannel(
-                  value === "not_set" ? "" : (value as ContactChannel),
-                )
-              }
-              disabled={loading}
-            >
-              <SelectTrigger id="contact-preferred-channel">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="not_set">Not set</SelectItem>
-                <SelectItem value="widget">Widget</SelectItem>
-                <SelectItem value="email">Email</SelectItem>
-                <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                <SelectItem value="telegram">Telegram</SelectItem>
-                <SelectItem value="phone">Phone</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="contact-next-follow-up">Next follow-up</Label>
-            <Input
-              id="contact-next-follow-up"
-              type="datetime-local"
-              value={nextFollowUpAt}
-              onChange={(event) => setNextFollowUpAt(event.target.value)}
-              disabled={loading}
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="grid gap-2">
-        <Label>Tags</Label>
-        <div className="flex flex-wrap gap-2">
-          {tagOptions.map((tag) => (
-            <button
-              key={tag}
-              type="button"
-              disabled={loading}
-              onClick={() =>
-                setTags((prev) =>
-                  prev.includes(tag)
-                    ? prev.filter((item) => item !== tag)
-                    : [...prev, tag],
-                )
-              }
-              className={`rounded-full border px-3 py-1 text-xs transition-colors cursor-pointer ${
-                tags.includes(tag)
-                  ? "bg-primary text-primary-foreground border-transparent"
-                  : "text-muted-foreground hover:bg-muted"
-              }`}
-            >
-              {tag}
-            </button>
-          ))}
-        </div>
-      </div>
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  value={newTag}
+                  maxLength={40}
+                  disabled={loading || tags.length >= 20}
+                  placeholder="Create a tag"
+                  onChange={(event) => setNewTag(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter") return;
+                    event.preventDefault();
+                    const value = newTag.trim();
+                    if (!value || tags.includes(value) || tags.length >= 20)
+                      return;
+                    setTags((previous) => [...previous, value]);
+                    setNewTag("");
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={
+                    loading ||
+                    !newTag.trim() ||
+                    tags.includes(newTag.trim()) ||
+                    tags.length >= 20
+                  }
+                  onClick={() => {
+                    const value = newTag.trim();
+                    if (!value) return;
+                    setTags((previous) => [...previous, value]);
+                    setNewTag("");
+                  }}
+                >
+                  <Plus className="mr-1 h-4 w-4" /> Add
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Select existing tags or create a new one. Up to 20 tags.
+              </p>
+            </div>
+          ),
+        }}
+      />
 
       <DialogFooter className="flex items-center gap-2">
         <Button
@@ -395,6 +483,7 @@ interface ContactDialogProps {
     acquisitionSource?: ContactAcquisitionSource;
     preferredChannel?: ContactChannel | null;
     nextFollowUpAt?: string | null;
+    customFields?: Record<string, unknown>;
   };
   triggerType?: "button" | "icon" | "custom";
   customTrigger?: React.ReactNode;
@@ -541,7 +630,7 @@ export function ContactDialog({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-180">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-180">
         <DialogHeader>
           <DialogTitle>
             {mode === "create"

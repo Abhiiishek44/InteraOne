@@ -30,6 +30,7 @@ export interface IAccount extends Document {
   lifecycleStage: AccountLifecycleStage;
   notes: IAccountNote[];
   metadata: Record<string, unknown>;
+  customFields: Record<string, unknown>;
   lastActivityAt: Date;
   archivedAt?: Date | null;
   createdBy?: Types.ObjectId | null;
@@ -69,9 +70,18 @@ const accountSchema = new Schema<IAccount>(
         new Schema<IAccountNote>(
           {
             id: { type: String, required: true },
-            authorId: { type: Schema.Types.ObjectId, ref: "User", default: null },
+            authorId: {
+              type: Schema.Types.ObjectId,
+              ref: "User",
+              default: null,
+            },
             authorName: { type: String, required: true, trim: true },
-            content: { type: String, required: true, trim: true, maxlength: 2000 },
+            content: {
+              type: String,
+              required: true,
+              trim: true,
+              maxlength: 2000,
+            },
             createdAt: { type: Date, default: Date.now },
           },
           { _id: false },
@@ -80,6 +90,7 @@ const accountSchema = new Schema<IAccount>(
       default: [],
     },
     metadata: { type: Schema.Types.Mixed, default: {} },
+    customFields: { type: Map, of: Schema.Types.Mixed, default: {} },
     lastActivityAt: { type: Date, default: Date.now },
     archivedAt: { type: Date, default: null },
     createdBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
