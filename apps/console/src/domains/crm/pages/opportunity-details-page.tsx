@@ -43,8 +43,11 @@ import {
 } from "@/domains/contacts/hooks/use-contacts";
 import { DeleteConfirmDialog } from "@/shared/components/delete-confirm-dialog";
 import { OpportunityDialog } from "../components/opportunity-dialog";
-import { InlineCustomFields } from "../components/inline-custom-fields";
 import { CrmFieldValues } from "../components/crm-field-values";
+import {
+  CustomFieldsCustomizeButton,
+  InlineCustomFields,
+} from "../components/inline-custom-fields";
 import { useCrmFields } from "../hooks/use-crm-fields";
 import { storageApi } from "@/shared/lib/storage.api";
 import {
@@ -117,6 +120,8 @@ export function OpportunityDetailsPage() {
   const deleteOpportunityNote = useDeleteOpportunityNote();
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [customizingAdditionalInfo, setCustomizingAdditionalInfo] =
+    useState(false);
   const [nextActionEdit, setNextActionEdit] = useState<{
     opportunityId: string;
     value: string;
@@ -151,8 +156,9 @@ export function OpportunityDetailsPage() {
     (field) => !field.isSystem && field.visible && field.type === "image",
   );
   const profileImageField =
-    visibleImageFields.find((field) => /profile|photo|avatar/i.test(field.label)) ||
-    visibleImageFields[0];
+    visibleImageFields.find((field) =>
+      /profile|photo|avatar/i.test(field.label),
+    ) || visibleImageFields[0];
   const profileImageValue = profileImageField
     ? opportunity?.customFields?.[profileImageField.key]
     : undefined;
@@ -536,8 +542,13 @@ export function OpportunityDetailsPage() {
       </div>
 
       <Card>
-        <div className="border-b px-5 py-4">
+        <div className="flex items-center justify-between gap-4 border-b px-5 py-4">
           <h2 className="font-semibold">Additional information</h2>
+          {!customizingAdditionalInfo && (
+            <CustomFieldsCustomizeButton
+              onClick={() => setCustomizingAdditionalInfo(true)}
+            />
+          )}
         </div>
         <CardContent className="p-5">
           <InlineCustomFields
@@ -545,6 +556,9 @@ export function OpportunityDetailsPage() {
             values={opportunity.customFields || {}}
             onChange={() => undefined}
             readOnly
+            customizing={customizingAdditionalInfo}
+            onCustomizingChange={setCustomizingAdditionalInfo}
+            showCustomizeButton={false}
           />
         </CardContent>
       </Card>

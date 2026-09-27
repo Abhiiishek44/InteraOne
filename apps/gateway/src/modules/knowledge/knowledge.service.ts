@@ -54,7 +54,7 @@ class KnowledgeService {
     const doc = await Knowledge.findOneAndUpdate(
       { _id: documentId, organizationId },
       { status: "queued" },
-      { new: true },
+      { returnDocument: "after" },
     );
 
     if (!doc) return null;
@@ -148,7 +148,7 @@ class KnowledgeService {
     const doc = await Knowledge.findOneAndUpdate(
       { _id: documentId, organizationId },
       { status: "queued", errorMessage: undefined },
-      { new: true },
+      { returnDocument: "after" },
     );
     if (!doc) return null;
 
@@ -187,7 +187,7 @@ class KnowledgeService {
     const doc = await Knowledge.findOneAndUpdate(
       { _id: documentId, organizationId },
       { $set: patch },
-      { new: true },
+      { returnDocument: "after" },
     );
     if (!doc) return null;
 

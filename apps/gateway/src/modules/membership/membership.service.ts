@@ -233,7 +233,7 @@ export class MembershipService {
         const membership = await Membership.findOneAndUpdate(
             { _id: targetMemberId, organizationId },
             { role: newRole },
-            { new: true },
+            { returnDocument: "after" },
         );
 
         if (membership) {
@@ -294,7 +294,7 @@ export class MembershipService {
             membership = await Membership.findOneAndUpdate(
                 { _id: targetMemberId, organizationId },
                 { inviteStatus: "accepted" },
-                { new: true },
+                { returnDocument: "after" },
             );
         }
 

@@ -28,6 +28,7 @@ import { ProtectedRoute } from "@/shared/components/protected-route";
 import QRCodeGeneratorPage from "@/domains/widget/pages/qr-generator-page";
 import QRScannerLandingPage from "@/domains/widget/pages/qr-scanner-landing-page";
 import { ChannelsPage } from "@/domains/channels/pages/channels-page";
+import { IntegrationsPage } from "@/domains/integrations/pages/integrations-page";
 import { EmailChannelSetupPage } from "@/domains/channels/pages/email-channel-setup";
 import { WhatsAppChannelSetupPage } from "@/domains/channels/pages/whatsapp-channel-setup";
 import { TelegramChannelSetupPage } from "@/domains/channels/pages/telegram-channel-setup";
@@ -253,6 +254,16 @@ const router = createBrowserRouter([
       <ProtectedRoute requiredRole="admin">
         <DashboardLayout>
           <ChannelsPage />
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/dashboard/integrations",
+    element: (
+      <ProtectedRoute requiredRole="admin">
+        <DashboardLayout>
+          <IntegrationsPage />
         </DashboardLayout>
       </ProtectedRoute>
     ),

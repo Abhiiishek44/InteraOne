@@ -229,7 +229,7 @@ export class OrganizationService {
     const org = await Organization.findByIdAndUpdate(
       orgId,
       { $set: updateFields },
-      { new: true },
+      { returnDocument: "after" },
     );
     if (!org) throw new Error("Organization not found");
     return org;

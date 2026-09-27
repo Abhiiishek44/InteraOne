@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { authApi } from "@/domains/auth/api/auth.api";
+import { DeleteConfirmDialog } from "@/shared/components/delete-confirm-dialog";
 import { Button } from "@/shared/ui/button";
 import {
   Dialog,
@@ -50,6 +51,30 @@ interface Props {
   disabled?: boolean;
   readOnly?: boolean;
   className?: string;
+  customizing?: boolean;
+  onCustomizingChange?: (customizing: boolean) => void;
+  showCustomizeButton?: boolean;
+  alwaysShowRequired?: boolean;
+  excludeFieldKeys?: string[];
+}
+
+interface CustomFieldsCustomizeButtonProps {
+  onClick: () => void;
+}
+
+export function CustomFieldsCustomizeButton({
+  onClick,
+}: CustomFieldsCustomizeButtonProps) {
+  const canCustomize = ["owner", "admin"].includes(authApi.getOrgRole() || "");
+
+  if (!canCustomize) return null;
+
+  return (
+    <Button type="button" variant="outline" size="sm" onClick={onClick}>
+      <Settings2 className="mr-2 h-4 w-4" />
+      Customize form
+    </Button>
+  );
 }
 
 const blank = {
@@ -70,30 +95,57 @@ export function InlineCustomFields({
   disabled,
   readOnly = false,
   className = "",
+  customizing: controlledCustomizing,
+  onCustomizingChange,
+  showCustomizeButton = true,
+  alwaysShowRequired = false,
+  excludeFieldKeys = [],
 }: Props) {
   const { data: fields = [] } = useCrmFields(entityType);
   const mutations = useCrmFieldMutations(entityType);
-  const [customizing, setCustomizing] = useState(false);
+  const [internalCustomizing, setInternalCustomizing] = useState(false);
+  const customizing = controlledCustomizing ?? internalCustomizing;
+  const setCustomizing = (next: boolean) => {
+    if (controlledCustomizing === undefined) setInternalCustomizing(next);
+    onCustomizingChange?.(next);
+  };
   const [editing, setEditing] = useState<CrmFieldDefinition | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [insertAt, setInsertAt] = useState<number | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [fieldToRemove, setFieldToRemove] = useState<CrmFieldDefinition | null>(
+    null,
+  );
   const [draft, setDraft] = useState(blank);
   const canCustomize = ["owner", "admin"].includes(authApi.getOrgRole() || "");
   const supportedFields = useMemo(
     () =>
       fields.filter(
-        (field) => !field.isSystem || Boolean(systemFields[field.key]),
+        (field) =>
+          !excludeFieldKeys.includes(field.key) &&
+          (!field.isSystem || Boolean(systemFields[field.key])),
       ),
-    [fields, systemFields],
+    [excludeFieldKeys, fields, systemFields],
   );
   const visibleFields = useMemo(
-    () => supportedFields.filter((field) => field.visible),
-    [supportedFields],
+    () =>
+      supportedFields.filter(
+        (field) =>
+          field.visible ||
+          field.protected ||
+          (alwaysShowRequired && field.required),
+      ),
+    [alwaysShowRequired, supportedFields],
   );
   const hiddenFields = useMemo(
-    () => supportedFields.filter((field) => !field.visible),
-    [supportedFields],
+    () =>
+      supportedFields.filter(
+        (field) =>
+          !field.visible &&
+          !field.protected &&
+          !(alwaysShowRequired && field.required),
+      ),
+    [alwaysShowRequired, supportedFields],
   );
 
   useEffect(() => {
@@ -191,15 +243,11 @@ export function InlineCustomFields({
     }
   };
 
-  const remove = async (field: CrmFieldDefinition) => {
-    if (
-      !window.confirm(
-        `Remove “${field.label}” from this form? Existing values will be preserved.`,
-      )
-    )
-      return;
+  const remove = async () => {
+    if (!fieldToRemove) return;
     try {
-      await mutations.archive.mutateAsync(field.id);
+      await mutations.archive.mutateAsync(fieldToRemove.id);
+      setFieldToRemove(null);
       toast.success("Field removed");
     } catch (error) {
       toast.error(
@@ -258,17 +306,9 @@ export function InlineCustomFields({
 
   return (
     <div className={`space-y-3 ${className}`}>
-      {canCustomize && !customizing && (
+      {showCustomizeButton && canCustomize && !customizing && (
         <div className="flex justify-end border-b pb-3">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setCustomizing(true)}
-          >
-            <Settings2 className="mr-2 h-4 w-4" />
-            Customize form
-          </Button>
+          <CustomFieldsCustomizeButton onClick={() => setCustomizing(true)} />
         </div>
       )}
       {canCustomize && customizing && (
@@ -276,14 +316,11 @@ export function InlineCustomFields({
           <div>
             <p className="text-sm font-medium">Customize form layout</p>
             <p className="text-xs text-muted-foreground">
-              Drag fields to reorder, or use the field actions to edit and remove.
+              Drag fields to reorder, or use the field actions to edit and
+              remove.
             </p>
           </div>
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => setCustomizing(false)}
-          >
+          <Button type="button" size="sm" onClick={() => setCustomizing(false)}>
             Done
           </Button>
         </div>
@@ -341,7 +378,7 @@ export function InlineCustomFields({
                           ? "Required system field"
                           : "Remove field"
                       }
-                      onClick={() => void remove(field)}
+                      onClick={() => setFieldToRemove(field)}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
@@ -460,30 +497,30 @@ export function InlineCustomFields({
             </div>
             {!editing?.isSystem &&
               !["file", "image", "signature"].includes(draft.type) && (
-              <div className="grid gap-2">
-                <Label>Default value</Label>
-                <Input
-                  value={draft.defaultValue}
-                  onChange={(event) =>
-                    setDraft({ ...draft, defaultValue: event.target.value })
-                  }
-                />
-              </div>
-            )}
-            {[editing?.type, draft.type].some(
-              (type) => type === "single_select" || type === "multi_select",
-            ) && (
                 <div className="grid gap-2">
-                  <Label>Options (one per line)</Label>
-                  <textarea
-                    className="min-h-28 rounded-md border bg-background px-3 py-2 text-sm"
-                    value={draft.options}
+                  <Label>Default value</Label>
+                  <Input
+                    value={draft.defaultValue}
                     onChange={(event) =>
-                      setDraft({ ...draft, options: event.target.value })
+                      setDraft({ ...draft, defaultValue: event.target.value })
                     }
                   />
                 </div>
               )}
+            {[editing?.type, draft.type].some(
+              (type) => type === "single_select" || type === "multi_select",
+            ) && (
+              <div className="grid gap-2">
+                <Label>Options (one per line)</Label>
+                <textarea
+                  className="min-h-28 rounded-md border bg-background px-3 py-2 text-sm"
+                  value={draft.options}
+                  onChange={(event) =>
+                    setDraft({ ...draft, options: event.target.value })
+                  }
+                />
+              </div>
+            )}
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
@@ -529,6 +566,14 @@ export function InlineCustomFields({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <DeleteConfirmDialog
+        isOpen={Boolean(fieldToRemove)}
+        onClose={() => setFieldToRemove(null)}
+        onConfirm={() => void remove()}
+        title="Remove field?"
+        description={`Remove “${fieldToRemove?.label || "this field"}” from this form? Existing values will be preserved.`}
+        isDeleting={mutations.archive.isPending}
+      />
     </div>
   );
 }
@@ -574,7 +619,8 @@ function formatFieldValue(field: CrmFieldDefinition, value: unknown) {
   }
   if (field.type === "single_select") {
     return (
-      field.options.find((option) => option.id === value)?.label || String(value)
+      field.options.find((option) => option.id === value)?.label ||
+      String(value)
     );
   }
   if (field.type === "multi_select" && Array.isArray(value)) {
@@ -635,7 +681,12 @@ function FieldInput({
         }
         initialFileName={asset?.fileName}
         onUploadSuccess={({ fileKey, fileName }) =>
-          onChange({ fileKey, fileName, mimeType: field.type === "image" ? "image/*" : "application/octet-stream" })
+          onChange({
+            fileKey,
+            fileName,
+            mimeType:
+              field.type === "image" ? "image/*" : "application/octet-stream",
+          })
         }
         onRemove={() => onChange(null)}
       />
@@ -810,7 +861,10 @@ function SignatureInput({
     try {
       const blob = await new Promise<Blob>((resolve, reject) =>
         canvas.toBlob(
-          (result) => (result ? resolve(result) : reject(new Error("Could not create signature"))),
+          (result) =>
+            result
+              ? resolve(result)
+              : reject(new Error("Could not create signature")),
           "image/png",
         ),
       );
@@ -822,7 +876,10 @@ function SignatureInput({
         file.type,
         3600,
       );
-      await storageApi.uploadFileWithPresignedUrl(response.data.uploadUrl, file);
+      await storageApi.uploadFileWithPresignedUrl(
+        response.data.uploadUrl,
+        file,
+      );
       onChange({
         fileKey: response.data.fileKey,
         fileName: file.name,
@@ -830,7 +887,9 @@ function SignatureInput({
       });
       toast.success("Signature saved");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not save signature");
+      toast.error(
+        error instanceof Error ? error.message : "Could not save signature",
+      );
     } finally {
       setUploading(false);
     }
@@ -856,10 +915,21 @@ function SignatureInput({
         onPointerCancel={() => setDrawing(false)}
       />
       <div className="flex gap-2">
-        <Button type="button" size="sm" onClick={() => void save()} disabled={disabled || uploading}>
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => void save()}
+          disabled={disabled || uploading}
+        >
           {uploading ? "Saving…" : "Save signature"}
         </Button>
-        <Button type="button" size="sm" variant="outline" onClick={clear} disabled={disabled || uploading}>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={clear}
+          disabled={disabled || uploading}
+        >
           Clear
         </Button>
       </div>

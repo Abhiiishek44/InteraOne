@@ -176,7 +176,7 @@ export class ConversationService {
           [`metadata.agentReads.${userId}.lastReadAt`]: new Date(),
         },
       },
-      { new: true, timestamps: false },
+      { returnDocument: "after", timestamps: false },
     ).lean();
   }
 
@@ -372,7 +372,7 @@ export class ConversationService {
         },
         $addToSet: { participants: agentId },
       },
-      { new: true },
+      { returnDocument: "after" },
     ).populate("assignedTo", "name email");
 
     // NOTE: Tickets and conversations are independent entities.
@@ -409,7 +409,7 @@ export class ConversationService {
           "metadata.statusUpdatedAt": new Date(),
         },
       },
-      { new: true },
+      { returnDocument: "after" },
     );
 
     if (!conversation) return { valid: true, found: false };

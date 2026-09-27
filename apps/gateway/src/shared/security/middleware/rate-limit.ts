@@ -188,7 +188,7 @@ export const incrementMessageUsage = async (
       $inc: { messagesUsed: 1 },
       $setOnInsert: { resetAt },
     },
-    { upsert: true, new: true },
+    { upsert: true, returnDocument: "after" },
   );
 
   const used = record?.messagesUsed ?? 1;
@@ -253,4 +253,3 @@ export async function isQuotaExhausted(organizationId: string): Promise<boolean>
   const used = await resolveCurrentCount("messages", organizationId, plan);
   return used >= limit;
 }
-

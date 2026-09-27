@@ -53,7 +53,7 @@ async function run() {
           lastActivityAt: new Date(),
         },
       },
-      { upsert: true, new: true, runValidators: true },
+      { upsert: true, returnDocument: "after", runValidators: true },
     );
     accountByKey.set(key, account);
   }

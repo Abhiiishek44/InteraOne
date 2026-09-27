@@ -83,7 +83,7 @@ export class TicketsService {
               },
             },
           },
-          { upsert: true, new: true, runValidators: true },
+          { upsert: true, returnDocument: "after", runValidators: true },
         );
 
         contactId = contact._id;
@@ -340,7 +340,7 @@ export class TicketsService {
     const ticket = await Ticket.findOneAndUpdate(
       { _id: ticketId, organizationId },
       { $set: setOps },
-      { new: true },
+      { returnDocument: "after" },
     )
       .populate("assignedTo", "name email")
       .lean();
@@ -387,7 +387,7 @@ export class TicketsService {
           },
         },
       },
-      { new: true },
+      { returnDocument: "after" },
     )
       .populate("assignedTo", "name email")
       .lean();
@@ -425,7 +425,7 @@ export class TicketsService {
           },
         },
       },
-      { new: true },
+      { returnDocument: "after" },
     )
       .populate("assignedTo", "name email")
       .lean();

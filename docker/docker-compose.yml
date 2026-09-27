@@ -151,6 +151,8 @@ services:
     volumes:
       - ../ee:/app/ee:ro
     depends_on:
+      mongodb:
+        condition: service_healthy
       redis:
         condition: service_healthy
     networks:

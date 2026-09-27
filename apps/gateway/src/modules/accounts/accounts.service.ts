@@ -338,7 +338,7 @@ export class AccountsService {
     const account = await Account.findOneAndUpdate(
       { _id: accountId, organizationId },
       { $set: set },
-      { new: true, runValidators: true },
+      { returnDocument: "after", runValidators: true },
     );
     if (!account) throw new Error("Company not found");
     if (input.name !== undefined) {
@@ -366,7 +366,7 @@ export class AccountsService {
     const account = await Account.findOneAndUpdate(
       { _id: accountId, organizationId },
       { $set: { archivedAt: new Date() } },
-      { new: true },
+      { returnDocument: "after" },
     );
     if (!account) throw new Error("Company not found");
   }
@@ -390,7 +390,7 @@ export class AccountsService {
         $push: { notes: { $each: [note], $position: 0 } },
         $set: { lastActivityAt: new Date() },
       },
-      { new: true },
+      { returnDocument: "after" },
     );
     if (!account) throw new Error("Company not found");
     return note;

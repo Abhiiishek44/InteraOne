@@ -33,8 +33,6 @@ export interface TelegramChannelConfig {
   verificationStatus: ChannelVerificationStatus;
 }
 
-
-
 export interface Channel {
   _id: string;
   organizationId: string;
@@ -72,4 +70,39 @@ export interface VerifyChannelResponse {
     status: ChannelVerificationStatus;
     dnsRecords: DnsRecord[];
   };
+}
+
+export interface LeadSourceForm {
+  id: string;
+  connectionId: string;
+  provider: "facebook_lead_ads" | "google_forms";
+  externalFormId: string;
+  externalFormName: string;
+  status: "active" | "paused";
+  fieldMappings: Record<string, string>;
+  defaults: {
+    ownerId?: string | null;
+    tags: string[];
+    lifecycleStage: "new" | "qualified";
+    leadStatus: "needs_review" | "contacted" | "follow_up";
+    createOpportunity: boolean;
+    opportunityStage?: string;
+    opportunityTitle?: string;
+  };
+}
+
+export interface LeadSourceConnection {
+  id: string;
+  provider: "facebook_lead_ads" | "google_forms";
+  name: string;
+  status: "active" | "expired" | "error";
+  externalAccountId: string;
+  tokenExpiresAt?: string | null;
+  lastError?: string | null;
+  forms: LeadSourceForm[];
+}
+
+export interface LeadSourcesResponse {
+  success: boolean;
+  data: { connections: LeadSourceConnection[] };
 }

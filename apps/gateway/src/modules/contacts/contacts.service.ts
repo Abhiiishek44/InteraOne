@@ -663,7 +663,7 @@ export class ContactsService {
             }
           : {}),
       },
-      { upsert: true, new: true, runValidators: true },
+      { upsert: true, returnDocument: "after", runValidators: true },
     ).lean();
 
     if (!contact) {
@@ -785,7 +785,7 @@ export class ContactsService {
       {
         $push: { notes: { $each: [note], $position: 0 } },
       },
-      { new: true },
+      { returnDocument: "after" },
     );
     if (!updated) throw new Error("Contact not found");
     return note;
@@ -806,7 +806,7 @@ export class ContactsService {
       {
         $set: { "notes.$.content": content },
       },
-      { new: true },
+      { returnDocument: "after" },
     ).lean();
 
     if (!updated) throw new Error("Contact note not found");
@@ -857,7 +857,7 @@ export class ContactsService {
       {
         $addToSet: { tags: cleanedTag },
       },
-      { new: true },
+      { returnDocument: "after" },
     );
     if (!updated) throw new Error("Contact not found");
     return cleanedTag;
@@ -878,7 +878,7 @@ export class ContactsService {
       {
         $pull: { tags: normalizedTag },
       },
-      { new: true },
+      { returnDocument: "after" },
     );
     if (!updated) throw new Error("Contact not found");
   }
@@ -932,7 +932,7 @@ export class ContactsService {
         {
           $set: updateField,
         },
-        { new: true },
+        { returnDocument: "after" },
       );
       if (!updatedContact) {
         throw new Error("Target contact not found");
@@ -1050,7 +1050,7 @@ export class ContactsService {
         $set: updateFields,
         ...(Object.keys(unsetFields).length > 0 ? { $unset: unsetFields } : {}),
       },
-      { new: true, runValidators: true },
+      { returnDocument: "after", runValidators: true },
     ).populate("ownerId", "name email");
     if (!updated) throw new Error("Contact not found");
 

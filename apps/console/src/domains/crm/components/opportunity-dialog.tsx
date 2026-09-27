@@ -60,6 +60,8 @@ const emptyForm: CreateOpportunityPayload = {
   customFields: {},
 };
 
+const OPPORTUNITY_DIALOG_EXCLUDED_FIELDS = ["primaryContactId"];
+
 export function OpportunityDialog({
   open,
   onOpenChange,
@@ -499,9 +501,82 @@ export function OpportunityDialog({
               </div>
             </>
           )}
+          <div className="grid gap-2 rounded-lg border bg-muted/15 p-4">
+            <div>
+              <Label htmlFor="opportunity-contact-search">
+                Primary contact
+              </Label>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Attach a contact person to this opportunity.
+              </p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">
+              <Input
+                id="opportunity-contact-search"
+                value={contactSearch}
+                onChange={(event) => setContactSearch(event.target.value)}
+                placeholder="Search contacts…"
+                disabled={contactsLoading && !contactResults}
+              />
+              <select
+                value={form.primaryContactId || ""}
+                onChange={(event) => {
+                  const contact = contactResults?.contacts.find(
+                    (item) => item.id === event.target.value,
+                  );
+                  if (contact) {
+                    selectContact(contact);
+                    return;
+                  }
+                  setSelectedContact(null);
+                  setForm((current) => ({
+                    ...current,
+                    contactId: null,
+                    primaryContactId: null,
+                  }));
+                }}
+                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                disabled={contactsLoading && !contactResults}
+              >
+                <option value="">
+                  {contactsLoading ? "Loading contacts…" : "Select a contact"}
+                </option>
+                {selectedContact &&
+                  !contactResults?.contacts.some(
+                    (item) => item.id === selectedContact.id,
+                  ) && (
+                    <option value={selectedContact.id}>
+                      {selectedContact.name}
+                    </option>
+                  )}
+                {opportunity?.contact &&
+                  opportunity.contact.id !== selectedContact?.id &&
+                  !contactResults?.contacts.some(
+                    (item) => item.id === opportunity.contact?.id,
+                  ) && (
+                    <option value={opportunity.contact.id}>
+                      {opportunity.contact.name}
+                    </option>
+                  )}
+                {(contactResults?.contacts || []).map((contact) => (
+                  <option key={contact.id} value={contact.id}>
+                    {contact.name}
+                    {contact.email ? ` — ${contact.email}` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {!contactsLoading && contactResults?.contacts.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                No contacts match your search.
+              </p>
+            )}
+          </div>
           <InlineCustomFields
             entityType="opportunities"
             values={form.customFields || {}}
+            alwaysShowRequired={!isEditing}
+            excludeFieldKeys={OPPORTUNITY_DIALOG_EXCLUDED_FIELDS}
             onChange={(customFields) =>
               setForm((current) => ({ ...current, customFields }))
             }

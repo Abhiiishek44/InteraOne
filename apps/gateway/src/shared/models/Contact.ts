@@ -1,7 +1,13 @@
 import mongoose, { Document, Schema, Types } from "mongoose";
 import { IOrganization } from "./Organization";
 
-export type ContactSource = "ai" | "widget" | "agent" | "owner" | "admin";
+export type ContactSource =
+  | "ai"
+  | "widget"
+  | "agent"
+  | "owner"
+  | "admin"
+  | "integration";
 export type ContactSentiment = "positive" | "neutral" | "negative";
 export type ContactLifecycleStage =
   | "new"
@@ -26,6 +32,8 @@ export type ContactAcquisitionSource =
   | ContactChannel
   | "qr"
   | "manual"
+  | "facebook_lead_ads"
+  | "google_forms"
   | "unknown";
 
 export interface IContactNote {
@@ -105,7 +113,7 @@ const contactSchema = new Schema<IContact>(
     tags: [{ type: String, trim: true, maxlength: 40 }],
     source: {
       type: String,
-      enum: ["ai", "widget", "agent", "owner", "admin"],
+      enum: ["ai", "widget", "agent", "owner", "admin", "integration"],
       default: "ai",
     },
     lifecycleStage: {
@@ -135,6 +143,8 @@ const contactSchema = new Schema<IContact>(
         "phone",
         "qr",
         "manual",
+        "facebook_lead_ads",
+        "google_forms",
         "unknown",
       ],
       default: "unknown",

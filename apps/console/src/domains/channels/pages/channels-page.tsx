@@ -16,8 +16,15 @@ import {
   ServerCog,
   Globe,
   Minus,
+  Megaphone,
+  Pause,
+  Play,
 } from "lucide-react";
-import { EmailIcon, TelegramIcon, WhatsAppIcon } from "@/shared/ui/channel-icon";
+import {
+  EmailIcon,
+  TelegramIcon,
+  WhatsAppIcon,
+} from "@/shared/ui/channel-icon";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import {
@@ -27,6 +34,11 @@ import {
   useWhatsAppChannel,
   useTelegramChannel,
   useUpdateEmailChannelAddresses,
+  useConnectFacebookLeadAds,
+  useDeleteLeadSource,
+  useLeadSources,
+  useSyncFacebookLeadForms,
+  useUpdateLeadSourceForm,
 } from "../hooks/use-channels";
 import type { Channel, DnsRecord } from "../types/types";
 
@@ -71,12 +83,22 @@ function CopyButton({ text }: { text: string }) {
       className="p-1.5 rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground cursor-pointer"
       title="Copy"
     >
-      {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+      {copied ? (
+        <Check className="h-3.5 w-3.5 text-emerald-500" />
+      ) : (
+        <Copy className="h-3.5 w-3.5" />
+      )}
     </button>
   );
 }
 
-function DnsRecordRow({ record, domain }: { record: DnsRecord; domain: string }) {
+function DnsRecordRow({
+  record,
+  domain,
+}: {
+  record: DnsRecord;
+  domain: string;
+}) {
   const [copiedName, setCopiedName] = useState(false);
   const [copiedValue, setCopiedValue] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -151,7 +173,10 @@ function DnsRecordRow({ record, domain }: { record: DnsRecord; domain: string })
             Name / Host
           </span>
           <div className="flex min-h-11 items-center gap-2 rounded-md bg-muted/35 px-3 font-mono text-xs ring-1 ring-inset ring-border/70">
-            <span className="flex-1 truncate text-foreground" title={getRelativeHost(record.name)}>
+            <span
+              className="flex-1 truncate text-foreground"
+              title={getRelativeHost(record.name)}
+            >
               {getRelativeHost(record.name)}
             </span>
             <button
@@ -175,7 +200,9 @@ function DnsRecordRow({ record, domain }: { record: DnsRecord; domain: string })
             Value / Content
           </span>
           <div className="flex min-h-11 items-center gap-2 rounded-md bg-muted/35 px-3 font-mono text-xs ring-1 ring-inset ring-border/70">
-            <span className={`flex-1 break-all text-foreground ${!expanded && isLong ? "line-clamp-1 truncate" : ""}`}>
+            <span
+              className={`flex-1 break-all text-foreground ${!expanded && isLong ? "line-clamp-1 truncate" : ""}`}
+            >
               {cleanValue}
             </span>
             <button
@@ -206,7 +233,9 @@ function ManageEmailsSection({
 }) {
   const emailConfig = channel.config.email;
   const domain = emailConfig?.domain || "";
-  const addresses = (emailConfig?.addresses || [emailConfig?.address || ""]).filter(Boolean);
+  const addresses = (
+    emailConfig?.addresses || [emailConfig?.address || ""]
+  ).filter(Boolean);
   const primaryAddress = emailConfig?.address || "";
 
   const updateMutation = useUpdateEmailChannelAddresses();
@@ -242,13 +271,17 @@ function ManageEmailsSection({
       });
       setNewEmail("");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to add email address");
+      setError(
+        err instanceof Error ? err.message : "Failed to add email address",
+      );
     }
   };
 
   const handleDeleteEmail = async (emailToDelete: string) => {
     setError("");
-    const updated = addresses.filter((email: string) => email !== emailToDelete);
+    const updated = addresses.filter(
+      (email: string) => email !== emailToDelete,
+    );
 
     try {
       await updateMutation.mutateAsync({
@@ -256,7 +289,9 @@ function ManageEmailsSection({
         emails: updated,
       });
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to delete email address");
+      setError(
+        err instanceof Error ? err.message : "Failed to delete email address",
+      );
     }
   };
 
@@ -286,7 +321,9 @@ function ManageEmailsSection({
             </span>
           </div>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            Create and manage addresses for the verified domain <strong className="font-semibold text-foreground">@{domain}</strong>.
+            Create and manage addresses for the verified domain{" "}
+            <strong className="font-semibold text-foreground">@{domain}</strong>
+            .
           </p>
         </div>
         <Button
@@ -306,7 +343,9 @@ function ManageEmailsSection({
       <div className="mt-5 space-y-2">
         {addresses.length === 0 && (
           <div className="rounded-lg border border-dashed border-border bg-card/60 px-4 py-5 text-center">
-            <p className="text-sm font-medium text-foreground">No email addresses yet</p>
+            <p className="text-sm font-medium text-foreground">
+              No email addresses yet
+            </p>
             <p className="mt-1 text-xs text-muted-foreground">
               Create your first address below to start receiving email.
             </p>
@@ -321,7 +360,10 @@ function ManageEmailsSection({
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted/50">
                 <EmailIcon className="h-4 w-4" />
               </span>
-              <span className="min-w-0 truncate text-sm font-medium text-foreground" title={email}>
+              <span
+                className="min-w-0 truncate text-sm font-medium text-foreground"
+                title={email}
+              >
                 {email}
               </span>
               {email === primaryAddress ? (
@@ -361,12 +403,19 @@ function ManageEmailsSection({
       </div>
 
       {/* Add new email form */}
-      <form onSubmit={handleAddEmail} className="mt-5 rounded-lg border border-dashed border-border bg-card/60 p-4">
+      <form
+        onSubmit={handleAddEmail}
+        className="mt-5 rounded-lg border border-dashed border-border bg-card/60 p-4"
+      >
         <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <Plus className="h-4 w-4 text-primary" />
-          {addresses.length === 0 ? "Create an email address" : "Add another address"}
+          {addresses.length === 0
+            ? "Create an email address"
+            : "Add another address"}
         </div>
-        <p className="mt-1 text-xs text-muted-foreground">Use the same verified domain: @{domain}</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Use the same verified domain: @{domain}
+        </p>
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
           <div className="relative min-w-0 flex-1">
             <EmailIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
@@ -394,10 +443,13 @@ function ManageEmailsSection({
           </Button>
         </div>
 
-        {error && <p className="mt-2 text-xs font-medium text-destructive">{error}</p>}
+        {error && (
+          <p className="mt-2 text-xs font-medium text-destructive">{error}</p>
+        )}
         {updateMutation.isError && !error && (
           <p className="mt-2 text-xs font-medium text-destructive">
-            {(updateMutation.error as Error)?.message || "Failed to update email addresses"}
+            {(updateMutation.error as Error)?.message ||
+              "Failed to update email addresses"}
           </p>
         )}
       </form>
@@ -405,7 +457,13 @@ function ManageEmailsSection({
   );
 }
 
-function DnsRecordsTable({ records, domain }: { records: DnsRecord[]; domain: string }) {
+function DnsRecordsTable({
+  records,
+  domain,
+}: {
+  records: DnsRecord[];
+  domain: string;
+}) {
   if (!records.length) return null;
   return (
     <div className="-mx-5 -mb-5 mt-2 border-t border-border bg-muted/15 px-5 py-5 sm:-mx-6 sm:-mb-6 sm:px-6 sm:py-6">
@@ -421,7 +479,8 @@ function DnsRecordsTable({ records, domain }: { records: DnsRecord[]; domain: st
             </span>
           </div>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            Add these values at your DNS provider. Changes can take up to 48 hours to propagate.
+            Add these values at your DNS provider. Changes can take up to 48
+            hours to propagate.
           </p>
         </div>
       </div>
@@ -436,18 +495,24 @@ function DnsRecordsTable({ records, domain }: { records: DnsRecord[]; domain: st
 
 // ── Channel cards ─────────────────────────────────────────────────────────────
 
-
-
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function ChannelsPage() {
   const navigate = useNavigate();
 
   const { data: emailChannel, isLoading: emailLoading } = useEmailChannel();
-  const { data: whatsappChannel, isLoading: whatsappLoading } = useWhatsAppChannel();
-  const { data: telegramChannel, isLoading: telegramLoading } = useTelegramChannel();
+  const { data: whatsappChannel, isLoading: whatsappLoading } =
+    useWhatsAppChannel();
+  const { data: telegramChannel, isLoading: telegramLoading } =
+    useTelegramChannel();
+  const { data: leadSources = [], isLoading: leadSourcesLoading } =
+    useLeadSources();
   const verifyMutation = useVerifyChannel();
   const deleteMutation = useDeleteChannel();
+  const connectFacebookMutation = useConnectFacebookLeadAds();
+  const syncFacebookFormsMutation = useSyncFacebookLeadForms();
+  const updateLeadFormMutation = useUpdateLeadSourceForm();
+  const deleteLeadSourceMutation = useDeleteLeadSource();
 
   const [showDns, setShowDns] = useState(false);
   const [showEmailPanel, setShowEmailPanel] = useState(true);
@@ -458,6 +523,7 @@ export function ChannelsPage() {
 
   const [showTelegramInfo, setShowTelegramInfo] = useState(false);
   const [deleteTgConfirm, setDeleteTgConfirm] = useState(false);
+  const [deletingLeadSourceId, setDeletingLeadSourceId] = useState<string>();
 
   const handleVerify = () => {
     if (!emailChannel) return;
@@ -497,12 +563,25 @@ export function ChannelsPage() {
     });
   };
 
-
-
-  const apiBase = import.meta.env.VITE_API_URL || "http://localhost:3002/api/v1";
+  const apiBase =
+    import.meta.env.VITE_API_URL || "http://localhost:3002/api/v1";
   const hostBase = apiBase.replace(/\/api\/v1\/?$/, "");
-  const connectedCount = [emailChannel, whatsappChannel, telegramChannel].filter(Boolean).length;
-  const emailVerificationStatus = emailChannel?.config.email?.verificationStatus ?? "pending";
+  const connectedCount = [
+    emailChannel,
+    whatsappChannel,
+    telegramChannel,
+  ].filter(Boolean).length;
+  const facebookLeadSources = leadSources.filter(
+    (source) => source.provider === "facebook_lead_ads",
+  );
+  const facebookOAuthResult = new URLSearchParams(window.location.search).get(
+    "facebook",
+  );
+  const facebookOAuthError = new URLSearchParams(window.location.search).get(
+    "message",
+  );
+  const emailVerificationStatus =
+    emailChannel?.config.email?.verificationStatus ?? "pending";
   const isEmailDomainVerified = emailVerificationStatus === "verified";
 
   return (
@@ -521,7 +600,8 @@ export function ChannelsPage() {
               Meet customers where they are
             </h1>
             <p className="mt-2 text-sm leading-6 text-muted-foreground sm:text-base">
-              Connect your business channels and manage every customer conversation from one shared inbox.
+              Connect your business channels and manage every customer
+              conversation from one shared inbox.
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-3 rounded-lg border border-border bg-muted/25 px-4 py-3">
@@ -529,20 +609,26 @@ export function ChannelsPage() {
               <CheckCircle2 className="h-4 w-4 text-emerald-500" />
             </span>
             <div>
-              <p className="text-xl font-bold leading-none text-foreground">{connectedCount}/3</p>
-              <p className="mt-1 text-xs text-muted-foreground">Channels connected</p>
+              <p className="text-xl font-bold leading-none text-foreground">
+                {connectedCount}/3
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Channels connected
+              </p>
             </div>
           </div>
         </div>
       </div>
 
-
-
       {/* Email Channel */}
       <section className="space-y-3" data-tour-id="page-channels-email">
         <div className="px-1">
-          <h2 className="text-base font-semibold text-foreground">Business email</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">Send and receive support email from your own domain.</p>
+          <h2 className="text-base font-semibold text-foreground">
+            Business email
+          </h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Send and receive support email from your own domain.
+          </p>
         </div>
 
         {emailLoading ? (
@@ -558,12 +644,17 @@ export function ChannelsPage() {
                 </div>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-semibold text-foreground">{emailChannel.name}</p>
+                    <p className="font-semibold text-foreground">
+                      {emailChannel.name}
+                    </p>
                     <VerificationBadge status={emailVerificationStatus} />
                   </div>
                   <div className="mt-1 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
                     <Globe className="h-3.5 w-3.5 shrink-0" />
-                    <span className="max-w-72 truncate" title={emailChannel.config.email?.domain}>
+                    <span
+                      className="max-w-72 truncate"
+                      title={emailChannel.config.email?.domain}
+                    >
                       {emailChannel.config.email?.domain}
                     </span>
                   </div>
@@ -655,8 +746,9 @@ export function ChannelsPage() {
               <div className="flex items-start gap-3 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
                 <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
                 <p className="text-sm text-amber-700 dark:text-amber-400">
-                  Verify <strong>{emailChannel.config.email?.domain}</strong> before creating email
-                  addresses. Add the DNS records below, then click <strong>Verify Now</strong>.
+                  Verify <strong>{emailChannel.config.email?.domain}</strong>{" "}
+                  before creating email addresses. Add the DNS records below,
+                  then click <strong>Verify Now</strong>.
                 </p>
               </div>
             )}
@@ -671,7 +763,10 @@ export function ChannelsPage() {
 
             {/* DNS Records */}
             {(!isEmailDomainVerified || showDns) && (
-              <DnsRecordsTable records={emailChannel.config.email?.dnsRecords ?? []} domain={emailChannel.config.email?.domain || ""} />
+              <DnsRecordsTable
+                records={emailChannel.config.email?.dnsRecords ?? []}
+                domain={emailChannel.config.email?.domain || ""}
+              />
             )}
 
             {/* Email creation unlocks only after domain verification */}
@@ -691,17 +786,20 @@ export function ChannelsPage() {
             id="btn-add-email-channel"
           >
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-background">
-                <EmailIcon className="h-6 w-6" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="font-semibold text-foreground">Connect business email</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Use an address like support@yourcompany.com.
-                </p>
-              </div>
-              <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-primary">
-                Connect <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-              </span>
+              <EmailIcon className="h-6 w-6" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-foreground">
+                Connect business email
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Use an address like support@yourcompany.com.
+              </p>
+            </div>
+            <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-primary">
+              Connect{" "}
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+            </span>
           </button>
         )}
       </section>
@@ -710,7 +808,9 @@ export function ChannelsPage() {
       <section className="space-y-3" data-tour-id="page-channels-whatsapp">
         <div className="px-1">
           <h2 className="text-base font-semibold text-foreground">WhatsApp</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">Connect a Twilio sender for real-time customer messaging.</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Connect a Twilio sender for real-time customer messaging.
+          </p>
         </div>
 
         {whatsappLoading ? (
@@ -726,9 +826,14 @@ export function ChannelsPage() {
                 </div>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-semibold text-foreground">{whatsappChannel.name}</p>
+                    <p className="font-semibold text-foreground">
+                      {whatsappChannel.name}
+                    </p>
                     <VerificationBadge
-                      status={whatsappChannel.config.whatsapp?.verificationStatus ?? "verified"}
+                      status={
+                        whatsappChannel.config.whatsapp?.verificationStatus ??
+                        "verified"
+                      }
                     />
                   </div>
                   <p className="text-sm text-muted-foreground mt-0.5">
@@ -777,27 +882,43 @@ export function ChannelsPage() {
             {/* Connection Information */}
             {showWhatsAppInfo && (
               <div className="mt-4 p-4 rounded-xl border border-border bg-muted/30 space-y-3 text-xs">
-                <p className="font-semibold text-sm">Twilio Connection Details</p>
+                <p className="font-semibold text-sm">
+                  Twilio Connection Details
+                </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <span className="text-muted-foreground font-medium block">Account SID</span>
-                    <span className="font-mono text-foreground/80 break-all">{whatsappChannel.config.whatsapp?.accountSid}</span>
+                    <span className="text-muted-foreground font-medium block">
+                      Account SID
+                    </span>
+                    <span className="font-mono text-foreground/80 break-all">
+                      {whatsappChannel.config.whatsapp?.accountSid}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground font-medium block">Messaging Service SID</span>
-                    <span className="font-mono text-foreground/80 break-all">{whatsappChannel.config.whatsapp?.messagingServiceSid || "—"}</span>
+                    <span className="text-muted-foreground font-medium block">
+                      Messaging Service SID
+                    </span>
+                    <span className="font-mono text-foreground/80 break-all">
+                      {whatsappChannel.config.whatsapp?.messagingServiceSid ||
+                        "—"}
+                    </span>
                   </div>
                 </div>
                 <div className="pt-2 border-t border-border space-y-2">
-                  <span className="text-muted-foreground font-medium block">Twilio Webhook URL</span>
+                  <span className="text-muted-foreground font-medium block">
+                    Twilio Webhook URL
+                  </span>
                   <div className="flex items-center gap-2 p-2 rounded bg-muted/65 font-mono">
                     <span className="flex-1 truncate text-foreground/75">
                       {`${hostBase}/api/v1/channels/whatsapp/inbound/${whatsappChannel._id}`}
                     </span>
-                    <CopyButton text={`${hostBase}/api/v1/channels/whatsapp/inbound/${whatsappChannel._id}`} />
+                    <CopyButton
+                      text={`${hostBase}/api/v1/channels/whatsapp/inbound/${whatsappChannel._id}`}
+                    />
                   </div>
                   <span className="text-muted-foreground block">
-                    Copy this URL into the Incoming Message Webhook field in your Twilio WhatsApp sender configuration.
+                    Copy this URL into the Incoming Message Webhook field in
+                    your Twilio WhatsApp sender configuration.
                   </span>
                 </div>
               </div>
@@ -811,18 +932,19 @@ export function ChannelsPage() {
             className="group flex w-full cursor-pointer items-center gap-4 rounded-xl border border-border bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-500/35 hover:shadow-md sm:p-6"
             id="btn-add-whatsapp-channel"
           >
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/5">
-                <WhatsAppIcon className="h-6 w-6" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="font-semibold text-foreground">Connect WhatsApp</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Bring your Twilio WhatsApp sender into the shared inbox.
-                </p>
-              </div>
-              <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-                Connect <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-              </span>
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/5">
+              <WhatsAppIcon className="h-6 w-6" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-foreground">Connect WhatsApp</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Bring your Twilio WhatsApp sender into the shared inbox.
+              </p>
+            </div>
+            <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+              Connect{" "}
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+            </span>
           </button>
         )}
       </section>
@@ -831,7 +953,9 @@ export function ChannelsPage() {
       <section className="space-y-3" data-tour-id="page-channels-telegram">
         <div className="px-1">
           <h2 className="text-base font-semibold text-foreground">Telegram</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">Turn bot messages into support conversations automatically.</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Turn bot messages into support conversations automatically.
+          </p>
         </div>
 
         {telegramLoading ? (
@@ -847,13 +971,20 @@ export function ChannelsPage() {
                 </div>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-semibold text-foreground">{telegramChannel.name}</p>
+                    <p className="font-semibold text-foreground">
+                      {telegramChannel.name}
+                    </p>
                     <VerificationBadge
-                      status={telegramChannel.config.telegram?.verificationStatus ?? "verified"}
+                      status={
+                        telegramChannel.config.telegram?.verificationStatus ??
+                        "verified"
+                      }
                     />
                   </div>
                   <p className="text-sm text-muted-foreground mt-0.5">
-                    @{telegramChannel.config.telegram?.botUsername || "Telegram Bot"}
+                    @
+                    {telegramChannel.config.telegram?.botUsername ||
+                      "Telegram Bot"}
                   </p>
                 </div>
               </div>
@@ -898,22 +1029,35 @@ export function ChannelsPage() {
             {/* Connection Information */}
             {showTelegramInfo && (
               <div className="mt-4 p-4 rounded-xl border border-border bg-muted/30 space-y-3 text-xs">
-                <p className="font-semibold text-sm">Telegram Connection Details</p>
+                <p className="font-semibold text-sm">
+                  Telegram Connection Details
+                </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <span className="text-muted-foreground font-medium block">Bot Username</span>
-                    <span className="font-mono text-foreground/80 break-all">@{telegramChannel.config.telegram?.botUsername}</span>
+                    <span className="text-muted-foreground font-medium block">
+                      Bot Username
+                    </span>
+                    <span className="font-mono text-foreground/80 break-all">
+                      @{telegramChannel.config.telegram?.botUsername}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground font-medium block">Bot API Token</span>
-                    <span className="font-mono text-foreground/80 break-all">••••••••••••••••••••</span>
+                    <span className="text-muted-foreground font-medium block">
+                      Bot API Token
+                    </span>
+                    <span className="font-mono text-foreground/80 break-all">
+                      ••••••••••••••••••••
+                    </span>
                   </div>
                 </div>
                 <div className="pt-2 border-t border-border space-y-2">
-                  <span className="text-muted-foreground font-medium block">Webhook Status</span>
+                  <span className="text-muted-foreground font-medium block">
+                    Webhook Status
+                  </span>
                   <div className="flex items-center gap-2 p-2 rounded bg-muted/65 font-mono">
                     <span className="flex-1 truncate text-foreground/75">
-                      Active: {`${hostBase}/api/v1/channels/telegram/inbound/${telegramChannel._id}`}
+                      Active:{" "}
+                      {`${hostBase}/api/v1/channels/telegram/inbound/${telegramChannel._id}`}
                     </span>
                   </div>
                   <span className="text-muted-foreground block">
@@ -931,23 +1075,257 @@ export function ChannelsPage() {
             className="group flex w-full cursor-pointer items-center gap-4 rounded-xl border border-border bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-sky-500/35 hover:shadow-md sm:p-6"
             id="btn-add-telegram-channel"
           >
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-sky-500/20 bg-sky-500/5">
-                <TelegramIcon className="h-6 w-6" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="font-semibold text-foreground">Connect Telegram</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Add a bot token and we’ll configure the webhook for you.
-                </p>
-              </div>
-              <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-sky-600 dark:text-sky-400">
-                Connect <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-              </span>
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-sky-500/20 bg-sky-500/5">
+              <TelegramIcon className="h-6 w-6" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-foreground">Connect Telegram</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Add a bot token and we’ll configure the webhook for you.
+              </p>
+            </div>
+            <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-sky-600 dark:text-sky-400">
+              Connect{" "}
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+            </span>
           </button>
         )}
       </section>
 
+      {/* Facebook Lead Ads now lives on the dedicated Integrations page. */}
+      {false && <section className="space-y-3" data-tour-id="page-lead-sources-facebook">
+        <div className="px-1">
+          <h2 className="text-base font-semibold text-foreground">
+            Facebook Lead Ads
+          </h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Create CRM contacts automatically when someone submits a Facebook
+            instant form.
+          </p>
+        </div>
 
+        {facebookOAuthResult === "connected" && (
+          <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-400">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            Facebook Pages connected and subscribed successfully.
+          </div>
+        )}
+        {facebookOAuthResult === "error" && (
+          <div className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+            <XCircle className="h-4 w-4 shrink-0" />
+            <span>
+              Facebook could not be connected.
+              {facebookOAuthError
+                ? ` ${facebookOAuthError}`
+                : " Check the Meta app permissions and try again."}
+            </span>
+          </div>
+        )}
+
+        {leadSourcesLoading ? (
+          <div className="h-32 animate-pulse rounded-xl border border-border bg-card p-6" />
+        ) : facebookLeadSources.length ? (
+          <div className="space-y-4">
+            {facebookLeadSources.map((source) => (
+              <div
+                key={source.id}
+                className="space-y-4 rounded-xl border border-border bg-card p-5 shadow-sm sm:p-6"
+              >
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex min-w-0 items-center gap-4">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/5">
+                      <Megaphone className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="truncate font-semibold text-foreground">
+                          {source.name}
+                        </p>
+                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 className="h-3 w-3" /> Active
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {source.forms.length} instant form
+                        {source.forms.length === 1 ? "" : "s"} connected
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        syncFacebookFormsMutation.mutate(source.id)
+                      }
+                      disabled={syncFacebookFormsMutation.isPending}
+                      className="gap-1.5"
+                    >
+                      <RefreshCw
+                        className={`h-3.5 w-3.5 ${
+                          syncFacebookFormsMutation.isPending
+                            ? "animate-spin"
+                            : ""
+                        }`}
+                      />
+                      Sync forms
+                    </Button>
+                    {deletingLeadSourceId === source.id ? (
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        disabled={deleteLeadSourceMutation.isPending}
+                        onClick={() =>
+                          deleteLeadSourceMutation.mutate(source.id, {
+                            onSuccess: () => setDeletingLeadSourceId(undefined),
+                          })
+                        }
+                      >
+                        Confirm disconnect
+                      </Button>
+                    ) : (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() => setDeletingLeadSourceId(source.id)}
+                        title="Disconnect Facebook Page"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="divide-y rounded-lg border border-border">
+                  {source.forms.length ? (
+                    source.forms.map((form) => (
+                      <div
+                        key={form.id}
+                        className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-foreground">
+                            {form.externalFormName}
+                          </p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {form.status === "active"
+                              ? "New responses create CRM contacts"
+                              : "Lead imports are paused"}
+                            {form.defaults.createOpportunity
+                              ? " and opportunities"
+                              : ""}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 flex-wrap items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={updateLeadFormMutation.isPending}
+                            onClick={() =>
+                              updateLeadFormMutation.mutate({
+                                formId: form.id,
+                                payload: {
+                                  defaults: {
+                                    createOpportunity:
+                                      !form.defaults.createOpportunity,
+                                  },
+                                },
+                              })
+                            }
+                          >
+                            {form.defaults.createOpportunity
+                              ? "Contact + opportunity"
+                              : "Contact only"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={updateLeadFormMutation.isPending}
+                            className="gap-1.5"
+                            onClick={() =>
+                              updateLeadFormMutation.mutate({
+                                formId: form.id,
+                                payload: {
+                                  status:
+                                    form.status === "active"
+                                      ? "paused"
+                                      : "active",
+                                },
+                              })
+                            }
+                          >
+                            {form.status === "active" ? (
+                              <Pause className="h-3.5 w-3.5" />
+                            ) : (
+                              <Play className="h-3.5 w-3.5" />
+                            )}
+                            {form.status === "active" ? "Pause" : "Resume"}
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="px-4 py-5 text-center text-sm text-muted-foreground">
+                      No instant forms were returned for this Page.
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            <Button
+              variant="outline"
+              onClick={() => connectFacebookMutation.mutate()}
+              disabled={connectFacebookMutation.isPending}
+              className="gap-2"
+            >
+              {connectFacebookMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+              Connect another Facebook Page
+            </Button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => connectFacebookMutation.mutate()}
+            disabled={connectFacebookMutation.isPending}
+            className="group flex w-full cursor-pointer items-center gap-4 rounded-xl border border-border bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-500/35 hover:shadow-md disabled:pointer-events-none disabled:opacity-60 sm:p-6"
+            id="btn-connect-facebook-leads"
+          >
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/5">
+              {connectFacebookMutation.isPending ? (
+                <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+              ) : (
+                <Megaphone className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-foreground">
+                Connect Facebook Lead Ads
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Import instant-form submissions directly into Contacts.
+              </p>
+            </div>
+            <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-blue-600 dark:text-blue-400">
+              Connect
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+            </span>
+          </button>
+        )}
+
+        {connectFacebookMutation.isError && (
+          <p className="px-1 text-xs font-medium text-destructive">
+            {connectFacebookMutation.error?.message ||
+              "Could not start Facebook connection"}
+          </p>
+        )}
+      </section>}
     </div>
   );
 }

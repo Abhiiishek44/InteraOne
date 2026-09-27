@@ -430,12 +430,12 @@ export class CrmFieldsService {
       ? await CrmFieldDefinition.findByIdAndUpdate(
           fieldId,
           { $set: { visible: false } },
-          { new: true },
+          { returnDocument: "after" },
         )
       : await CrmFieldDefinition.findByIdAndUpdate(
           fieldId,
           { $set: { archivedAt: new Date() } },
-          { new: true },
+          { returnDocument: "after" },
         );
     if (!field) throw new Error("CRM field not found");
   }

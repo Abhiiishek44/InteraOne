@@ -43,6 +43,7 @@ export interface IOpportunity extends Document {
   nextAction?: string;
   activities: IOpportunityActivity[];
   customFields: Record<string, unknown>;
+  sourceSubmissionId?: Types.ObjectId | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -136,6 +137,11 @@ const opportunitySchema = new Schema<IOpportunity>(
       default: [],
     },
     customFields: { type: Map, of: Schema.Types.Mixed, default: {} },
+    sourceSubmissionId: {
+      type: Schema.Types.ObjectId,
+      ref: "LeadSubmission",
+      default: null,
+    },
   },
   { timestamps: true },
 );
@@ -145,6 +151,14 @@ opportunitySchema.index({ organizationId: 1, contactId: 1 });
 opportunitySchema.index({ organizationId: 1, primaryContactId: 1 });
 opportunitySchema.index({ organizationId: 1, accountId: 1 });
 opportunitySchema.index({ organizationId: 1, ownerId: 1 });
+opportunitySchema.index(
+  { organizationId: 1, sourceSubmissionId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { sourceSubmissionId: { $type: "objectId" } },
+    name: "unique_opportunity_per_lead_submission",
+  },
+);
 
 export const Opportunity = mongoose.model<IOpportunity>(
   "Opportunity",

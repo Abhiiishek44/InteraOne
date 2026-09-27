@@ -86,3 +86,20 @@ export {
   CrmFieldEntity,
   CrmFieldType,
 } from "./CrmFieldDefinition";
+export {
+  LeadSourceConnection,
+  ILeadSourceConnection,
+  LeadSourceProvider,
+  LeadSourceConnectionStatus,
+} from "./LeadSourceConnection";
+export {
+  LeadSourceForm,
+  ILeadSourceForm,
+  ILeadSourceFormDefaults,
+} from "./LeadSourceForm";
+export {
+  LeadSubmission,
+  ILeadSubmission,
+  LeadSubmissionStatus,
+} from "./LeadSubmission";
+export { FacebookOAuthState, IFacebookOAuthState } from "./FacebookOAuthState";

@@ -25,6 +25,7 @@ interface CreateOpportunityInput {
   expectedCloseAt?: string | null;
   nextAction?: string;
   customFields?: Record<string, unknown>;
+  sourceSubmissionId?: string;
 }
 
 type UpdateOpportunityInput = Partial<
@@ -97,7 +98,7 @@ export class OpportunitiesService {
           stages,
         },
       },
-      { upsert: true, new: true, runValidators: true },
+      { upsert: true, returnDocument: "after", runValidators: true },
     ).lean();
 
     return {
@@ -264,6 +265,9 @@ export class OpportunitiesService {
         : null,
       nextAction: input.nextAction || "",
       customFields,
+      sourceSubmissionId: input.sourceSubmissionId
+        ? new Types.ObjectId(input.sourceSubmissionId)
+        : null,
     });
 
     if (contact) {
@@ -369,7 +373,7 @@ export class OpportunitiesService {
           },
         },
       },
-      { new: true, runValidators: true },
+      { returnDocument: "after", runValidators: true },
     );
     if (!opportunity) throw new Error("Opportunity not found");
     return opportunity;
@@ -422,7 +426,7 @@ export class OpportunitiesService {
           },
         },
       },
-      { new: true, runValidators: true },
+      { returnDocument: "after", runValidators: true },
     );
     if (!opportunity) throw new Error("Opportunity not found");
 
@@ -446,7 +450,7 @@ export class OpportunitiesService {
     const opportunity = await Opportunity.findOneAndUpdate(
       { _id: opportunityId, organizationId },
       { $set: { color } },
-      { new: true, runValidators: true },
+      { returnDocument: "after", runValidators: true },
     );
     if (!opportunity) throw new Error("Opportunity not found");
     return opportunity;
@@ -460,7 +464,7 @@ export class OpportunitiesService {
     const opportunity = await Opportunity.findOneAndUpdate(
       { _id: opportunityId, organizationId },
       { $set: { nextAction: nextAction.trim() } },
-      { new: true, runValidators: true },
+      { returnDocument: "after", runValidators: true },
     );
     if (!opportunity) throw new Error("Opportunity not found");
     return opportunity;
@@ -493,7 +497,7 @@ export class OpportunitiesService {
     const opportunity = await Opportunity.findOneAndUpdate(
       { _id: opportunityId, organizationId },
       { $push: { activities: { $each: [activity], $position: 0 } } },
-      { new: true, runValidators: true },
+      { returnDocument: "after", runValidators: true },
     );
     if (!opportunity) throw new Error("Opportunity not found");
     const contactId = opportunity.primaryContactId || opportunity.contactId;
@@ -511,7 +515,7 @@ export class OpportunitiesService {
     const opportunity = await Opportunity.findOneAndUpdate(
       { _id: opportunityId, organizationId },
       { $set: { priority } },
-      { new: true, runValidators: true },
+      { returnDocument: "after", runValidators: true },
     );
     if (!opportunity) throw new Error("Opportunity not found");
     return opportunity;
@@ -525,7 +529,7 @@ export class OpportunitiesService {
     const opportunity = await Opportunity.findOneAndUpdate(
       { _id: opportunityId, organizationId, "activities.id": activityId },
       { $set: { "activities.$.completedAt": new Date() } },
-      { new: true },
+      { returnDocument: "after" },
     );
     if (!opportunity) throw new Error("Activity not found");
     const contactId = opportunity.primaryContactId || opportunity.contactId;
