@@ -41,7 +41,9 @@
   --sidebar-ring: #745663;
   --font-sans: "Hanken Grotesk", sans-serif;
   --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --font-mono:
+    "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
   --radius: 0.2rem;
   --radius-sm-token: 0.125rem;
   --radius-md-token: 0.2rem;
@@ -55,11 +57,16 @@
   --shadow-color: #000000;
   --shadow-2xs: 0px 1px 3px 0px hsl(0 0% 0% / 0.09);
   --shadow-xs: 0px 1px 3px 0px hsl(0 0% 0% / 0.09);
-  --shadow-sm: 0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 1px 2px -1px hsl(0 0% 0% / 0.17);
-  --shadow: 0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 1px 2px -1px hsl(0 0% 0% / 0.17);
-  --shadow-md: 0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 2px 4px -1px hsl(0 0% 0% / 0.17);
-  --shadow-lg: 0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 4px 6px -1px hsl(0 0% 0% / 0.17);
-  --shadow-xl: 0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 8px 10px -1px hsl(0 0% 0% / 0.17);
+  --shadow-sm:
+    0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 1px 2px -1px hsl(0 0% 0% / 0.17);
+  --shadow:
+    0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 1px 2px -1px hsl(0 0% 0% / 0.17);
+  --shadow-md:
+    0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 2px 4px -1px hsl(0 0% 0% / 0.17);
+  --shadow-lg:
+    0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 4px 6px -1px hsl(0 0% 0% / 0.17);
+  --shadow-xl:
+    0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 8px 10px -1px hsl(0 0% 0% / 0.17);
   --shadow-2xl: 0px 1px 3px 0px hsl(0 0% 0% / 0.43);
   --tracking-normal: 0em;
   --spacing: 0.25rem;
@@ -111,6 +118,93 @@
   --type-button-weight: 600;
 }
 
+@keyframes integration-gentle-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+.integration-water-surface {
+  position: relative;
+  isolation: isolate;
+  padding: 1.5rem;
+  border-radius: 1rem;
+  background:
+    radial-gradient(circle at 14% 28%, rgb(240 218 227 / 0.5), transparent 30%),
+    radial-gradient(circle at 86% 58%, rgb(82 55 68 / 0.045), transparent 32%),
+    linear-gradient(180deg, rgb(255 248 248 / 0.5), transparent 55%);
+}
+
+.integration-water-surface::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='96' viewBox='0 0 56 96'%3E%3Cpath d='M28 1 55 16.5v31L28 63 1 47.5v-31L28 1Zm0 62 27 15.5V95H1V78.5L28 63Z' fill='none' stroke='%23523744' stroke-opacity='.13' stroke-width='.7'/%3E%3C/svg%3E");
+  background-position: center top;
+  content: "";
+  mask-image: linear-gradient(
+    to bottom,
+    black 10%,
+    rgb(0 0 0 / 0.45) 68%,
+    transparent 100%
+  );
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.integration-float-card {
+  position: relative;
+  isolation: isolate;
+  animation: integration-gentle-float 7s ease-in-out infinite;
+  box-shadow:
+    0 10px 24px -18px rgb(82 55 68 / 0.4),
+    0 2px 5px rgb(31 26 27 / 0.08);
+}
+
+.integration-float-card:nth-child(even) {
+  animation-delay: -3.5s;
+}
+
+.integration-float-card::after {
+  position: absolute;
+  right: 12%;
+  bottom: -12px;
+  left: 12%;
+  z-index: -1;
+  height: 18px;
+  border: 1px solid rgb(82 55 68 / 0.1);
+  border-radius: 50%;
+  background: rgb(240 218 227 / 0.18);
+  content: "";
+  filter: blur(2px);
+}
+
+.dark .integration-water-surface {
+  background:
+    radial-gradient(circle at 14% 28%, rgb(132 92 108 / 0.09), transparent 30%),
+    radial-gradient(
+      circle at 86% 58%,
+      rgb(240 218 227 / 0.025),
+      transparent 32%
+    );
+}
+
+.dark .integration-water-surface::before {
+  filter: invert(1);
+  opacity: 0.12;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .integration-float-card {
+    animation: none;
+  }
+}
+
 .dark {
   --background: oklch(0.1822 0 0);
   --foreground: oklch(0.9288 0.0126 255.5078);
@@ -149,7 +243,9 @@
   --sidebar-ring: #845c6c;
   --font-sans: "Hanken Grotesk", sans-serif;
   --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --font-mono:
+    "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
   --radius: 0.2rem;
   --shadow-x: 0px;
   --shadow-y: 1px;
@@ -159,11 +255,16 @@
   --shadow-color: #000000;
   --shadow-2xs: 0px 1px 3px 0px hsl(0 0% 0% / 0.09);
   --shadow-xs: 0px 1px 3px 0px hsl(0 0% 0% / 0.09);
-  --shadow-sm: 0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 1px 2px -1px hsl(0 0% 0% / 0.17);
-  --shadow: 0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 1px 2px -1px hsl(0 0% 0% / 0.17);
-  --shadow-md: 0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 2px 4px -1px hsl(0 0% 0% / 0.17);
-  --shadow-lg: 0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 4px 6px -1px hsl(0 0% 0% / 0.17);
-  --shadow-xl: 0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 8px 10px -1px hsl(0 0% 0% / 0.17);
+  --shadow-sm:
+    0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 1px 2px -1px hsl(0 0% 0% / 0.17);
+  --shadow:
+    0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 1px 2px -1px hsl(0 0% 0% / 0.17);
+  --shadow-md:
+    0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 2px 4px -1px hsl(0 0% 0% / 0.17);
+  --shadow-lg:
+    0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 4px 6px -1px hsl(0 0% 0% / 0.17);
+  --shadow-xl:
+    0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 8px 10px -1px hsl(0 0% 0% / 0.17);
   --shadow-2xl: 0px 1px 3px 0px hsl(0 0% 0% / 0.43);
 }
 

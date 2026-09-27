@@ -1,17 +1,25 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
-  ArrowRight,
+  Check,
   CheckCircle2,
   Loader2,
-  Megaphone,
   Pause,
   Play,
-  Plus,
   RefreshCw,
+  Search,
+  Settings2,
   Trash2,
   XCircle,
 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
+import { DeleteConfirmDialog } from "@/shared/components/delete-confirm-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/shared/ui/dialog";
 import {
   useConnectFacebookLeadAds,
   useConnectGoogleForms,
@@ -20,6 +28,210 @@ import {
   useSyncFacebookLeadForms,
   useUpdateLeadSourceForm,
 } from "@/domains/channels/hooks/use-channels";
+import type { LeadSourceConnection } from "@/domains/channels/types/types";
+
+type Provider = "facebook_lead_ads" | "google_forms";
+
+function FacebookLogo({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 48 48" className={className} aria-hidden="true">
+      <circle cx="24" cy="24" r="22" fill="#1877F2" />
+      <path
+        fill="#fff"
+        d="M32.6 30.4 33.7 24h-6.1v-4.2c0-1.8.9-3.5 3.6-3.5H34v-5.5s-2.5-.4-4.9-.4c-5 0-8.3 3-8.3 8.6v5h-5.6v6.4h5.6V46a22.4 22.4 0 0 0 6.8 0V30.4h5Z"
+      />
+    </svg>
+  );
+}
+
+function GoogleFormsLogo({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 48 48" className={className} aria-hidden="true">
+      <path fill="#7248B9" d="M10 3h19l10 10v32H10z" />
+      <path fill="#A487D5" d="M29 3v10h10z" />
+      <g fill="#fff">
+        <rect x="16" y="21" width="4" height="4" rx="1" />
+        <rect x="23" y="21" width="10" height="3" rx="1.5" />
+        <rect x="16" y="29" width="4" height="4" rx="1" />
+        <rect x="23" y="29" width="10" height="3" rx="1.5" />
+        <rect x="16" y="37" width="4" height="4" rx="1" />
+        <rect x="23" y="37" width="10" height="3" rx="1.5" />
+      </g>
+    </svg>
+  );
+}
+
+const providers = [
+  {
+    id: "facebook_lead_ads" as const,
+    name: "Facebook Lead Ads",
+    brand: "Meta",
+    description:
+      "Send instant-form submissions directly into your CRM as qualified contacts.",
+    benefit: "Capture leads automatically",
+    icon: FacebookLogo,
+  },
+  {
+    id: "google_forms" as const,
+    name: "Google Forms",
+    brand: "Google Workspace",
+    description:
+      "Turn every new form response into a structured lead without manual data entry.",
+    benefit: "Import responses instantly",
+    icon: GoogleFormsLogo,
+  },
+];
+
+function ResultBanner({ success, text }: { success: boolean; text: string }) {
+  const Icon = success ? CheckCircle2 : XCircle;
+  return (
+    <div
+      className={`flex items-center gap-2.5 rounded-2xl border px-4 py-3 text-sm ${
+        success
+          ? "border-emerald-500/20 bg-emerald-500/[0.07] text-emerald-700 dark:text-emerald-300"
+          : "border-destructive/20 bg-destructive/[0.06] text-destructive"
+      }`}
+    >
+      <Icon className="h-4 w-4 shrink-0" />
+      {text}
+    </div>
+  );
+}
+
+function ConnectedSource({
+  source,
+  provider,
+  syncing,
+  updating,
+  deleting,
+  onSync,
+  onDelete,
+  onUpdate,
+}: {
+  source: LeadSourceConnection;
+  provider: Provider;
+  syncing: boolean;
+  updating: boolean;
+  deleting: boolean;
+  onSync: () => void;
+  onDelete: () => void;
+  onUpdate: (
+    formId: string,
+    payload: {
+      status?: "active" | "paused";
+      defaults?: { createOpportunity: boolean };
+    },
+  ) => void;
+}) {
+  return (
+    <section className="overflow-hidden rounded-lg border bg-background">
+      <div className="flex items-center justify-between gap-3 bg-muted/25 px-3.5 py-2.5">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+            <p className="truncate text-sm font-semibold">{source.name}</p>
+            <span className="rounded border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+              {source.forms.length} form{source.forms.length === 1 ? "" : "s"}
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 gap-1.5 px-2 text-xs"
+            disabled={syncing}
+            onClick={onSync}
+          >
+            <RefreshCw
+              className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`}
+            />
+            Sync
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+            disabled={deleting}
+            onClick={onDelete}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+      <div className="divide-y">
+        {source.forms.length ? (
+          source.forms.map((form) => (
+            <div
+              key={form.id}
+              className="flex flex-col gap-2 px-3.5 py-2.5 transition-colors hover:bg-muted/20 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="min-w-0">
+                <p className="flex items-center gap-2 truncate text-sm font-medium">
+                  <span
+                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${form.status === "active" ? "bg-emerald-500" : "bg-amber-500"}`}
+                  />
+                  {form.externalFormName}
+                </p>
+                <p className="mt-0.5 pl-3.5 text-[11px] text-muted-foreground">
+                  {form.status === "active"
+                    ? "Importing responses"
+                    : "Import paused"}
+                  {form.defaults.createOpportunity
+                    ? " · Creates opportunities"
+                    : ""}
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {provider === "facebook_lead_ads" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 px-2.5 text-xs"
+                    disabled={updating}
+                    onClick={() =>
+                      onUpdate(form.id, {
+                        defaults: {
+                          createOpportunity: !form.defaults.createOpportunity,
+                        },
+                      })
+                    }
+                  >
+                    {form.defaults.createOpportunity
+                      ? "Contact + opportunity"
+                      : "Contact only"}
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 gap-1 px-2.5 text-xs"
+                  disabled={updating}
+                  onClick={() =>
+                    onUpdate(form.id, {
+                      status: form.status === "active" ? "paused" : "active",
+                    })
+                  }
+                >
+                  {form.status === "active" ? (
+                    <Pause className="h-3.5 w-3.5" />
+                  ) : (
+                    <Play className="h-3.5 w-3.5" />
+                  )}
+                  {form.status === "active" ? "Pause" : "Resume"}
+                </Button>
+              </div>
+            </div>
+          ))
+        ) : (
+          <p className="px-4 py-5 text-center text-xs text-muted-foreground">
+            No forms found for this connection.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
 
 export function IntegrationsPage() {
   const { data: leadSources = [], isLoading } = useLeadSources();
@@ -28,293 +240,268 @@ export function IntegrationsPage() {
   const syncForms = useSyncFacebookLeadForms();
   const updateForm = useUpdateLeadSourceForm();
   const deleteSource = useDeleteLeadSource();
-  const [deletingId, setDeletingId] = useState<string>();
+  const [query, setQuery] = useState("");
+  const [sourceToDelete, setSourceToDelete] =
+    useState<LeadSourceConnection | null>(null);
+  const [activeProvider, setActiveProvider] = useState<Provider | null>(null);
 
-  const facebookSources = leadSources.filter(
-    (source) => source.provider === "facebook_lead_ads",
-  );
-  const googleSources = leadSources.filter(
-    (source) => source.provider === "google_forms",
-  );
   const params = new URLSearchParams(window.location.search);
-  const oauthResult = params.get("facebook");
+  const facebookResult = params.get("facebook");
+  const googleResult = params.get("google");
   const oauthError = params.get("message");
-  const googleOauthResult = params.get("google");
+  const shownProviders = useMemo(() => {
+    const search = query.trim().toLowerCase();
+    return search
+      ? providers.filter((item) =>
+          `${item.name} ${item.brand} ${item.description}`
+            .toLowerCase()
+            .includes(search),
+        )
+      : providers;
+  }, [query]);
+  const connectedCount = new Set(leadSources.map((source) => source.provider))
+    .size;
 
+  const connect = (provider: Provider) =>
+    provider === "facebook_lead_ads"
+      ? connectFacebook.mutate()
+      : connectGoogle.mutate();
+  const isConnecting = (provider: Provider) =>
+    provider === "facebook_lead_ads"
+      ? connectFacebook.isPending
+      : connectGoogle.isPending;
+  const connectionError = (provider: Provider) =>
+    provider === "facebook_lead_ads"
+      ? connectFacebook.error
+      : connectGoogle.error;
+  const selectedProvider = providers.find(
+    (provider) => provider.id === activeProvider,
+  );
+  const selectedSources = activeProvider
+    ? leadSources.filter((source) => source.provider === activeProvider)
+    : [];
+  const SelectedProviderIcon = selectedProvider?.icon;
   return (
-    <div className="mx-auto max-w-5xl space-y-7">
-      <div
-        className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
-        data-tour-id="page-integrations-heading"
-      >
-        <div className="flex flex-col gap-6 p-6 sm:flex-row sm:items-end sm:justify-between sm:p-8">
-          <div className="max-w-2xl">
-            <span className="inline-flex rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">
-              Business integrations
-            </span>
-            <h1 className="mt-4 text-3xl font-bold tracking-tight text-foreground">
-              Connect the tools that power your workflow
-            </h1>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground sm:text-base">
-              Bring leads and business data into InteraOne while keeping your
-              messaging channels managed separately.
+    <div className="integration-water-surface mx-auto max-w-6xl space-y-6 pb-10">
+      <section className="space-y-5" data-tour-id="page-integrations-heading">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Integrations</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Connect apps and automate how leads enter your workspace.
             </p>
           </div>
-          <div className="flex shrink-0 items-center gap-3 rounded-lg border border-border bg-muted/25 px-4 py-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-500/10">
-              <Megaphone className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          <div className="flex items-center gap-3">
+            <span className="whitespace-nowrap text-xs text-muted-foreground">
+              {connectedCount} connected
             </span>
-            <div>
-              <p className="text-xl font-bold leading-none text-foreground">
-                {facebookSources.length}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Facebook Pages connected
-              </p>
-            </div>
+            <label className="relative block w-full sm:w-64">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search integrations"
+                className="h-9 w-full rounded-md border bg-background pl-9 pr-3 text-sm outline-none focus:border-primary"
+              />
+            </label>
           </div>
         </div>
-      </div>
 
-      <section className="space-y-3" data-tour-id="page-integrations-facebook">
-        <div className="px-1">
-          <h2 className="text-base font-semibold text-foreground">
-            Facebook Lead Ads
-          </h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Create CRM contacts automatically from Facebook instant-form submissions.
-          </p>
-        </div>
-
-        {oauthResult === "connected" && (
-          <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-400">
-            <CheckCircle2 className="h-4 w-4 shrink-0" />
-            Facebook Pages connected and subscribed successfully.
-          </div>
+        {facebookResult === "connected" && (
+          <ResultBanner
+            success
+            text="Facebook Lead Ads connected successfully."
+          />
         )}
-        {oauthResult === "error" && (
-          <div className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-            <XCircle className="h-4 w-4 shrink-0" />
-            <span>
-              Facebook could not be connected.
-              {oauthError
-                ? ` ${oauthError}`
-                : " Check the Meta app permissions and try again."}
-            </span>
-          </div>
+        {facebookResult === "error" && (
+          <ResultBanner
+            success={false}
+            text={`Facebook could not be connected.${oauthError ? ` ${oauthError}` : ""}`}
+          />
+        )}
+        {googleResult === "connected" && (
+          <ResultBanner success text="Google Forms connected successfully." />
+        )}
+        {googleResult === "error" && (
+          <ResultBanner
+            success={false}
+            text={`Google Forms could not be connected.${oauthError ? ` ${oauthError}` : ""}`}
+          />
         )}
 
-        {isLoading ? (
-          <div className="h-32 animate-pulse rounded-xl border border-border bg-card" />
-        ) : facebookSources.length ? (
-          <div className="space-y-4">
-            {facebookSources.map((source) => (
-              <div
-                key={source.id}
-                className="space-y-4 rounded-xl border border-border bg-card p-5 shadow-sm sm:p-6"
-              >
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="flex min-w-0 items-center gap-4">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/5">
-                      <Megaphone className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate font-semibold text-foreground">{source.name}</p>
-                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-                          <CheckCircle2 className="h-3 w-3" /> Active
+        <div>
+          {shownProviders.length ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {shownProviders.map((provider) => {
+                const sources = leadSources.filter(
+                  (source) => source.provider === provider.id,
+                );
+                const connected = sources.length > 0;
+                const pending = isConnecting(provider.id);
+                const error = connectionError(provider.id);
+                const Icon = provider.icon;
+                return (
+                  <article
+                    key={provider.id}
+                    data-tour-id={`page-integrations-${
+                      provider.id === "facebook_lead_ads"
+                        ? "facebook"
+                        : "google-forms"
+                    }`}
+                    className="integration-float-card rounded-xl border bg-card shadow-sm transition hover:border-primary/25 hover:shadow-md"
+                  >
+                    <div className="p-5 sm:p-6">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-xl border bg-background p-1.5 shadow-sm">
+                          <Icon className="h-full w-full" />
+                        </div>
+                        <span
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                            connected
+                              ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                              : "border-border bg-background/70 text-muted-foreground"
+                          }`}
+                        >
+                          {connected ? (
+                            <Check className="h-3 w-3" />
+                          ) : (
+                            <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" />
+                          )}
+                          {connected ? "Connected" : "Not connected"}
                         </span>
                       </div>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {source.forms.length} instant form{source.forms.length === 1 ? "" : "s"} connected
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="gap-1.5"
-                      disabled={syncForms.isPending}
-                      onClick={() => syncForms.mutate(source.id)}
-                    >
-                      <RefreshCw className={`h-3.5 w-3.5 ${syncForms.isPending ? "animate-spin" : ""}`} />
-                      Sync forms
-                    </Button>
-                    {deletingId === source.id ? (
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        disabled={deleteSource.isPending}
-                        onClick={() => deleteSource.mutate(source.id, { onSuccess: () => setDeletingId(undefined) })}
-                      >
-                        Confirm disconnect
-                      </Button>
-                    ) : (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                        onClick={() => setDeletingId(source.id)}
-                        title="Disconnect Facebook Page"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="divide-y rounded-lg border border-border">
-                  {source.forms.length ? source.forms.map((form) => (
-                    <div key={form.id} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-foreground">{form.externalFormName}</p>
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          {form.status === "active" ? "New responses create CRM contacts" : "Lead imports are paused"}
-                          {form.defaults.createOpportunity ? " and opportunities" : ""}
+                      <div className="mt-4">
+                        <p className="text-[11px] font-medium text-muted-foreground">
+                          {provider.brand}
+                        </p>
+                        <h3 className="mt-1 text-base font-semibold tracking-tight">
+                          {provider.name}
+                        </h3>
+                        <p className="mt-1.5 text-sm leading-5 text-muted-foreground">
+                          {provider.description}
                         </p>
                       </div>
-                      <div className="flex shrink-0 flex-wrap items-center gap-2">
-                        <Button size="sm" variant="outline" disabled={updateForm.isPending} onClick={() => updateForm.mutate({ formId: form.id, payload: { defaults: { createOpportunity: !form.defaults.createOpportunity } } })}>
-                          {form.defaults.createOpportunity ? "Contact + opportunity" : "Contact only"}
-                        </Button>
-                        <Button size="sm" variant="ghost" className="gap-1.5" disabled={updateForm.isPending} onClick={() => updateForm.mutate({ formId: form.id, payload: { status: form.status === "active" ? "paused" : "active" } })}>
-                          {form.status === "active" ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-                          {form.status === "active" ? "Pause" : "Resume"}
+                      <div className="mt-4 flex items-center justify-between gap-3 border-t pt-4">
+                        <span className="text-xs font-medium text-muted-foreground">
+                          {provider.benefit}
+                        </span>
+                        <Button
+                          className="h-9 min-w-24 gap-2"
+                          variant={connected ? "outline" : "default"}
+                          disabled={pending}
+                          onClick={() =>
+                            connected
+                              ? setActiveProvider(provider.id)
+                              : connect(provider.id)
+                          }
+                        >
+                          {pending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Settings2 className="h-4 w-4" />
+                          )}
+                          {connected ? "Manage" : "Connect"}
                         </Button>
                       </div>
+                      {error && (
+                        <p className="mt-3 text-xs font-medium text-destructive">
+                          {error instanceof Error
+                            ? error.message
+                            : `Could not connect ${provider.name}`}
+                        </p>
+                      )}
                     </div>
-                  )) : (
-                    <p className="px-4 py-5 text-center text-sm text-muted-foreground">No instant forms were returned for this Page.</p>
-                  )}
-                </div>
-              </div>
-            ))}
-            <Button variant="outline" className="gap-2" disabled={connectFacebook.isPending} onClick={() => connectFacebook.mutate()}>
-              {connectFacebook.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-              Connect another Facebook Page
-            </Button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            id="btn-connect-facebook-leads"
-            disabled={connectFacebook.isPending}
-            onClick={() => connectFacebook.mutate()}
-            className="group flex w-full cursor-pointer items-center gap-4 rounded-xl border border-border bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-500/35 hover:shadow-md disabled:pointer-events-none disabled:opacity-60 sm:p-6"
-          >
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/5">
-              {connectFacebook.isPending ? <Loader2 className="h-6 w-6 animate-spin text-blue-600" /> : <Megaphone className="h-6 w-6 text-blue-600 dark:text-blue-400" />}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="font-semibold text-foreground">Connect Facebook Lead Ads</p>
-              <p className="mt-1 text-sm text-muted-foreground">Import instant-form submissions directly into Contacts.</p>
-            </div>
-            <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-blue-600 dark:text-blue-400">
-              Connect <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-            </span>
-          </button>
-        )}
-
-        {connectFacebook.isError && (
-          <p className="px-1 text-xs font-medium text-destructive">
-            {connectFacebook.error instanceof Error ? connectFacebook.error.message : "Could not start Facebook connection"}
-          </p>
-        )}
-      </section>
-
-      <section className="space-y-3" data-tour-id="page-integrations-google-forms">
-        <div className="px-1">
-          <h2 className="text-base font-semibold text-foreground">Google Forms</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Turn new responses from your Google Forms into CRM leads automatically.
-          </p>
-        </div>
-
-        {googleOauthResult === "connected" && (
-          <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-400">
-            <CheckCircle2 className="h-4 w-4 shrink-0" />
-            Google Forms connected successfully.
-          </div>
-        )}
-        {googleOauthResult === "error" && (
-          <div className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-            <XCircle className="h-4 w-4 shrink-0" />
-            <span>Google Forms could not be connected.{oauthError ? ` ${oauthError}` : ""}</span>
-          </div>
-        )}
-
-        {isLoading ? (
-          <div className="h-32 animate-pulse rounded-xl border border-border bg-card" />
-        ) : googleSources.length ? (
-          <div className="space-y-4">
-            {googleSources.map((source) => (
-              <div key={source.id} className="space-y-4 rounded-xl border border-border bg-card p-5 shadow-sm sm:p-6">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="flex min-w-0 items-center gap-4">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/5 text-xl font-bold text-emerald-600">G</div>
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold text-foreground">{source.name}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {source.forms.length} form{source.forms.length === 1 ? "" : "s"} discovered
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button size="sm" variant="outline" className="gap-1.5" disabled={syncForms.isPending} onClick={() => syncForms.mutate(source.id)}>
-                      <RefreshCw className={`h-3.5 w-3.5 ${syncForms.isPending ? "animate-spin" : ""}`} />
-                      Refresh forms
-                    </Button>
-                    {deletingId === source.id ? (
-                      <Button size="sm" variant="destructive" disabled={deleteSource.isPending} onClick={() => deleteSource.mutate(source.id, { onSuccess: () => setDeletingId(undefined) })}>
-                        Confirm disconnect
-                      </Button>
-                    ) : (
-                      <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={() => setDeletingId(source.id)} title="Disconnect Google Forms">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                    {isLoading && (
+                      <div className="mx-5 mb-5 h-2 animate-pulse rounded bg-muted" />
                     )}
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="rounded-[26px] border border-dashed bg-muted/20 px-6 py-16 text-center">
+              <Search className="mx-auto h-6 w-6 text-muted-foreground" />
+              <p className="mt-3 font-medium">No integrations found</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Try a different app or provider name.
+              </p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <Dialog
+        open={Boolean(activeProvider)}
+        onOpenChange={(open) => !open && setActiveProvider(null)}
+      >
+        <DialogContent className="overflow-hidden p-0 sm:max-w-xl">
+          {activeProvider && selectedProvider && SelectedProviderIcon && (
+            <>
+              <DialogHeader className="border-b px-5 py-4 text-left">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border bg-background p-1.5">
+                    <SelectedProviderIcon className="h-full w-full" />
+                  </div>
+                  <div>
+                    <DialogTitle>{selectedProvider.name}</DialogTitle>
+                    <DialogDescription className="mt-0.5">
+                      Manage connected accounts, forms, and import settings.
+                    </DialogDescription>
                   </div>
                 </div>
-                <div className="divide-y rounded-lg border border-border">
-                  {source.forms.length ? source.forms.map((form) => (
-                    <div key={form.id} className="flex items-center justify-between gap-4 px-4 py-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-foreground">{form.externalFormName}</p>
-                        <p className="mt-0.5 text-xs text-muted-foreground">New responses are imported automatically</p>
-                      </div>
-                      <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">Active</span>
-                    </div>
-                  )) : <p className="px-4 py-5 text-center text-sm text-muted-foreground">No Google Forms were found in this account.</p>}
-                </div>
+              </DialogHeader>
+              <div className="max-h-[58vh] space-y-3 overflow-y-auto px-5 py-4">
+                {selectedSources.map((source) => (
+                  <ConnectedSource
+                    key={source.id}
+                    source={source}
+                    provider={activeProvider}
+                    syncing={syncForms.isPending}
+                    updating={updateForm.isPending}
+                    deleting={deleteSource.isPending}
+                    onSync={() => syncForms.mutate(source.id)}
+                    onDelete={() => setSourceToDelete(source)}
+                    onUpdate={(formId, payload) =>
+                      updateForm.mutate({ formId, payload })
+                    }
+                  />
+                ))}
               </div>
-            ))}
-            <Button variant="outline" className="gap-2" disabled={connectGoogle.isPending} onClick={() => connectGoogle.mutate()}>
-              {connectGoogle.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-              Connect another Google account
-            </Button>
-          </div>
-        ) : (
-          <button type="button" disabled={connectGoogle.isPending} onClick={() => connectGoogle.mutate()} className="group flex w-full cursor-pointer items-center gap-4 rounded-xl border border-border bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-500/35 hover:shadow-md disabled:pointer-events-none disabled:opacity-60 sm:p-6">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/5 text-xl font-bold text-emerald-600">
-              {connectGoogle.isPending ? <Loader2 className="h-6 w-6 animate-spin" /> : "G"}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="font-semibold text-foreground">Connect Google Forms</p>
-              <p className="mt-1 text-sm text-muted-foreground">Authorize a Google account and discover its forms.</p>
-            </div>
-            <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-emerald-600">
-              Connect <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-            </span>
-          </button>
-        )}
+              <div className="flex items-center justify-between gap-3 border-t bg-muted/15 px-5 py-3">
+                <p className="text-xs text-muted-foreground">
+                  {selectedSources.length} connected account
+                  {selectedSources.length === 1 ? "" : "s"}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isConnecting(activeProvider)}
+                  onClick={() => connect(activeProvider)}
+                >
+                  {isConnecting(activeProvider) && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  Connect another
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
-        {connectGoogle.isError && (
-          <p className="px-1 text-xs font-medium text-destructive">
-            {connectGoogle.error instanceof Error ? connectGoogle.error.message : "Could not start Google connection"}
-          </p>
-        )}
-      </section>
+      <DeleteConfirmDialog
+        isOpen={Boolean(sourceToDelete)}
+        onClose={() => setSourceToDelete(null)}
+        onConfirm={() => {
+          if (!sourceToDelete) return;
+          deleteSource.mutate(sourceToDelete.id, {
+            onSuccess: () => setSourceToDelete(null),
+          });
+        }}
+        title="Disconnect integration?"
+        description={`Disconnect “${sourceToDelete?.name || "this integration"}”? New responses will stop importing until it is connected again.`}
+        isDeleting={deleteSource.isPending}
+      />
     </div>
   );
 }
