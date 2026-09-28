@@ -81,6 +81,38 @@ interface GoogleFormResponse {
   >;
 }
 
+const GOOGLE_REQUEST_TIMEOUT_MS = 15_000;
+const GOOGLE_REQUEST_ATTEMPTS = 3;
+
+function errorDetails(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  const cause = (error as Error & { cause?: unknown }).cause;
+  return cause ? `${error.message}: ${errorDetails(cause)}` : error.message;
+}
+
+async function fetchGoogle(
+  url: string,
+  init?: RequestInit,
+): Promise<Response> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= GOOGLE_REQUEST_ATTEMPTS; attempt += 1) {
+    try {
+      return await fetch(url, {
+        ...init,
+        signal: AbortSignal.timeout(GOOGLE_REQUEST_TIMEOUT_MS),
+      });
+    } catch (error) {
+      lastError = error;
+      if (attempt < GOOGLE_REQUEST_ATTEMPTS) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 500));
+      }
+    }
+  }
+  throw new Error(
+    `Google API is unreachable after ${GOOGLE_REQUEST_ATTEMPTS} attempts (${errorDetails(lastError)})`,
+  );
+}
+
 const DEFAULT_OPPORTUNITY_STAGE = "qualified";
 
 function getModels() {
@@ -291,7 +323,7 @@ async function refreshGoogleCredentials(
       "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required to ingest Google Forms",
     );
   }
-  const response = await fetch("https://oauth2.googleapis.com/token", {
+  const response = await fetchGoogle("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -314,7 +346,7 @@ async function refreshGoogleCredentials(
 }
 
 async function googleApi<T>(path: string, accessToken: string): Promise<T> {
-  const response = await fetch(`https://forms.googleapis.com/v1/${path}`, {
+  const response = await fetchGoogle(`https://forms.googleapis.com/v1/${path}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   const payload = (await response.json().catch(() => ({}))) as T & {

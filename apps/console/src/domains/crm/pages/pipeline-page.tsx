@@ -137,6 +137,7 @@ export function PipelinePage() {
   const [scheduleForId, setScheduleForId] = useState<string>();
   const [scheduleTitle, setScheduleTitle] = useState("");
   const [scheduleAt, setScheduleAt] = useState("");
+  const [scheduleDuration, setScheduleDuration] = useState(60);
   const [activityCustomFields, setActivityCustomFields] = useState<
     Record<string, unknown>
   >({});
@@ -998,6 +999,7 @@ export function PipelinePage() {
             values={activityCustomFields}
             onChange={setActivityCustomFields}
             disabled={addActivity.isPending}
+            excludeFieldKeys={["dueAt"]}
             systemFields={{
               category: (field) => (
                 <div className="grid gap-2">
@@ -1049,41 +1051,106 @@ export function PipelinePage() {
                   />
                 </div>
               ),
-              dueAt: (field) => (
-                <div className="grid gap-2">
-                  <Label>
-                    {field.label}
-                    {field.required ? " *" : ""}
-                  </Label>
-                  <Input
-                    type="datetime-local"
-                    value={scheduleAt}
-                    onChange={(event) => setScheduleAt(event.target.value)}
-                    required={field.required}
-                  />
-                </div>
-              ),
             }}
           />
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-2">
+              <Label htmlFor="pipeline-activity-date">Date *</Label>
+              <Input
+                id="pipeline-activity-date"
+                type="date"
+                value={scheduleAt.split("T")[0] || ""}
+                onChange={(event) =>
+                  setScheduleAt(
+                    `${event.target.value}T${scheduleAt.split("T")[1] || "09:00"}`,
+                  )
+                }
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="pipeline-activity-time">Time *</Label>
+              <Input
+                id="pipeline-activity-time"
+                type="time"
+                value={scheduleAt.split("T")[1] || ""}
+                onChange={(event) => {
+                  const today = new Date();
+                  const localDate = new Date(
+                    today.getTime() - today.getTimezoneOffset() * 60_000,
+                  )
+                    .toISOString()
+                    .slice(0, 10);
+                  setScheduleAt(
+                    `${scheduleAt.split("T")[0] || localDate}T${event.target.value}`,
+                  );
+                }}
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="pipeline-activity-duration">
+                Duration (minutes) *
+              </Label>
+              <Input
+                id="pipeline-activity-duration"
+                type="number"
+                min={5}
+                max={1440}
+                step={5}
+                value={scheduleDuration}
+                onChange={(event) =>
+                  setScheduleDuration(Number(event.target.value))
+                }
+                required
+              />
+            </div>
+          </div>
           <DialogFooter>
             <Button
               disabled={
-                !scheduleTitle.trim() || !scheduleAt || addActivity.isPending
+                !scheduleTitle.trim() ||
+                !scheduleAt ||
+                scheduleDuration < 5 ||
+                scheduleDuration > 1440 ||
+                addActivity.isPending
               }
               onClick={async () => {
                 if (!scheduleForId) return;
-                await addActivity.mutateAsync({
-                  id: scheduleForId,
-                  content: scheduleTitle.trim(),
-                  dueAt: new Date(scheduleAt).toISOString(),
-                  category: scheduleCategory,
-                  customFields: activityCustomFields,
-                });
-                setScheduleForId(undefined);
-                setScheduleTitle("");
-                setScheduleAt("");
-                setActivityCustomFields({});
-                toast.success("Activity scheduled");
+                try {
+                  const activity = await addActivity.mutateAsync({
+                    id: scheduleForId,
+                    content: scheduleTitle.trim(),
+                    dueAt: new Date(scheduleAt).toISOString(),
+                    category: scheduleCategory,
+                    customFields: activityCustomFields,
+                    durationMinutes: scheduleDuration,
+                  });
+                  setScheduleForId(undefined);
+                  setScheduleTitle("");
+                  setScheduleAt("");
+                  setScheduleDuration(60);
+                  setActivityCustomFields({});
+                  if (activity.calendarSyncStatus === "synced") {
+                    toast.success(
+                      "Activity scheduled and added to Google Calendar",
+                    );
+                  } else if (activity.calendarSyncStatus === "failed") {
+                    toast.error(
+                      `Activity saved, but Google Calendar failed: ${activity.calendarSyncError || "Reconnect Google Calendar"}`,
+                    );
+                  } else {
+                    toast.warning(
+                      "Activity saved in CRM only. Connect Google Calendar to sync it.",
+                    );
+                  }
+                } catch (error: unknown) {
+                  toast.error(
+                    error instanceof Error
+                      ? error.message
+                      : "Failed to schedule activity",
+                  );
+                }
               }}
             >
               Schedule activity

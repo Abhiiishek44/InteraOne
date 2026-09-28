@@ -234,7 +234,7 @@ const config: Config = {
       redirectUri: process.env.GOOGLE_CALENDAR_REDIRECT_URI,
       oauthScopes: (
         process.env.GOOGLE_CALENDAR_OAUTH_SCOPES ||
-        "openid,email,https://www.googleapis.com/auth/calendar.calendarlist.readonly"
+        "openid,email,https://www.googleapis.com/auth/calendar.calendarlist.readonly,https://www.googleapis.com/auth/calendar.events"
       )
         .split(",")
         .map((scope) => scope.trim())

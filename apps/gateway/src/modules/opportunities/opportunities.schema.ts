@@ -74,6 +74,7 @@ export const opportunitiesSchema = {
   addActivity: Joi.object({
     content: Joi.string().trim().max(2000).required(),
     dueAt: Joi.date().iso().allow(null, ""),
+    durationMinutes: Joi.number().integer().min(5).max(1440).default(60),
     category: Joi.string()
       .valid("todo", "email", "call", "meeting", "document")
       .default("todo"),

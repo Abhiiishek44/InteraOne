@@ -22,6 +22,12 @@ export type GoogleCalendarSummary = {
   timeZone?: string;
 };
 
+export type GoogleCalendarEvent = {
+  id: string;
+  htmlLink?: string;
+  hangoutLink?: string;
+};
+
 // Wraps Google OAuth and CalendarList operations for calendar connections.
 export class GoogleCalendarAdapter {
   // Builds the Google Calendar OAuth URL with offline and incremental authorization.
@@ -134,6 +140,88 @@ export class GoogleCalendarAdapter {
       pageToken = payload.nextPageToken;
     } while (pageToken);
     return calendars;
+  }
+
+  // Creates a CRM meeting in Google Calendar and requests a Google Meet link.
+  async createEvent(
+    accessToken: string,
+    calendarId: string,
+    input: {
+      summary: string;
+      description?: string;
+      start: Date;
+      end: Date;
+      attendeeEmail?: string;
+      requestId: string;
+      createConference?: boolean;
+    },
+  ): Promise<GoogleCalendarEvent> {
+    const response = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?conferenceDataVersion=1&sendUpdates=all`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          summary: input.summary,
+          description: input.description,
+          start: { dateTime: input.start.toISOString() },
+          end: { dateTime: input.end.toISOString() },
+          attendees: input.attendeeEmail
+            ? [{ email: input.attendeeEmail }]
+            : undefined,
+          conferenceData: input.createConference
+            ? {
+                createRequest: {
+                  requestId: input.requestId,
+                  conferenceSolutionKey: { type: "hangoutsMeet" },
+                },
+              }
+            : undefined,
+          extendedProperties: {
+            private: { interaOneActivityId: input.requestId },
+          },
+        }),
+      },
+    );
+    const payload = (await response.json().catch(() => ({}))) as {
+      id?: string;
+      htmlLink?: string;
+      hangoutLink?: string;
+      error?: {
+        message?: string;
+        status?: string;
+        errors?: Array<{ reason?: string }>;
+      };
+    };
+    if (!response.ok || !payload.id) {
+      const insufficientScope =
+        response.status === 403 &&
+        (payload.error?.status === "PERMISSION_DENIED" ||
+          payload.error?.errors?.some((error) =>
+            ["insufficientPermissions", "forbidden"].includes(
+              error.reason || "",
+            ),
+          ) ||
+          /insufficient authentication scopes/i.test(
+            payload.error?.message || "",
+          ));
+      if (insufficientScope) {
+        throw new Error(
+          "Google Calendar needs event access. Reconnect Google Calendar in Integrations and approve the requested permissions.",
+        );
+      }
+      throw new Error(
+        payload.error?.message || "Could not create Google Calendar event",
+      );
+    }
+    return {
+      id: payload.id,
+      htmlLink: payload.htmlLink,
+      hangoutLink: payload.hangoutLink,
+    };
   }
 
   // Refreshes Google Calendar access credentials for background synchronization.

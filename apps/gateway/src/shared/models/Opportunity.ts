@@ -19,9 +19,16 @@ export interface IOpportunityActivity {
   content: string;
   category?: "todo" | "email" | "call" | "meeting" | "document";
   dueAt?: Date | null;
+  durationMinutes?: number;
   completedAt?: Date | null;
   createdAt: Date;
   customFields?: Record<string, unknown>;
+  googleCalendarEventId?: string | null;
+  googleCalendarId?: string | null;
+  googleCalendarEventUrl?: string | null;
+  googleMeetUrl?: string | null;
+  calendarSyncStatus?: "synced" | "failed" | null;
+  calendarSyncError?: string | null;
 }
 
 export interface IOpportunity extends Document {
@@ -127,9 +134,20 @@ const opportunitySchema = new Schema<IOpportunity>(
               default: "todo",
             },
             dueAt: { type: Date, default: null },
+            durationMinutes: { type: Number, min: 5, max: 1440, default: 60 },
             completedAt: { type: Date, default: null },
             createdAt: { type: Date, required: true, default: Date.now },
             customFields: { type: Map, of: Schema.Types.Mixed, default: {} },
+            googleCalendarEventId: { type: String, default: null },
+            googleCalendarId: { type: String, default: null },
+            googleCalendarEventUrl: { type: String, default: null },
+            googleMeetUrl: { type: String, default: null },
+            calendarSyncStatus: {
+              type: String,
+              enum: ["synced", "failed", null],
+              default: null,
+            },
+            calendarSyncError: { type: String, default: null, maxlength: 500 },
           },
           { _id: false },
         ),
