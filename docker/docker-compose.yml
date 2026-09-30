@@ -216,7 +216,7 @@ services:
         max-file: "3"
 
   minio:
-    image: quay.io/minio/minio:latest
+    image: pgsty/silo:latest
     restart: unless-stopped
     ports:
       - "127.0.0.1:9002:9002" 

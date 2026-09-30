@@ -80,7 +80,7 @@ services:
       retries: 3
 
   minio:
-    image: minio/minio:latest
+    image: pgsty/silo:latest
     container_name: InteraOne-minio-dev
     restart: unless-stopped
     ports:
