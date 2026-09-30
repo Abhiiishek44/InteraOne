@@ -1,4 +1,4 @@
-import { minioClient, INTERAONE_BUCKET } from "@shared/infra/minio";
+import { siloClient, INTERAONE_BUCKET } from "@shared/infra/silo";
 import type { Readable } from "stream";
 import config from "@shared/infra/config";
 
@@ -7,23 +7,23 @@ import config from "@shared/infra/config";
 /**
  * Build a permanent, publicly-accessible URL for an object.
  *
- * Works because `initializeMinIO` applies a public-read `s3:GetObject` bucket
+ * Works because `initializeSilo` applies a public-read `s3:GetObject` bucket
  * policy at startup. Use for assets that need no access control:
  *   - Widget logos
  *   - Organisation avatars
  *   - Other publicly-served brand assets
  */
 export function getPublicUrl(objectKey: string): string {
-  const base = config.minio.publicUrl.replace(/\/$/, "");
+  const base = config.silo.publicUrl.replace(/\/$/, "");
   if (base) return `${base}/${INTERAONE_BUCKET}/${objectKey}`;
-  const protocol = config.minio.useSSL ? "https" : "http";
-  return `${protocol}://${config.minio.endpoint}:${config.minio.port}/${INTERAONE_BUCKET}/${objectKey}`;
+  const protocol = config.silo.useSSL ? "https" : "http";
+  return `${protocol}://${config.silo.endpoint}:${config.silo.port}/${INTERAONE_BUCKET}/${objectKey}`;
 }
 
 // ── Presigned URLs ────────────────────────────────────────────────────────────
 
 /**
- * Generate a presigned PUT URL so clients upload directly to MinIO.
+ * Generate a presigned PUT URL so clients upload directly to Silo.
  *
  * Use for: client-side file uploads (knowledge docs, conversation attachments).
  *   - Never expose your storage credentials to the client.
@@ -33,7 +33,7 @@ export async function getPresignedUploadUrl(
   objectKey: string,
   expiresIn: number = 900,
 ): Promise<string> {
-  const url = await minioClient.presignedPutObject(INTERAONE_BUCKET, objectKey, expiresIn);
+  const url = await siloClient.presignedPutObject(INTERAONE_BUCKET, objectKey, expiresIn);
   return _normalizeUrl(url);
 }
 
@@ -51,21 +51,21 @@ export async function getPresignedDownloadUrl(
   objectKey: string,
   expiresIn: number = 3600,
 ): Promise<string> {
-  const url = await minioClient.presignedGetObject(INTERAONE_BUCKET, objectKey, expiresIn);
+  const url = await siloClient.presignedGetObject(INTERAONE_BUCKET, objectKey, expiresIn);
   return _normalizeUrl(url);
 }
 
 // ── Server-side operations ────────────────────────────────────────────────────
 
 /**
- * Stream an object body from MinIO.
+ * Stream an object body from Silo.
  *
- * Use for: server-side proxy when the client cannot reach MinIO directly
+ * Use for: server-side proxy when the client cannot reach Silo directly
  * (e.g. the widget iframe, internal tooling, SSR pages).
  * Pipe the returned stream straight to an HTTP response.
  */
 export async function downloadStream(objectKey: string): Promise<Readable> {
-  return minioClient.getObject(INTERAONE_BUCKET, objectKey);
+  return siloClient.getObject(INTERAONE_BUCKET, objectKey);
 }
 
 /**
@@ -73,14 +73,14 @@ export async function downloadStream(objectKey: string): Promise<Readable> {
  * Throws if the object does not exist.
  */
 export async function statObject(objectKey: string) {
-  return minioClient.statObject(INTERAONE_BUCKET, objectKey);
+  return siloClient.statObject(INTERAONE_BUCKET, objectKey);
 }
 
 /**
  * Permanently delete an object.
  */
 export async function removeObject(objectKey: string): Promise<void> {
-  await minioClient.removeObject(INTERAONE_BUCKET, objectKey);
+  await siloClient.removeObject(INTERAONE_BUCKET, objectKey);
 }
 
 /**
@@ -89,7 +89,7 @@ export async function removeObject(objectKey: string): Promise<void> {
  */
 export async function objectExists(objectKey: string): Promise<boolean> {
   try {
-    await minioClient.statObject(INTERAONE_BUCKET, objectKey);
+    await siloClient.statObject(INTERAONE_BUCKET, objectKey);
     return true;
   } catch {
     return false;
@@ -102,7 +102,7 @@ export async function objectExists(objectKey: string): Promise<boolean> {
 export function listObjects(prefix: string): Promise<string[]> {
   return new Promise((resolve, reject) => {
     const keys: string[] = [];
-    const stream = minioClient.listObjects(INTERAONE_BUCKET, prefix, true);
+    const stream = siloClient.listObjects(INTERAONE_BUCKET, prefix, true);
     stream.on("data", (obj) => { if (obj.name) keys.push(obj.name); });
     stream.on("error", reject);
     stream.on("end", () => resolve(keys));
@@ -114,15 +114,15 @@ export function listObjects(prefix: string): Promise<string[]> {
 /**
  * Ensure presigned URLs carry the correct public-facing host.
  *
- * When `MINIO_SERVER_URL` is configured, MinIO already embeds the public base
+ * When Silo's compatible server URL is configured, Silo already embeds the public base
  * URL in every presigned URL it generates — pass it through unchanged so the
  * AWS signature stays valid.
  *
- * Without `MINIO_SERVER_URL` (local dev without external CDN), MinIO uses its
+ * Without it (local dev without external CDN), Silo uses its
  * internal hostname, so we rewrite it to the derived publicUrl.
  */
 function _normalizeUrl(url: string): string {
-  const publicBase = config.minio.publicUrl.replace(/\/$/, "");
+  const publicBase = config.silo.publicUrl.replace(/\/$/, "");
   if (!publicBase || url.includes(publicBase)) return url;
   return url.replace(/^https?:\/\/[^/]+/, publicBase);
 }

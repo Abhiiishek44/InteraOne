@@ -14,7 +14,7 @@
     "lint:fix": "eslint . --fix",
     "preview": "vite preview",
     "type-check": "tsc --noEmit",
-    "deploy": "pnpm run build && node deploy-to-minio.js",
+    "deploy": "pnpm run build && node deploy-to-silo.js",
     "deploy:prod": "NODE_ENV=production pnpm run deploy"
   },
   "dependencies": {

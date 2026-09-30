@@ -65,13 +65,13 @@ const config = {
     url: process.env.QDRANT_URL,
     apiKey: process.env.QDRANT_API_KEY,
   },
-  minio: {
-    endpoint: process.env.MINIO_ENDPOINT,
-    port: parseInt(process.env.MINIO_PORT || "9000", 10),
-    useSSL: process.env.MINIO_USE_SSL === "true",
-    accessKey: process.env.MINIO_ACCESS_KEY,
-    secretKey: process.env.MINIO_SECRET_KEY,
-    bucket: process.env.MINIO_BUCKET_NAME,
+  silo: {
+    endpoint: process.env.SILO_ENDPOINT,
+    port: parseInt(process.env.SILO_PORT || "9000", 10),
+    useSSL: process.env.SILO_USE_SSL === "true",
+    accessKey: process.env.SILO_ACCESS_KEY,
+    secretKey: process.env.SILO_SECRET_KEY,
+    bucket: process.env.SILO_BUCKET_NAME,
   },
 };
 

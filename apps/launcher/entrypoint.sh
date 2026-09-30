@@ -34,6 +34,6 @@ replace() {
 echo "Configuring widget runtime environment..."
 replace "__API_URL_PRODUCTION__" "$API_URL_PRODUCTION" "/app/dist"
 replace "__CDN_URL_PRODUCTION__" "$CDN_URL_PRODUCTION" "/app/dist"
-echo "Done. Deploying widget to MinIO..."
+echo "Done. Deploying widget to Silo..."
 
-exec node deploy-to-minio.js
+exec node deploy-to-silo.js

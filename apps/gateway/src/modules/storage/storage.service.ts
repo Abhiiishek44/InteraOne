@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import logger from "@shared/core/logger";
-import { INTERAONE_BUCKET } from "@shared/infra/minio";
+import { INTERAONE_BUCKET } from "@shared/infra/silo";
 import {
   getPublicUrl,
   getPresignedUploadUrl,
@@ -33,7 +33,7 @@ class StorageService {
   }
 
   // ── Presigned upload URLs ──────────────────────────────────────────────────
-  // Let clients upload directly to MinIO without passing data through the API.
+  // Let clients upload directly to Silo without passing data through the API.
 
   async generatePresignedUploadUrl(
     fileName: string,

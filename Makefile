@@ -208,7 +208,7 @@ check-types: ## Type check
 
 docker-start: check-docker ## Start Docker services
 	@echo "$(BLUE)🐳 Starting Docker services...$(NC)"
-	@cd docker && docker-compose -f docker-compose.dev.yml up -d redis mongodb mongo-express mailhog minio qdrant log-viewer || { \
+	@cd docker && docker-compose -f docker-compose.dev.yml up -d redis mongodb mongo-express mailhog silo qdrant log-viewer || { \
 		echo "$(RED)❌ Failed to start Docker services!$(NC)"; \
 		echo ""; \
 		echo "$(YELLOW)Common issues:$(NC)"; \
@@ -227,8 +227,8 @@ docker-start: check-docker ## Start Docker services
 	@echo "  $(GREEN)✓$(NC) Mongo Express  → http://localhost:8081 (admin/dev123)"
 	@echo "  $(GREEN)✓$(NC) Redis          → localhost:6379 (password: dev123)"
 	@echo "  $(GREEN)✓$(NC) MailHog UI     → http://localhost:8025"
-	@echo "  $(GREEN)✓$(NC) MinIO API      → http://localhost:9001"
-	@echo "  $(GREEN)✓$(NC) MinIO Console  → http://localhost:9002 (minioadmin/minioadmin)"
+	@echo "  $(GREEN)✓$(NC) Silo API       → http://localhost:9001"
+	@echo "  $(GREEN)✓$(NC) Silo Console   → http://localhost:9002 (silo-admin/silo-admin)"
 	@echo ""
 	@echo "$(BLUE)📋 App services (started via 'make dev' / turbo):$(NC)"
 	@echo "  $(GREEN)✓$(NC) Gateway        → http://localhost:3002"
@@ -260,19 +260,19 @@ docker-logs: ## Show Docker logs
 	$(BANNER)
 	cd docker && docker-compose -f docker-compose.dev.yml logs -f
 
-launcher-deploy: ## Build and deploy widget to MinIO
+launcher-deploy: ## Build and deploy widget to Silo
 	@echo "$(BLUE)📦 Building and deploying widget...$(NC)"
 	@cd apps/launcher && pnpm run build && pnpm run deploy || { \
 		echo "$(RED)❌ Widget deployment failed!$(NC)"; \
 		echo ""; \
 		echo "$(YELLOW)Make sure:$(NC)"; \
-		echo "  1. MinIO is running - Run: make docker-start"; \
+		echo "  1. Silo is running - Run: make docker-start"; \
 		echo "  2. Dependencies are installed - Run: make install"; \
 		echo "  3. Widget build completes - Check apps/launcher/dist/"; \
 		echo ""; \
 		exit 1; \
 	}
-	@echo "$(GREEN)✅ Widget deployed to MinIO$(NC)"
+	@echo "$(GREEN)✅ Widget deployed to Silo$(NC)"
 	@echo "$(BLUE)📍 Widget URL:$(NC) http://localhost:9001/interaone-widget/v1/InteraOne.js"
 	@echo ""
 
