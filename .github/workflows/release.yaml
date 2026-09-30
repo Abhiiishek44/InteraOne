@@ -98,7 +98,7 @@ jobs:
       # ── LAUNCHER ───────────────────────────────────────────────────────────
       # Builds the widget JS bundle and packages it with the deploy script.
       # The widget-deploy service in docker-compose runs this image on startup
-      # to push InteraOne.js into MinIO automatically.
+      # to push InteraOne.js into Silo automatically.
       - name: Build & push Launcher
         uses: docker/build-push-action@v6
         with:

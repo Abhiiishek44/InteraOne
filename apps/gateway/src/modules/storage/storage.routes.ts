@@ -5,13 +5,13 @@ import { storageSchema } from "./storage.schema";
 
 const router = Router();
 
-// Get public URL for a MinIO object (no auth required)
+// Get public URL for a Silo object (no auth required)
 
 /**
  * @openapi
  * /storage/public-url/{objectKey}:
  *   get:
- *     summary: Retrieve the public URL for a MinIO object
+ *     summary: Retrieve the public URL for a Silo object
  *     tags:
  *       - Storage
  *     parameters:
@@ -30,14 +30,14 @@ router.get(
 	storageController.getPublicUrl,
 );
 
-// Public proxy — streams a MinIO object through the API (no auth).
-// Used so browsers never need to reach the internal MinIO hostname.
+// Public proxy — streams a Silo object through the API (no auth).
+// Used so browsers never need to reach the internal Silo hostname.
 
 /**
  * @openapi
  * /storage/file:
  *   get:
- *     summary: Stream a file through proxy from MinIO storage
+ *     summary: Stream a file through proxy from Silo storage
  *     tags:
  *       - Storage
  *     parameters:

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import * as Minio from 'minio';
+import * as S3Sdk from 'minio';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -8,30 +8,30 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const minioConfig = {
-  endPoint: process.env.MINIO_ENDPOINT || 'localhost',
-  port: parseInt(process.env.MINIO_PORT || '9001'),
-  useSSL: process.env.MINIO_USE_SSL === 'true',
-  accessKey: process.env.MINIO_ACCESS_KEY || 'minioadmin',
-  secretKey: process.env.MINIO_SECRET_KEY || 'minioadmin',
+const siloConfig = {
+  endPoint: process.env.SILO_ENDPOINT || 'localhost',
+  port: parseInt(process.env.SILO_PORT || '9001'),
+  useSSL: process.env.SILO_USE_SSL === 'true',
+  accessKey: process.env.SILO_ACCESS_KEY || 'silo-admin',
+  secretKey: process.env.SILO_SECRET_KEY || 'silo-admin',
 };
 
 const BUCKET_NAME = 'interaone-widget';
 const WIDGET_VERSION = 'v1';
 
-const minioClient = new Minio.Client(minioConfig);
+const siloClient = new S3Sdk.Client(siloConfig);
 
 function assertValidBucketName(bucketName) {
   if (!/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucketName)) {
-    throw new Error(`Invalid MinIO bucket name: ${bucketName}. Use lowercase letters, numbers, dots, or hyphens only.`);
+    throw new Error(`Invalid Silo bucket name: ${bucketName}. Use lowercase letters, numbers, dots, or hyphens only.`);
   }
 }
 
 async function ensureBucketExists() {
   assertValidBucketName(BUCKET_NAME);
-  const exists = await minioClient.bucketExists(BUCKET_NAME);
+  const exists = await siloClient.bucketExists(BUCKET_NAME);
   if (!exists) {
-    await minioClient.makeBucket(BUCKET_NAME, 'us-east-1');
+    await siloClient.makeBucket(BUCKET_NAME, 'us-east-1');
   }
 }
 
@@ -47,7 +47,7 @@ async function setBucketPolicy() {
       },
     ],
   };
-  await minioClient.setBucketPolicy(BUCKET_NAME, JSON.stringify(policy));
+  await siloClient.setBucketPolicy(BUCKET_NAME, JSON.stringify(policy));
 }
 
 
@@ -94,7 +94,7 @@ async function uploadFile(localPath, remotePath) {
     'Cross-Origin-Resource-Policy': 'cross-origin',
   };
 
-  await minioClient.putObject(BUCKET_NAME, remotePath, fileStream, fileStat.size, metadata);
+  await siloClient.putObject(BUCKET_NAME, remotePath, fileStream, fileStat.size, metadata);
   console.log(`✅ Uploaded ${remotePath}`);
 }
 
@@ -115,7 +115,7 @@ async function uploadDir(localDirPath, remoteDirPrefix) {
 
 async function deployWidget() {
   try {
-    console.log('🚀 Starting widget deployment to MinIO...\n');
+    console.log('🚀 Starting widget deployment to Silo...\n');
 
     await ensureBucketExists();
     await setBucketPolicy();
@@ -127,9 +127,9 @@ async function deployWidget() {
 
     await uploadDir(distPath, WIDGET_VERSION);
 
-    const protocol = minioConfig.useSSL ? 'https' : 'http';
-    const port = minioConfig.port === (minioConfig.useSSL ? 443 : 80) ? '' : `:${minioConfig.port}`;
-    const widgetUrl = `${protocol}://${minioConfig.endPoint}${port}/${BUCKET_NAME}/${WIDGET_VERSION}/InteraOne.js`;
+    const protocol = siloConfig.useSSL ? 'https' : 'http';
+    const port = siloConfig.port === (siloConfig.useSSL ? 443 : 80) ? '' : `:${siloConfig.port}`;
+    const widgetUrl = `${protocol}://${siloConfig.endPoint}${port}/${BUCKET_NAME}/${WIDGET_VERSION}/InteraOne.js`;
 
     console.log('\n✨ Deployment complete!');
     console.log(`   Loader: ${widgetUrl}`);

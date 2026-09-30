@@ -2,7 +2,7 @@ import pdfParse from "pdf-parse";
 import mammoth from "mammoth";
 import { StringDecoder } from "string_decoder";
 import config from "../../../config";
-import { minioClient } from "../../../infrastructure/storage/minio.client";
+import { siloClient } from "../../../infrastructure/storage/silo.client";
 import { ContentStreamItem } from "../ingestion.types";
 
 
@@ -13,7 +13,7 @@ const TEXT_STREAM_SEGMENT_CHARS = parseInt(
 
  
 async function fetchBuffer(fileKey: string): Promise<Buffer> {
-  const stream = await minioClient.getObject(config.minio.bucket || "", fileKey);
+  const stream = await siloClient.getObject(config.silo.bucket || "", fileKey);
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     stream.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
@@ -23,7 +23,7 @@ async function fetchBuffer(fileKey: string): Promise<Buffer> {
 }
 
 async function getObjectStream(fileKey: string) {
-  return minioClient.getObject(config.minio.bucket || "", fileKey);
+  return siloClient.getObject(config.silo.bucket || "", fileKey);
 }
 
  
@@ -64,7 +64,7 @@ export async function loadDocument(fileKey: string, mimeType: string): Promise<s
   throw new Error(`Unsupported MIME type for document ingestion: ${mimeType}`);
 }
 
-async function* streamPlainTextFromMinio(
+async function* streamPlainTextFromSilo(
   fileKey: string,
 ): AsyncGenerator<ContentStreamItem> {
   const stream = await getObjectStream(fileKey);
@@ -104,13 +104,13 @@ export async function* loadDocumentStream(
   mimeType: string,
 ): AsyncGenerator<ContentStreamItem> {
   if (mimeType === "text/plain") {
-    // Pre-verify text file size from MinIO metadata to enforce estimated 25-page limit
-    const stat = await minioClient.statObject(config.minio.bucket || "", fileKey);
+    // Pre-verify text file size from Silo metadata to enforce estimated 25-page limit
+    const stat = await siloClient.statObject(config.silo.bucket || "", fileKey);
     const estPages = Math.ceil(stat.size / 3000);
     if (estPages > 25) {
       throw new Error(`Plain text file exceeds page limit of 25 pages (estimated ${estPages} pages).`);
     }
-    yield* streamPlainTextFromMinio(fileKey);
+    yield* streamPlainTextFromSilo(fileKey);
     return;
   }
 

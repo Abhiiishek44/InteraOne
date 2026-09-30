@@ -7,7 +7,7 @@ import { Router } from "express";
 import config from "@shared/infra/config";
 import { connectDatabase } from "@shared/infra/database";
 import { connectRedis } from "@shared/infra/redis";
-import { initializeMinIO } from "@shared/infra/minio";
+import { initializeSilo } from "@shared/infra/silo";
 import {
   globalRateLimit,
   errorHandler,
@@ -230,9 +230,9 @@ class Application {
       // Start Assist response consumer
       startAssistResponseConsumer();
 
-      // Initialize MinIO (non-blocking - log error but don't crash)
-      initializeMinIO().catch((error) => {
-        logger.error("MinIO initialization failed; will retry on first use", {
+      // Initialize Silo (non-blocking - log error but don't crash)
+      initializeSilo().catch((error) => {
+        logger.error("Silo initialization failed; will retry on first use", {
           error,
         });
       });
@@ -244,7 +244,7 @@ class Application {
         logger.info(`🔌 Socket.IO: Ready`);
         logger.info(`💾 MongoDB: Connected`);
         logger.info(`📮 Redis: Connected`);
-        logger.info(`📦 MinIO: Initializing...`);
+        logger.info(`📦 Silo: Initializing...`);
       });
 
       // Graceful shutdown

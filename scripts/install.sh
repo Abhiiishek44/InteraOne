@@ -445,14 +445,19 @@ prompt_config() {
         log_info "Existing docker/.env detected — reusing database passwords to preserve MongoDB data."
         MONGO_PASSWORD=$(grep "^MONGO_ROOT_PASSWORD=" docker/.env | cut -d= -f2-)
         REDIS_PASSWORD=$(grep "^REDIS_PASSWORD=" docker/.env | cut -d= -f2-)
-        MINIO_PASSWORD=$(grep "^MINIO_ROOT_PASSWORD=" docker/.env | cut -d= -f2-)
+        if grep -q "^SILO_ROOT_PASSWORD=" docker/.env; then
+            SILO_PASSWORD=$(grep "^SILO_ROOT_PASSWORD=" docker/.env | cut -d= -f2-)
+        else
+            # Preserve credentials when upgrading an installation created before Silo.
+            SILO_PASSWORD=$(grep "^MINIO_ROOT_PASSWORD=" docker/.env | cut -d= -f2-)
+        fi
         JWT_SECRET=$(grep "^JWT_SECRET=" docker/.env | cut -d= -f2-)
         AI_TOOL_SECRET=$(grep "^AI_TOOL_SECRET=" docker/.env | cut -d= -f2-)
         LOG_VIEWER_PORT=$(grep "^LOG_VIEWER_PORT=" docker/.env | cut -d= -f2- || echo "")
     else
         MONGO_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
         REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
-        MINIO_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
+        SILO_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
         JWT_SECRET=$(openssl rand -base64 64 | tr -d "=+/" | cut -c1-64)
         AI_TOOL_SECRET=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-32)
     fi
@@ -490,12 +495,12 @@ MONGO_ROOT_PASSWORD=$MONGO_PASSWORD
 # Redis
 REDIS_PASSWORD=$REDIS_PASSWORD
 
-# MinIO
-MINIO_ROOT_USER=minioadmin
-MINIO_ROOT_PASSWORD=$MINIO_PASSWORD
+# Silo
+SILO_ROOT_USER=silo-admin
+SILO_ROOT_PASSWORD=$SILO_PASSWORD
 
-# MinIO public URL (CDN subdomain)
-MINIO_PUBLIC_URL=https://$CDN_HOST
+# Silo public URL (CDN subdomain)
+SILO_PUBLIC_URL=https://$CDN_HOST
 
 # Caddy reverse-proxy hosts
 API_HOST=$API_HOST
@@ -556,14 +561,14 @@ JWT_EXPIRES_IN=7d
 JWT_REFRESH_SECRET=$JWT_SECRET
 JWT_REFRESH_EXPIRES_IN=30d
 
-# MinIO (service hostname: minio)
-MINIO_ENDPOINT=minio
-MINIO_PORT=9001
-MINIO_ACCESS_KEY=minioadmin
-MINIO_SECRET_KEY=$MINIO_PASSWORD
-MINIO_USE_SSL=false
-MINIO_PUBLIC_URL=https://$CDN_HOST
-MINIO_BUCKET_NAME=interaone-chat
+# Silo (service hostname: silo)
+SILO_ENDPOINT=silo
+SILO_PORT=9001
+SILO_ACCESS_KEY=silo-admin
+SILO_SECRET_KEY=$SILO_PASSWORD
+SILO_USE_SSL=false
+SILO_PUBLIC_URL=https://$CDN_HOST
+SILO_BUCKET_NAME=interaone-chat
 
 # CORS
 CLIENT_URL=https://$WEB_HOST
@@ -614,11 +619,11 @@ EOF
 
 API_URL_PRODUCTION=https://$API_HOST
 CDN_URL_PRODUCTION=https://$CDN_HOST
-MINIO_ENDPOINT=minio
-MINIO_PORT=9001
-MINIO_ACCESS_KEY=minioadmin
-MINIO_SECRET_KEY=$MINIO_PASSWORD
-MINIO_USE_SSL=false
+SILO_ENDPOINT=silo
+SILO_PORT=9001
+SILO_ACCESS_KEY=silo-admin
+SILO_SECRET_KEY=$SILO_PASSWORD
+SILO_USE_SSL=false
 EOF
     
     # apps/agent/.env.docker (if exists)
@@ -643,13 +648,13 @@ REDIS_PASSWORD=$REDIS_PASSWORD
 # API (internal service hostname)
 API_URL=http://gateway:3002/api/v1
 
-# MinIO (service hostname: minio)
-MINIO_ENDPOINT=minio
-MINIO_PORT=9001
-MINIO_ACCESS_KEY=minioadmin
-MINIO_SECRET_KEY=$MINIO_PASSWORD
-MINIO_USE_SSL=false
-MINIO_BUCKET_NAME=interaone-chat
+# Silo (service hostname: silo)
+SILO_ENDPOINT=silo
+SILO_PORT=9001
+SILO_ACCESS_KEY=silo-admin
+SILO_SECRET_KEY=$SILO_PASSWORD
+SILO_USE_SSL=false
+SILO_BUCKET_NAME=interaone-chat
 
 # Qdrant (service hostname: qdrant)
 QDRANT_URL=http://qdrant:6333

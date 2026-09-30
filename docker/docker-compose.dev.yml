@@ -79,21 +79,22 @@ services:
       timeout: 10s
       retries: 3
 
-  minio:
-    image: minio/minio:latest
-    container_name: InteraOne-minio-dev
+  silo:
+    image: pgsty/silo:latest
+    container_name: InteraOne-silo-dev
     restart: unless-stopped
     ports:
       - "9001:9001"  # API port (widget CDN)
       - "9002:9002"  # Console (Web UI) port
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      # Silo's server process uses these compatibility environment variables.
+      MINIO_ROOT_USER: silo-admin
+      MINIO_ROOT_PASSWORD: silo-admin
       # Enable CORS for widget serving
       MINIO_API_CORS_ALLOW_ORIGIN: "*"
     command: server /data --console-address ":9002" --address ":9001"
     volumes:
-      - minio_data_dev:/data
+      - silo_data_dev:/data
     networks:
       - InteraOne-dev-network
     healthcheck:
@@ -121,7 +122,7 @@ volumes:
     driver: local
   redis_data_dev:
     driver: local
-  minio_data_dev:
+  silo_data_dev:
     driver: local
   qdrant_data_dev:
     driver: local

@@ -34,7 +34,7 @@ services:
         max-size: "5m"
         max-file: "2"
 
-  # One-shot: builds widget JS and deploys it to MinIO on every stack startup.
+  # One-shot: builds widget JS and deploys it to Silo on every stack startup.
   # Exits after deploy (restart: no). Re-runs on `docker-compose up`.
   # Uses runtime config injection via entrypoint.sh (same pattern as the web app).
   launcher-deploy:
@@ -43,11 +43,11 @@ services:
     env_file:
       - ../apps/launcher/.env.docker
     environment:
-      # Always sourced from docker/.env — single source of truth for MinIO credentials
-      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
-      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      # Always sourced from docker/.env — single source of truth for Silo credentials
+      SILO_ACCESS_KEY: ${SILO_ROOT_USER}
+      SILO_SECRET_KEY: ${SILO_ROOT_PASSWORD}
     depends_on:
-      minio:
+      silo:
         condition: service_healthy
     networks:
       - InteraOne-network
@@ -89,9 +89,9 @@ services:
     env_file:
       - ../apps/gateway/.env.docker
     environment:
-      # Always sourced from docker/.env — single source of truth for MinIO credentials
-      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
-      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      # Always sourced from docker/.env — single source of truth for Silo credentials
+      SILO_ACCESS_KEY: ${SILO_ROOT_USER}
+      SILO_SECRET_KEY: ${SILO_ROOT_PASSWORD}
     volumes:
       - ../ee:/app/ee:ro
     depends_on:
@@ -99,7 +99,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio:
+      silo:
         condition: service_healthy
     networks:
       - InteraOne-network
@@ -121,9 +121,9 @@ services:
     env_file:
       - ../apps/agent/.env.docker
     environment:
-      # Always sourced from docker/.env — single source of truth for MinIO credentials
-      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
-      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      # Always sourced from docker/.env — single source of truth for Silo credentials
+      SILO_ACCESS_KEY: ${SILO_ROOT_USER}
+      SILO_SECRET_KEY: ${SILO_ROOT_PASSWORD}
     depends_on:
       mongodb:
         condition: service_healthy
@@ -145,9 +145,9 @@ services:
     env_file:
       - ../apps/worker/.env.docker
     environment:
-      # Always sourced from docker/.env — single source of truth for MinIO credentials
-      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
-      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      # Always sourced from docker/.env — single source of truth for Silo credentials
+      SILO_ACCESS_KEY: ${SILO_ROOT_USER}
+      SILO_SECRET_KEY: ${SILO_ROOT_PASSWORD}
     volumes:
       - ../ee:/app/ee:ro
     depends_on:
@@ -217,19 +217,20 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  minio:
-    image: minio/minio:latest
+  silo:
+    image: pgsty/silo:latest
     restart: unless-stopped
     ports:
       - "127.0.0.1:9002:9002" 
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-      MINIO_SERVER_URL: ${MINIO_PUBLIC_URL}
+      # Silo retains these MINIO_* server variables as its stable compatibility interface.
+      MINIO_ROOT_USER: ${SILO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${SILO_ROOT_PASSWORD}
+      MINIO_SERVER_URL: ${SILO_PUBLIC_URL}
       MINIO_API_CORS_ALLOW_ORIGIN: "*"
     command: server /data --console-address ":9002" --address ":9001"
     volumes:
-      - minio_data:/data
+      - silo_data:/data
     networks:
       - InteraOne-network
     healthcheck:
@@ -280,7 +281,7 @@ volumes:
     driver: local
   redis_data:
     driver: local
-  minio_data:
+  silo_data:
     driver: local
   qdrant_data:
     driver: local

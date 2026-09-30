@@ -40,10 +40,10 @@ interface Config {
   cors: {
     allowedOrigins: string[];
   };
-  minio: {
+  silo: {
     bucketName: string;
-    minio_uri: string;
-    minio_public_url: string;
+    silo_uri: string;
+    silo_public_url: string;
     endpoint: string;
     port: number;
     useSSL: boolean;
@@ -120,38 +120,38 @@ function parseRedisConfig(): Config["redis"] {
   };
 }
 
-function parseMinioConfig(): Config["minio"] {
-  const minioUri = process.env.MINIO_URI;
-  const minioPublicUrl = process.env.MINIO_PUBLIC_URL || "";
+function parseSiloConfig(): Config["silo"] {
+  const siloUri = process.env.SILO_URI;
+  const siloPublicUrl = process.env.SILO_PUBLIC_URL || "";
 
-  if (minioUri) {
-    const url = new URL(minioUri);
+  if (siloUri) {
+    const url = new URL(siloUri);
     const useSSL = url.protocol === "https:";
     const port = url.port ? parseInt(url.port, 10) : useSSL ? 443 : 80;
 
     return {
-      bucketName: process.env.MINIO_BUCKET_NAME!,
-      minio_uri: minioUri,
-      minio_public_url: minioPublicUrl,
+      bucketName: process.env.SILO_BUCKET_NAME!,
+      silo_uri: siloUri,
+      silo_public_url: siloPublicUrl,
       endpoint: url.hostname,
       port,
       useSSL,
-      accessKey: url.username || process.env.MINIO_ACCESS_KEY,
-      secretKey: url.password || process.env.MINIO_SECRET_KEY,
-      publicUrl: minioPublicUrl,
+      accessKey: url.username || process.env.SILO_ACCESS_KEY,
+      secretKey: url.password || process.env.SILO_SECRET_KEY,
+      publicUrl: siloPublicUrl,
     };
   }
 
   return {
-    bucketName: process.env.MINIO_BUCKET_NAME!,
-    minio_uri: minioUri || "",
-    minio_public_url: minioPublicUrl,
-    endpoint: process.env.MINIO_ENDPOINT!,
-    port: parseInt(process.env.MINIO_PORT || "9000", 10),
-    useSSL: process.env.MINIO_USE_SSL === "true",
-    accessKey: process.env.MINIO_ACCESS_KEY,
-    secretKey: process.env.MINIO_SECRET_KEY,
-    publicUrl: minioPublicUrl,
+    bucketName: process.env.SILO_BUCKET_NAME!,
+    silo_uri: siloUri || "",
+    silo_public_url: siloPublicUrl,
+    endpoint: process.env.SILO_ENDPOINT!,
+    port: parseInt(process.env.SILO_PORT || "9000", 10),
+    useSSL: process.env.SILO_USE_SSL === "true",
+    accessKey: process.env.SILO_ACCESS_KEY,
+    secretKey: process.env.SILO_SECRET_KEY,
+    publicUrl: siloPublicUrl,
   };
 }
 
@@ -206,7 +206,7 @@ const config: Config = {
   cors: {
     allowedOrigins: ["*"],
   },
-  minio: parseMinioConfig(),
+  silo: parseSiloConfig(),
   aws: {
     region: process.env.AWS_REGION || "us-east-1",
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
