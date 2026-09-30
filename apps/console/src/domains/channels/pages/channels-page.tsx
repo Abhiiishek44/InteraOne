@@ -660,18 +660,18 @@ export function ChannelsPage() {
         </div>
 
         {shownChannels.length ? (
-          <div className="integration-scatter">
+          <div className="grid gap-4 sm:grid-cols-2">
             {shownChannels.map((channel) => {
               const Icon = channel.icon;
               return (
                 <article
                   key={channel.id}
                   data-tour-id={`page-channels-${channel.id}`}
-                  className="integration-float-card rounded-xl border bg-card shadow-sm transition hover:border-primary/25 hover:shadow-md"
+                  className="rounded-lg border bg-card"
                 >
-                  <div className="p-5 sm:p-6">
+                  <div className="p-5">
                     <div className="flex items-start justify-between gap-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-xl border bg-background p-2 shadow-sm">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-lg border bg-background p-2">
                         <Icon className="h-full w-full" />
                       </div>
                       <div className="flex items-center gap-2 pt-1 text-xs text-muted-foreground">
@@ -694,7 +694,7 @@ export function ChannelsPage() {
                         {channel.description}
                       </p>
                     </div>
-                    <div className="mt-4 flex items-center justify-between gap-3 border-t pt-4">
+                    <div className="mt-5 flex items-center justify-between gap-3">
                       <span className="text-xs font-medium text-muted-foreground">
                         {channel.benefit}
                       </span>

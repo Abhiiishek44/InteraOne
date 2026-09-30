@@ -316,7 +316,7 @@ function ConnectedSource({
 }
 
 export function IntegrationsPage() {
-  const { data: leadSources = [], isLoading } = useLeadSources();
+  const { data: leadSources = [] } = useLeadSources();
   const connectFacebook = useConnectFacebookLeadAds();
   const connectGoogle = useConnectGoogleForms();
   const connectGoogleCalendar = useConnectGoogleCalendar();
@@ -450,99 +450,92 @@ export function IntegrationsPage() {
           />
         )}
 
-        <div>
-          {shownProviders.length ? (
-            <div className="integration-scatter">
-              {shownProviders.map((provider) => {
-                const sources = leadSources.filter(
-                  (source) => source.provider === provider.id,
-                );
-                const connected = sources.length > 0;
-                const pending = isConnecting(provider.id);
-                const error = connectionError(provider.id);
-                const Icon = provider.icon;
-                return (
-                  <article
-                    key={provider.id}
-                    data-tour-id={`page-integrations-${
-                      provider.id === "facebook_lead_ads"
-                        ? "facebook"
-                        : "google-forms"
-                    }`}
-                    className="integration-float-card rounded-xl border bg-card shadow-sm transition hover:border-primary/25 hover:shadow-md"
-                  >
-                    <div className="p-5 sm:p-6">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-xl border bg-background p-1.5 shadow-sm">
-                          <Icon className="h-full w-full" />
-                        </div>
-                        <div className="flex items-center gap-2 pt-1 text-xs text-muted-foreground">
-                          <span
-                            className={`h-2 w-2 rounded-full ${connected ? "bg-emerald-500" : "bg-muted-foreground/35"}`}
-                          />
-                          <span>
-                            {connected ? "Connected" : "Not connected"}
-                          </span>
-                        </div>
+        {shownProviders.length ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {shownProviders.map((provider) => {
+              const sources = leadSources.filter(
+                (source) => source.provider === provider.id,
+              );
+              const connected = sources.length > 0;
+              const pending = isConnecting(provider.id);
+              const error = connectionError(provider.id);
+              const Icon = provider.icon;
+              return (
+                <article
+                  key={provider.id}
+                  data-tour-id={`page-integrations-${
+                    provider.id === "facebook_lead_ads"
+                      ? "facebook"
+                      : "google-forms"
+                  }`}
+                  className="rounded-lg border bg-card"
+                >
+                  <div className="p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-lg border bg-background p-2">
+                        <Icon className="h-full w-full" />
                       </div>
-                      <div className="mt-4">
-                        <p className="text-[11px] font-medium text-muted-foreground">
-                          {provider.brand}
-                        </p>
-                        <h3 className="mt-1 text-base font-semibold tracking-tight">
-                          {provider.name}
-                        </h3>
-                        <p className="mt-1.5 text-sm leading-5 text-muted-foreground">
-                          {provider.description}
-                        </p>
+                      <div className="flex items-center gap-2 pt-1 text-xs text-muted-foreground">
+                        <span
+                          className={`h-2 w-2 rounded-full ${connected ? "bg-emerald-500" : "bg-muted-foreground/35"}`}
+                        />
+                        <span>{connected ? "Connected" : "Not connected"}</span>
                       </div>
-                      <div className="mt-4 flex items-center justify-between gap-3 border-t pt-4">
-                        <span className="text-xs font-medium text-muted-foreground">
-                          {provider.benefit}
-                        </span>
-                        <Button
-                          className="h-9 min-w-24 gap-2"
-                          variant={connected ? "outline" : "default"}
-                          disabled={pending}
-                          onClick={() =>
-                            connected
-                              ? setActiveProvider(provider.id)
-                              : connect(provider.id)
-                          }
-                        >
-                          {pending ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Settings2 className="h-4 w-4" />
-                          )}
-                          {connected ? "Manage" : "Connect"}
-                        </Button>
-                      </div>
-                      {error && (
-                        <p className="mt-3 text-xs font-medium text-destructive">
-                          {error instanceof Error
-                            ? error.message
-                            : `Could not connect ${provider.name}`}
-                        </p>
-                      )}
                     </div>
-                    {isLoading && (
-                      <div className="mx-5 mb-5 h-2 animate-pulse rounded bg-muted" />
+                    <div className="mt-4">
+                      <p className="text-[11px] font-medium text-muted-foreground">
+                        {provider.brand}
+                      </p>
+                      <h3 className="mt-1 text-base font-semibold tracking-tight">
+                        {provider.name}
+                      </h3>
+                      <p className="mt-1.5 text-sm leading-5 text-muted-foreground">
+                        {provider.description}
+                      </p>
+                    </div>
+                    <div className="mt-5 flex items-center justify-between gap-3">
+                      <span className="text-xs font-medium text-muted-foreground">
+                        {provider.benefit}
+                      </span>
+                      <Button
+                        className="h-9 min-w-24 gap-2"
+                        variant={connected ? "outline" : "default"}
+                        disabled={pending}
+                        onClick={() =>
+                          connected
+                            ? setActiveProvider(provider.id)
+                            : connect(provider.id)
+                        }
+                      >
+                        {pending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Settings2 className="h-4 w-4" />
+                        )}
+                        {connected ? "Manage" : "Connect"}
+                      </Button>
+                    </div>
+                    {error && (
+                      <p className="mt-3 text-xs font-medium text-destructive">
+                        {error instanceof Error
+                          ? error.message
+                          : `Could not connect ${provider.name}`}
+                      </p>
                     )}
-                  </article>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="rounded-[26px] border border-dashed bg-muted/20 px-6 py-16 text-center">
-              <Search className="mx-auto h-6 w-6 text-muted-foreground" />
-              <p className="mt-3 font-medium">No integrations found</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Try a different app or provider name.
-              </p>
-            </div>
-          )}
-        </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="rounded-[26px] border border-dashed bg-muted/20 px-6 py-16 text-center">
+            <Search className="mx-auto h-6 w-6 text-muted-foreground" />
+            <p className="mt-3 font-medium">No integrations found</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Try a different app or provider name.
+            </p>
+          </div>
+        )}
       </section>
 
       <Dialog

@@ -588,6 +588,7 @@ export function OpportunityDialog({
             entityType="opportunities"
             values={form.customFields || {}}
             alwaysShowRequired={!isEditing}
+            alwaysShowFieldKeys={["ownerId", "expectedCloseAt"]}
             excludeFieldKeys={OPPORTUNITY_DIALOG_EXCLUDED_FIELDS}
             onChange={(customFields) =>
               setForm((current) => ({ ...current, customFields }))

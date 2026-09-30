@@ -55,6 +55,7 @@ interface Props {
   onCustomizingChange?: (customizing: boolean) => void;
   showCustomizeButton?: boolean;
   alwaysShowRequired?: boolean;
+  alwaysShowFieldKeys?: string[];
   excludeFieldKeys?: string[];
 }
 
@@ -99,6 +100,7 @@ export function InlineCustomFields({
   onCustomizingChange,
   showCustomizeButton = true,
   alwaysShowRequired = false,
+  alwaysShowFieldKeys = [],
   excludeFieldKeys = [],
 }: Props) {
   const { data: fields = [] } = useCrmFields(entityType);
@@ -133,9 +135,10 @@ export function InlineCustomFields({
         (field) =>
           field.visible ||
           field.protected ||
+          alwaysShowFieldKeys.includes(field.key) ||
           (alwaysShowRequired && field.required),
       ),
-    [alwaysShowRequired, supportedFields],
+    [alwaysShowFieldKeys, alwaysShowRequired, supportedFields],
   );
   const hiddenFields = useMemo(
     () =>
@@ -143,9 +146,10 @@ export function InlineCustomFields({
         (field) =>
           !field.visible &&
           !field.protected &&
+          !alwaysShowFieldKeys.includes(field.key) &&
           !(alwaysShowRequired && field.required),
       ),
-    [alwaysShowRequired, supportedFields],
+    [alwaysShowFieldKeys, alwaysShowRequired, supportedFields],
   );
 
   useEffect(() => {

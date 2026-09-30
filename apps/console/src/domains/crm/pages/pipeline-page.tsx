@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type DragEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useNavigate } from "react-router";
 import { motion } from "framer-motion";
 import {
@@ -114,6 +114,21 @@ const formatMoney = (value: number, currency: Opportunity["currency"]) =>
     maximumFractionDigits: 0,
   }).format(value);
 
+type PipelineView = "board" | "list";
+
+const PIPELINE_VIEW_STORAGE_KEY = "interaone.pipeline.view";
+
+const getStoredPipelineView = (): PipelineView => {
+  if (typeof window === "undefined") return "board";
+  try {
+    return window.localStorage.getItem(PIPELINE_VIEW_STORAGE_KEY) === "list"
+      ? "list"
+      : "board";
+  } catch {
+    return "board";
+  }
+};
+
 export function PipelinePage() {
   const navigate = useNavigate();
   const orgRole = authApi.getOrgRole();
@@ -144,7 +159,15 @@ export function PipelinePage() {
   const [scheduleCategory, setScheduleCategory] = useState<
     "todo" | "email" | "call" | "meeting" | "document"
   >("todo");
-  const [view, setView] = useState<"board" | "list">("board");
+  const [view, setView] = useState<PipelineView>(getStoredPipelineView);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(PIPELINE_VIEW_STORAGE_KEY, view);
+    } catch {
+      // Keep the view usable when browser storage is unavailable.
+    }
+  }, [view]);
   const [search, setSearch] = useState("");
   const [ownerFilter, setOwnerFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState<"all" | PipelineStageType>(
@@ -1007,7 +1030,7 @@ export function PipelinePage() {
                     {field.label}
                     {field.required ? " *" : ""}
                   </Label>
-                  <div className="grid grid-cols-5 gap-1 rounded-md bg-muted/40 p-1">
+                  <div className="flex flex-wrap gap-1 rounded-md bg-muted/40 p-1">
                     {(
                       ["todo", "email", "call", "meeting", "document"] as const
                     ).map((category) => {
@@ -1022,7 +1045,7 @@ export function PipelinePage() {
                             scheduleCategory === category ? "default" : "ghost"
                           }
                           onClick={() => setScheduleCategory(category)}
-                          className="px-1 text-[11px]"
+                          className="min-w-0 px-2 text-[11px]"
                         >
                           <CategoryIcon
                             className={`mr-1.5 h-4 w-4 ${meta.iconColor}`}
