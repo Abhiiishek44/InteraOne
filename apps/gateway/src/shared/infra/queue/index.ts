@@ -115,3 +115,21 @@ export const assistQueue = new Queue<AssistJobData, void, string>(
   "assist-processing",
   { connection: connection as any, defaultJobOptions },
 );
+
+export interface LeadSourceJobData {
+  provider: "facebook_lead_ads" | "google_forms";
+  submissionId: string;
+}
+
+export const leadSourceQueue = new Queue<LeadSourceJobData, void, string>(
+  "lead-source-ingestion",
+  {
+    connection: connection as any,
+    defaultJobOptions: {
+      attempts: 5,
+      backoff: { type: "exponential", delay: 5_000 },
+      removeOnComplete: 500,
+      removeOnFail: 500,
+    },
+  },
+);

@@ -56,11 +56,45 @@ interface Config {
     accessKeyId?: string;
     secretAccessKey?: string;
   };
+  leadSources: {
+    encryptionKey?: string;
+    facebook: {
+      appId?: string;
+      appSecret?: string;
+      verifyToken?: string;
+      redirectUri?: string;
+      graphApiVersion: string;
+      oauthScopes: string[];
+    };
+    google: {
+      clientId?: string;
+      clientSecret?: string;
+      redirectUri?: string;
+      oauthScopes: string[];
+    };
+    googleCalendar: {
+      clientId?: string;
+      clientSecret?: string;
+      redirectUri?: string;
+      oauthScopes: string[];
+    };
+    googleTasks: {
+      clientId?: string;
+      clientSecret?: string;
+      redirectUri?: string;
+      oauthScopes: string[];
+    };
+  };
 }
 
 function parseEmailProvider(value?: string): Config["email"]["provider"] {
   const normalized = (value || "").toLowerCase();
-  if (normalized === "mailhog" || normalized === "ses" || normalized === "resend" || normalized === "disabled") {
+  if (
+    normalized === "mailhog" ||
+    normalized === "ses" ||
+    normalized === "resend" ||
+    normalized === "disabled"
+  ) {
     return normalized;
   }
   return process.env.NODE_ENV === "development" ? "mailhog" : "disabled";
@@ -93,11 +127,7 @@ function parseSiloConfig(): Config["silo"] {
   if (siloUri) {
     const url = new URL(siloUri);
     const useSSL = url.protocol === "https:";
-    const port = url.port
-      ? parseInt(url.port, 10)
-      : useSSL
-        ? 443
-        : 80;
+    const port = url.port ? parseInt(url.port, 10) : useSSL ? 443 : 80;
 
     return {
       bucketName: process.env.SILO_BUCKET_NAME!,
@@ -129,17 +159,27 @@ const config: Config = {
   app: {
     port: 3002,
     env: process.env.NODE_ENV || "development",
-    clientUrl: process.env.CLIENT_URL ||
+    clientUrl:
+      process.env.CLIENT_URL ||
       (process.env.NODE_ENV === "production"
         ? (() => {
-            throw new Error("CLIENT_URL environment variable is required in production");
+            throw new Error(
+              "CLIENT_URL environment variable is required in production",
+            );
           })()
         : "http://localhost:5173"),
-    mode: (process.env.INTERAONE_MODE || "self-host") === "cloud" ? "cloud" : "self-host",
+    mode:
+      (process.env.INTERAONE_MODE || "self-host") === "cloud"
+        ? "cloud"
+        : "self-host",
     apiUrl: process.env.PUBLIC_API_URL || "http://localhost:3002",
-    allowedDomains: (process.env.ALLOWED_DOMAINS || process.env.ALLOWED_DOMAIN || "")
+    allowedDomains: (
+      process.env.ALLOWED_DOMAINS ||
+      process.env.ALLOWED_DOMAIN ||
+      ""
+    )
       .split(",")
-      .map(d => d.trim().toLowerCase())
+      .map((d) => d.trim().toLowerCase())
       .filter(Boolean),
   },
   database: {
@@ -171,6 +211,59 @@ const config: Config = {
     region: process.env.AWS_REGION || "us-east-1",
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+  leadSources: {
+    encryptionKey: process.env.LEAD_SOURCE_ENCRYPTION_KEY,
+    facebook: {
+      appId: process.env.META_APP_ID,
+      appSecret: process.env.META_APP_SECRET,
+      verifyToken: process.env.META_WEBHOOK_VERIFY_TOKEN,
+      redirectUri: process.env.META_REDIRECT_URI,
+      graphApiVersion: process.env.META_GRAPH_API_VERSION || "v26.0",
+      oauthScopes: (
+        process.env.META_OAUTH_SCOPES ||
+        "leads_retrieval,pages_show_list,pages_read_engagement,pages_manage_ads,pages_manage_metadata"
+      )
+        .split(",")
+        .map((scope) => scope.trim())
+        .filter(Boolean),
+    },
+    googleCalendar: {
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      redirectUri: process.env.GOOGLE_CALENDAR_REDIRECT_URI,
+      oauthScopes: (
+        process.env.GOOGLE_CALENDAR_OAUTH_SCOPES ||
+        "openid,email,https://www.googleapis.com/auth/calendar.calendarlist.readonly,https://www.googleapis.com/auth/calendar.events"
+      )
+        .split(",")
+        .map((scope) => scope.trim())
+        .filter(Boolean),
+    },
+    googleTasks: {
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      redirectUri: process.env.GOOGLE_TASKS_REDIRECT_URI,
+      oauthScopes: (
+        process.env.GOOGLE_TASKS_OAUTH_SCOPES ||
+        "openid,email,https://www.googleapis.com/auth/tasks.readonly"
+      )
+        .split(",")
+        .map((scope) => scope.trim())
+        .filter(Boolean),
+    },
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      redirectUri: process.env.GOOGLE_FORMS_REDIRECT_URI,
+      oauthScopes: (
+        process.env.GOOGLE_FORMS_OAUTH_SCOPES ||
+        "openid,email,https://www.googleapis.com/auth/drive.metadata.readonly,https://www.googleapis.com/auth/forms.body.readonly,https://www.googleapis.com/auth/forms.responses.readonly"
+      )
+        .split(",")
+        .map((scope) => scope.trim())
+        .filter(Boolean),
+    },
   },
 };
 

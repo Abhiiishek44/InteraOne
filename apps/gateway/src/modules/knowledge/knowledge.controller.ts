@@ -123,7 +123,7 @@ export const aiUpdateDocStatus = asyncHandler(async (req: Request, res: Response
   const doc = await Knowledge.findOneAndUpdate(
     { _id: documentId, organizationId },
     { $set: patch },
-    { new: true },
+    { returnDocument: "after" },
   );
 
   if (!doc) return sendError(res, 404, "Knowledge document not found");

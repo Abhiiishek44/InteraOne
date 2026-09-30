@@ -14,6 +14,7 @@ import {
   Loader2,
   CalendarClock,
   UserRound,
+  Cable,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ChannelIcon, EmailIcon } from "@/shared/ui/channel-icon";
@@ -313,6 +314,20 @@ export function ContactDetailsCard({
               ) : (
                 <span className="min-w-0 truncate">{displayCompany}</span>
               )}
+            </div>
+            <div className="flex items-start gap-2">
+              <Cable className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <div className="min-w-0">
+                <span className="block truncate">
+                  {contact.integrationSources[0]?.providerLabel ||
+                    contact.acquisitionSource.replaceAll("_", " ")}
+                </span>
+                {contact.integrationSources[0] && (
+                  <span className="block truncate text-[11px] text-muted-foreground/80">
+                    Form: {contact.integrationSources[0].formName}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 

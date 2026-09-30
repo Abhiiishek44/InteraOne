@@ -125,8 +125,18 @@ const SYSTEM_FIELDS: Record<CrmFieldEntity, SystemField[]> = {
       required: true,
       protected: true,
     },
-    { key: "ownerId", label: "Owner", type: "single_select" },
-    { key: "expectedCloseAt", label: "Expected close", type: "date" },
+    {
+      key: "ownerId",
+      label: "Opportunity owner",
+      type: "single_select",
+      protected: true,
+    },
+    {
+      key: "expectedCloseAt",
+      label: "Expected close",
+      type: "date",
+      protected: true,
+    },
     {
       key: "nextAction",
       label: "Next action",
@@ -430,12 +440,12 @@ export class CrmFieldsService {
       ? await CrmFieldDefinition.findByIdAndUpdate(
           fieldId,
           { $set: { visible: false } },
-          { new: true },
+          { returnDocument: "after" },
         )
       : await CrmFieldDefinition.findByIdAndUpdate(
           fieldId,
           { $set: { archivedAt: new Date() } },
-          { new: true },
+          { returnDocument: "after" },
         );
     if (!field) throw new Error("CRM field not found");
   }
@@ -474,13 +484,13 @@ export class CrmFieldsService {
     values: Record<string, unknown> | undefined,
     requireAll = false,
   ) {
-    const fields = await CrmFieldDefinition.find({
+    const allFields = await CrmFieldDefinition.find({
       organizationId,
       entityType,
-      archivedAt: null,
       isSystem: false,
     }).lean();
-    const byKey = new Map(fields.map((field) => [field.key, field]));
+    const fields = allFields.filter((field) => !field.archivedAt);
+    const byKey = new Map(allFields.map((field) => [field.key, field]));
     const normalized: Record<string, unknown> = {};
     for (const field of fields) {
       if (field.defaultValue !== undefined && field.defaultValue !== null) {
@@ -490,7 +500,7 @@ export class CrmFieldsService {
 
     for (const [key, value] of Object.entries(values || {})) {
       const field = byKey.get(key);
-      if (!field) throw new Error(`Unknown or archived CRM field: ${key}`);
+      if (!field) throw new Error(`Unknown CRM field: ${key}`);
       if (
         value === null ||
         value === "" ||

@@ -400,7 +400,7 @@ export class WidgetService {
       }
 
       return Widget.findOneAndUpdate({ organizationId }, cleanUpdates, {
-        new: true,
+        returnDocument: "after",
         runValidators: true,
       });
     }
@@ -528,7 +528,7 @@ export class WidgetService {
       { organizationId },
       cleanUpdates,
       {
-        new: true,
+        returnDocument: "after",
         runValidators: true,
       },
     );

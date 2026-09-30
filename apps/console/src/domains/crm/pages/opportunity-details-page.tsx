@@ -43,8 +43,11 @@ import {
 } from "@/domains/contacts/hooks/use-contacts";
 import { DeleteConfirmDialog } from "@/shared/components/delete-confirm-dialog";
 import { OpportunityDialog } from "../components/opportunity-dialog";
-import { InlineCustomFields } from "../components/inline-custom-fields";
 import { CrmFieldValues } from "../components/crm-field-values";
+import {
+  CustomFieldsCustomizeButton,
+  InlineCustomFields,
+} from "../components/inline-custom-fields";
 import { useCrmFields } from "../hooks/use-crm-fields";
 import { storageApi } from "@/shared/lib/storage.api";
 import {
@@ -117,6 +120,8 @@ export function OpportunityDetailsPage() {
   const deleteOpportunityNote = useDeleteOpportunityNote();
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [customizingAdditionalInfo, setCustomizingAdditionalInfo] =
+    useState(false);
   const [nextActionEdit, setNextActionEdit] = useState<{
     opportunityId: string;
     value: string;
@@ -142,6 +147,7 @@ export function OpportunityDetailsPage() {
   const [scheduleTitle, setScheduleTitle] = useState("");
   const [scheduleNote, setScheduleNote] = useState("");
   const [scheduleAt, setScheduleAt] = useState("");
+  const [scheduleDuration, setScheduleDuration] = useState(60);
   const [activityCustomFields, setActivityCustomFields] = useState<
     Record<string, unknown>
   >({});
@@ -151,8 +157,9 @@ export function OpportunityDetailsPage() {
     (field) => !field.isSystem && field.visible && field.type === "image",
   );
   const profileImageField =
-    visibleImageFields.find((field) => /profile|photo|avatar/i.test(field.label)) ||
-    visibleImageFields[0];
+    visibleImageFields.find((field) =>
+      /profile|photo|avatar/i.test(field.label),
+    ) || visibleImageFields[0];
   const profileImageValue = profileImageField
     ? opportunity?.customFields?.[profileImageField.key]
     : undefined;
@@ -187,19 +194,31 @@ export function OpportunityDetailsPage() {
       ? `${scheduleTitle.trim()}\n${scheduleNote.trim()}`
       : scheduleTitle.trim();
     try {
-      await addActivity.mutateAsync({
+      const activity = await addActivity.mutateAsync({
         id: opportunity.id,
         content,
         dueAt: new Date(scheduleAt).toISOString(),
         category: scheduleCategory,
         customFields: activityCustomFields,
+        durationMinutes: scheduleDuration,
       });
       setScheduleOpen(false);
       setScheduleTitle("");
       setScheduleNote("");
       setScheduleAt("");
+      setScheduleDuration(60);
       setActivityCustomFields({});
-      toast.success("Activity scheduled");
+      if (activity.calendarSyncStatus === "synced") {
+        toast.success("Activity scheduled and added to Google Calendar");
+      } else if (activity.calendarSyncStatus === "failed") {
+        toast.error(
+          `Activity saved, but Google Calendar failed: ${activity.calendarSyncError || "Reconnect Google Calendar"}`,
+        );
+      } else {
+        toast.warning(
+          "Activity saved in CRM only. Connect Google Calendar to sync it.",
+        );
+      }
     } catch (error: unknown) {
       toast.error(
         error instanceof Error ? error.message : "Failed to schedule activity",
@@ -422,8 +441,8 @@ export function OpportunityDetailsPage() {
             variant="outline"
             onClick={() => setCalendarOpen(true)}
           >
-            <Video className="mr-2 h-4 w-4" />
-            <span>Meetings calendar</span>
+            <CalendarPlus className="mr-2 h-4 w-4" />
+            <span>Schedule activity</span>
             {nextMeeting?.dueAt && (
               <Badge variant="secondary" className="ml-2 text-[10px]">
                 Next ·{" "}
@@ -451,13 +470,6 @@ export function OpportunityDetailsPage() {
             }}
           >
             <MessageSquare className="mr-2 h-4 w-4" /> Send message
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setScheduleOpen(true)}
-          >
-            <CalendarPlus className="mr-2 h-4 w-4" /> Schedule activity
           </Button>
           <Button
             size="sm"
@@ -536,8 +548,13 @@ export function OpportunityDetailsPage() {
       </div>
 
       <Card>
-        <div className="border-b px-5 py-4">
+        <div className="flex items-center justify-between gap-4 border-b px-5 py-4">
           <h2 className="font-semibold">Additional information</h2>
+          {!customizingAdditionalInfo && (
+            <CustomFieldsCustomizeButton
+              onClick={() => setCustomizingAdditionalInfo(true)}
+            />
+          )}
         </div>
         <CardContent className="p-5">
           <InlineCustomFields
@@ -545,6 +562,9 @@ export function OpportunityDetailsPage() {
             values={opportunity.customFields || {}}
             onChange={() => undefined}
             readOnly
+            customizing={customizingAdditionalInfo}
+            onCustomizingChange={setCustomizingAdditionalInfo}
+            showCustomizeButton={false}
           />
         </CardContent>
       </Card>
@@ -702,6 +722,38 @@ export function OpportunityDetailsPage() {
                           ? new Date(activity.dueAt).toLocaleString()
                           : "without a date"}
                       </p>
+                      {activity.calendarSyncStatus === "synced" && (
+                          <div className="mt-2 flex flex-wrap gap-3 text-xs">
+                            {activity.googleCalendarEventUrl && (
+                              <a
+                                href={activity.googleCalendarEventUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="font-medium text-primary hover:underline"
+                              >
+                                Open in Google Calendar
+                              </a>
+                            )}
+                            {activity.googleMeetUrl && (
+                              <a
+                                href={activity.googleMeetUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="font-medium text-primary hover:underline"
+                              >
+                                Join Google Meet
+                              </a>
+                            )}
+                          </div>
+                        )}
+                      {activity.calendarSyncStatus === "failed" && (
+                          <p
+                            className="mt-2 text-xs text-destructive"
+                            title={activity.calendarSyncError || undefined}
+                          >
+                            Saved in CRM, but Google Calendar sync failed
+                          </p>
+                        )}
                     </div>
                     <Button
                       size="sm"
@@ -1123,6 +1175,7 @@ export function OpportunityDetailsPage() {
             values={activityCustomFields}
             onChange={setActivityCustomFields}
             disabled={addActivity.isPending}
+            excludeFieldKeys={["dueAt"]}
             systemFields={{
               category: (field) => (
                 <div className="grid gap-2">
@@ -1173,20 +1226,6 @@ export function OpportunityDetailsPage() {
                   />
                 </div>
               ),
-              dueAt: (field) => (
-                <div className="grid gap-2">
-                  <Label>
-                    {field.label}
-                    {field.required ? " *" : ""}
-                  </Label>
-                  <Input
-                    type="datetime-local"
-                    value={scheduleAt}
-                    onChange={(event) => setScheduleAt(event.target.value)}
-                    required={field.required}
-                  />
-                </div>
-              ),
               notes: (field) => (
                 <div className="grid gap-2">
                   <Label>{field.label}</Label>
@@ -1201,6 +1240,57 @@ export function OpportunityDetailsPage() {
               ),
             }}
           />
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-2">
+              <Label htmlFor="activity-date">Date *</Label>
+              <Input
+                id="activity-date"
+                type="date"
+                value={scheduleAt.split("T")[0] || ""}
+                onChange={(event) =>
+                  setScheduleAt(
+                    `${event.target.value}T${scheduleAt.split("T")[1] || "09:00"}`,
+                  )
+                }
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="activity-time">Time *</Label>
+              <Input
+                id="activity-time"
+                type="time"
+                value={scheduleAt.split("T")[1] || ""}
+                onChange={(event) => {
+                  const today = new Date();
+                  const localDate = new Date(
+                    today.getTime() - today.getTimezoneOffset() * 60_000,
+                  )
+                    .toISOString()
+                    .slice(0, 10);
+                  setScheduleAt(
+                    `${scheduleAt.split("T")[0] || localDate}T${event.target.value}`,
+                  );
+                }}
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="activity-duration">Duration (minutes) *</Label>
+              <Input
+                id="activity-duration"
+                type="number"
+                min={5}
+                max={1440}
+                step={5}
+                value={scheduleDuration}
+                onChange={(event) =>
+                  setScheduleDuration(Number(event.target.value))
+                }
+                required
+              />
+            </div>
+          </div>
           <div className="rounded-md border bg-muted/20 px-3 py-2 text-sm">
             Assigned to:{" "}
             <span className="font-medium">
@@ -1214,7 +1304,11 @@ export function OpportunityDetailsPage() {
             <Button
               onClick={() => void scheduleActivity()}
               disabled={
-                !scheduleTitle.trim() || !scheduleAt || addActivity.isPending
+                !scheduleTitle.trim() ||
+                !scheduleAt ||
+                scheduleDuration < 5 ||
+                scheduleDuration > 1440 ||
+                addActivity.isPending
               }
             >
               {addActivity.isPending ? "Scheduling…" : "Schedule activity"}

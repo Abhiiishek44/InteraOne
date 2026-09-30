@@ -8,9 +8,19 @@ import {
   DEFAULT_PIPELINE_STAGES,
   IPipelineStage,
   Account,
+  LeadSourceConnection,
 } from "@shared/models";
 import { CrmFieldsService } from "@modules/crm-fields";
 import { serializeCustomFields } from "@shared/utils/custom-fields";
+import {
+  decryptCredential,
+  encryptCredential,
+} from "@shared/security/credential-cipher";
+import {
+  GoogleCalendarAdapter,
+  type GoogleCalendarCredentials,
+  type GoogleCalendarSummary,
+} from "@modules/lead-sources/google-calendar.adapter";
 
 interface CreateOpportunityInput {
   contactId?: string | null;
@@ -25,6 +35,7 @@ interface CreateOpportunityInput {
   expectedCloseAt?: string | null;
   nextAction?: string;
   customFields?: Record<string, unknown>;
+  sourceSubmissionId?: string;
 }
 
 type UpdateOpportunityInput = Partial<
@@ -97,7 +108,7 @@ export class OpportunitiesService {
           stages,
         },
       },
-      { upsert: true, new: true, runValidators: true },
+      { upsert: true, returnDocument: "after", runValidators: true },
     ).lean();
 
     return {
@@ -158,11 +169,18 @@ export class OpportunitiesService {
         content: activity.content,
         category: activity.category || "todo",
         dueAt: activity.dueAt ? new Date(activity.dueAt).toISOString() : null,
+        durationMinutes: activity.durationMinutes || 60,
         completedAt: activity.completedAt
           ? new Date(activity.completedAt).toISOString()
           : null,
         createdAt: new Date(activity.createdAt).toISOString(),
         customFields: serializeCustomFields(activity.customFields),
+        googleCalendarEventId: activity.googleCalendarEventId || null,
+        googleCalendarId: activity.googleCalendarId || null,
+        googleCalendarEventUrl: activity.googleCalendarEventUrl || null,
+        googleMeetUrl: activity.googleMeetUrl || null,
+        calendarSyncStatus: activity.calendarSyncStatus || null,
+        calendarSyncError: activity.calendarSyncError || null,
       })),
       contact:
         opportunity.primaryContactId || opportunity.contactId
@@ -264,6 +282,9 @@ export class OpportunitiesService {
         : null,
       nextAction: input.nextAction || "",
       customFields,
+      sourceSubmissionId: input.sourceSubmissionId
+        ? new Types.ObjectId(input.sourceSubmissionId)
+        : null,
     });
 
     if (contact) {
@@ -369,7 +390,7 @@ export class OpportunitiesService {
           },
         },
       },
-      { new: true, runValidators: true },
+      { returnDocument: "after", runValidators: true },
     );
     if (!opportunity) throw new Error("Opportunity not found");
     return opportunity;
@@ -422,7 +443,7 @@ export class OpportunitiesService {
           },
         },
       },
-      { new: true, runValidators: true },
+      { returnDocument: "after", runValidators: true },
     );
     if (!opportunity) throw new Error("Opportunity not found");
 
@@ -446,7 +467,7 @@ export class OpportunitiesService {
     const opportunity = await Opportunity.findOneAndUpdate(
       { _id: opportunityId, organizationId },
       { $set: { color } },
-      { new: true, runValidators: true },
+      { returnDocument: "after", runValidators: true },
     );
     if (!opportunity) throw new Error("Opportunity not found");
     return opportunity;
@@ -460,7 +481,7 @@ export class OpportunitiesService {
     const opportunity = await Opportunity.findOneAndUpdate(
       { _id: opportunityId, organizationId },
       { $set: { nextAction: nextAction.trim() } },
-      { new: true, runValidators: true },
+      { returnDocument: "after", runValidators: true },
     );
     if (!opportunity) throw new Error("Opportunity not found");
     return opportunity;
@@ -473,6 +494,7 @@ export class OpportunitiesService {
     dueAt?: string | null,
     category?: "todo" | "email" | "call" | "meeting" | "document",
     customFieldValues?: Record<string, unknown>,
+    durationMinutes = 60,
   ) {
     const customFields = await new CrmFieldsService().validateValues(
       organizationId,
@@ -486,6 +508,7 @@ export class OpportunitiesService {
       content: content.trim(),
       category: category || "todo",
       dueAt: dueAt ? new Date(dueAt) : null,
+      durationMinutes,
       completedAt: null,
       createdAt: new Date(),
       customFields,
@@ -493,14 +516,138 @@ export class OpportunitiesService {
     const opportunity = await Opportunity.findOneAndUpdate(
       { _id: opportunityId, organizationId },
       { $push: { activities: { $each: [activity], $position: 0 } } },
-      { new: true, runValidators: true },
+      { returnDocument: "after", runValidators: true },
     );
     if (!opportunity) throw new Error("Opportunity not found");
+    if (activity.dueAt) {
+      const sync = await this.createGoogleCalendarActivity(
+        organizationId,
+        opportunity,
+        { ...activity, dueAt: activity.dueAt },
+      );
+      if (sync) Object.assign(activity, sync);
+    }
     const contactId = opportunity.primaryContactId || opportunity.contactId;
     if (activity.dueAt && contactId) {
       await this.syncContactNextFollowUp(organizationId, contactId.toString());
     }
     return activity;
+  }
+
+  // Mirrors scheduled CRM activities to the connected account's writable calendar.
+  // Calendar failures are recorded without losing the CRM activity.
+  private async createGoogleCalendarActivity(
+    organizationId: string,
+    opportunity: any,
+    activity: {
+      id: string;
+      content: string;
+      dueAt: Date;
+      durationMinutes: number;
+      category: "todo" | "email" | "call" | "meeting" | "document";
+    },
+  ) {
+    const connection = await LeadSourceConnection.findOne({
+      organizationId,
+      provider: "google_calendar",
+      status: "active",
+    }).select("+credentialsCiphertext");
+    if (!connection) return null;
+
+    const calendars = ((connection.metadata as any)?.calendars || []) as
+      | GoogleCalendarSummary[]
+      | undefined;
+    const isWritable = (item: GoogleCalendarSummary) =>
+      ["owner", "writer"].includes(item.accessRole);
+    const calendar =
+      calendars?.find((item) => item.primary && isWritable(item)) ||
+      calendars?.find(isWritable);
+    if (!calendar) {
+      return {
+        calendarSyncStatus: "failed" as const,
+        calendarSyncError: "No writable Google Calendar is available",
+      };
+    }
+
+    try {
+      const adapter = new GoogleCalendarAdapter();
+      const stored = JSON.parse(
+        decryptCredential(connection.credentialsCiphertext),
+      ) as GoogleCalendarCredentials;
+      const credentials = await adapter.refresh(stored);
+      if (credentials.accessToken !== stored.accessToken) {
+        connection.credentialsCiphertext = encryptCredential(
+          JSON.stringify(credentials),
+        );
+        await connection.save();
+      }
+      const contactId = opportunity.primaryContactId || opportunity.contactId;
+      const contact = contactId
+        ? await Contact.findOne({ _id: contactId, organizationId })
+            .select("email")
+            .lean()
+        : null;
+      const [summary, ...noteLines] = activity.content.split("\n");
+      const notes = noteLines.join("\n").trim();
+      const event = await adapter.createEvent(
+        credentials.accessToken,
+        calendar.id,
+        {
+          summary: summary.trim(),
+          description: [
+            notes,
+            `CRM opportunity: ${opportunity.title}`,
+            `Activity type: ${activity.category}`,
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
+          start: activity.dueAt,
+          end: new Date(
+            activity.dueAt.getTime() + activity.durationMinutes * 60 * 1000,
+          ),
+          attendeeEmail:
+            activity.category === "meeting" ? contact?.email : undefined,
+          requestId: activity.id,
+          createConference: activity.category === "meeting",
+        },
+      );
+      const fields = {
+        googleCalendarEventId: event.id,
+        googleCalendarId: calendar.id,
+        googleCalendarEventUrl: event.htmlLink || null,
+        googleMeetUrl: event.hangoutLink || null,
+        calendarSyncStatus: "synced" as const,
+        calendarSyncError: null,
+      };
+      await Opportunity.updateOne(
+        { _id: opportunity._id, "activities.id": activity.id },
+        {
+          $set: Object.fromEntries(
+            Object.entries(fields).map(([key, value]) => [
+              `activities.$.${key}`,
+              value,
+            ]),
+          ),
+        },
+      );
+      return fields;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Calendar sync failed";
+      await Opportunity.updateOne(
+        { _id: opportunity._id, "activities.id": activity.id },
+        {
+          $set: {
+            "activities.$.calendarSyncStatus": "failed",
+            "activities.$.calendarSyncError": message.slice(0, 500),
+          },
+        },
+      );
+      return {
+        calendarSyncStatus: "failed" as const,
+        calendarSyncError: message.slice(0, 500),
+      };
+    }
   }
 
   async updatePriority(
@@ -511,7 +658,7 @@ export class OpportunitiesService {
     const opportunity = await Opportunity.findOneAndUpdate(
       { _id: opportunityId, organizationId },
       { $set: { priority } },
-      { new: true, runValidators: true },
+      { returnDocument: "after", runValidators: true },
     );
     if (!opportunity) throw new Error("Opportunity not found");
     return opportunity;
@@ -525,7 +672,7 @@ export class OpportunitiesService {
     const opportunity = await Opportunity.findOneAndUpdate(
       { _id: opportunityId, organizationId, "activities.id": activityId },
       { $set: { "activities.$.completedAt": new Date() } },
-      { new: true },
+      { returnDocument: "after" },
     );
     if (!opportunity) throw new Error("Activity not found");
     const contactId = opportunity.primaryContactId || opportunity.contactId;

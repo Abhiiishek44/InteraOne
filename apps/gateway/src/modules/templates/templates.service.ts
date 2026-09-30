@@ -133,7 +133,7 @@ export class TemplatesService {
     return Template.findOneAndUpdate(
       { _id: id, organizationId },
       { $set: cleanPayload(data) },
-      { new: true },
+      { returnDocument: "after" },
     ).lean();
   }
 

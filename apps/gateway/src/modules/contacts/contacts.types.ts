@@ -4,6 +4,7 @@ export interface ListContactsOptions {
   limit?: number;
   lifecycleStage?: string;
   leadStatus?: string;
+  acquisitionSource?: string;
   ownerId?: string;
   followUp?: "overdue" | "upcoming";
   tags?: string[];

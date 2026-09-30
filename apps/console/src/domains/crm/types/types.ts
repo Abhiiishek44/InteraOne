@@ -59,9 +59,16 @@ export interface Opportunity {
     content: string;
     category: "todo" | "email" | "call" | "meeting" | "document";
     dueAt: string | null;
+    durationMinutes?: number;
     completedAt: string | null;
     createdAt: string;
     customFields?: Record<string, unknown>;
+    googleCalendarEventId?: string | null;
+    googleCalendarId?: string | null;
+    googleCalendarEventUrl?: string | null;
+    googleMeetUrl?: string | null;
+    calendarSyncStatus?: "synced" | "failed" | null;
+    calendarSyncError?: string | null;
   }>;
   contact: {
     id: string;

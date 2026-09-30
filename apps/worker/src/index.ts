@@ -4,6 +4,7 @@ dotenv.config();
 import { startEmailWorker } from "./workers/email.worker";
 import { startAnalyticsWorker } from "./workers/analytics.worker";
 import { startSubscriptionExpiryWorker } from "./workers/subscription-expiry.worker";
+import { startGoogleFormsPoller, startLeadSourceWorker } from "./workers/lead-source.worker";
 import { isEeEnabled } from "./config";
 import logger from "./utils/logger";
 
@@ -13,6 +14,8 @@ logger.info("Starting platform worker service", {
 
 const emailWorker = startEmailWorker();
 const analyticsWorker = startAnalyticsWorker();
+const leadSourceWorker = startLeadSourceWorker();
+const googleFormsPoller = startGoogleFormsPoller();
 
 // The subscription expiry worker is an EE-only concern.
 // It must never start on OSS deployments where no license key is present.
@@ -29,6 +32,8 @@ const shutdown = async (signal: string) => {
   await Promise.all([
     emailWorker.close(),
     analyticsWorker.close(),
+    leadSourceWorker.close(),
+    googleFormsPoller.close(),
     subscriptionExpiryWorker?.close(),
   ]);
   logger.info("Platform worker shutdown completed", { signal });

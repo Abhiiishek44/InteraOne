@@ -162,14 +162,23 @@ export function useAddOpportunityActivity() {
       dueAt,
       category,
       customFields,
+      durationMinutes,
     }: {
       id: string;
       content: string;
       dueAt?: string;
       category?: "todo" | "email" | "call" | "meeting" | "document";
       customFields?: Record<string, unknown>;
+      durationMinutes?: number;
     }) =>
-      opportunitiesApi.addActivity(id, content, dueAt, category, customFields),
+      opportunitiesApi.addActivity(
+        id,
+        content,
+        dueAt,
+        category,
+        customFields,
+        durationMinutes,
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["opportunities"] });
       queryClient.invalidateQueries({ queryKey: ["contacts"] });

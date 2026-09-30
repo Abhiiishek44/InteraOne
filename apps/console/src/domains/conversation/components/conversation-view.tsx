@@ -366,6 +366,7 @@ export function ConversationView({ conversationId }: ConversationViewProps) {
         | "whatsapp"
         | "telegram"
         | "unknown",
+      integrationSources: [],
       preferredChannel: null,
       nextFollowUpAt: null,
       lastContactedAt: null,

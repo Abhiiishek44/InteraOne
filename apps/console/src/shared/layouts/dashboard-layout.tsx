@@ -31,6 +31,7 @@ import {
   type LucideIcon,
   Columns3,
   Building2,
+  Plug,
 } from "lucide-react";
 import { useAuth } from "@/domains/auth/hooks/useAuth";
 import { useLogout } from "@/domains/auth/hooks/useLogout";
@@ -83,6 +84,7 @@ const getBreadcrumbIcon = (path: string, label: string): LucideIcon | null => {
   )
     return Users2;
   if (path.startsWith("/dashboard/channels")) return Radio;
+  if (path.startsWith("/dashboard/integrations")) return Plug;
   if (path.startsWith("/dashboard/agents")) return UserCog;
   if (path.startsWith("/dashboard/members")) return UserCheck;
   if (path.startsWith("/dashboard/widget/qr") || normalizedLabel === "qr codes")
@@ -286,6 +288,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         { label: "Knowledge Static", to: "/dashboard/knowledge/static" },
         { label: "Knowledge Realtime", to: "/dashboard/knowledge/realtime" },
         { label: "Widget", to: "/dashboard/widget" },
+        { label: "Integrations", to: "/dashboard/integrations" },
       );
     }
 
@@ -835,6 +838,21 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 >
                   <Crown className="h-5 w-5 mr-3" />
                   <span className="flex-1 text-left">Widget</span>
+                </Button>
+              </Link>
+
+              <Link to="/dashboard/integrations">
+                <Button
+                  data-tour-id="sidebar-nav-integrations"
+                  variant="ghost"
+                  className={`w-full flex items-center px-3 py-2 text-sm cursor-pointer font-medium rounded-lg transition-colors justify-start ${
+                    isActive("/dashboard/integrations", true)
+                      ? "bg-primary/10 text-primary border-r-2 border-primary"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                  }`}
+                >
+                  <Plug className="h-5 w-5 mr-3" />
+                  <span className="flex-1 text-left">Integrations</span>
                 </Button>
               </Link>
 

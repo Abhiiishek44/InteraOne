@@ -17,6 +17,10 @@ interface PipelineResponse {
   data: { pipeline: SalesPipeline };
 }
 
+interface ActivityResponse {
+  data: { activity: Opportunity["activities"][number] };
+}
+
 export const opportunitiesApi = {
   async list(): Promise<Opportunity[]> {
     const response =
@@ -77,13 +81,19 @@ export const opportunitiesApi = {
     dueAt?: string,
     category?: "todo" | "email" | "call" | "meeting" | "document",
     customFields?: Record<string, unknown>,
-  ): Promise<void> {
-    await apiClient.post(`/opportunities/${id}/activities`, {
+    durationMinutes?: number,
+  ): Promise<Opportunity["activities"][number]> {
+    const response = await apiClient.post<ActivityResponse>(
+      `/opportunities/${id}/activities`,
+      {
       content,
       dueAt,
       category,
       customFields,
-    });
+      durationMinutes,
+      },
+    );
+    return response.data.activity;
   },
 
   async updatePriority(id: string, priority: 1 | 2 | 3): Promise<void> {

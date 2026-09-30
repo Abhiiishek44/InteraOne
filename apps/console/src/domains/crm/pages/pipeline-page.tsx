@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type DragEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useNavigate } from "react-router";
 import { motion } from "framer-motion";
 import {
@@ -29,6 +29,13 @@ import { Card, CardContent } from "@/shared/ui/card";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { Textarea } from "@/shared/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/shared/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -107,6 +114,21 @@ const formatMoney = (value: number, currency: Opportunity["currency"]) =>
     maximumFractionDigits: 0,
   }).format(value);
 
+type PipelineView = "board" | "list";
+
+const PIPELINE_VIEW_STORAGE_KEY = "interaone.pipeline.view";
+
+const getStoredPipelineView = (): PipelineView => {
+  if (typeof window === "undefined") return "board";
+  try {
+    return window.localStorage.getItem(PIPELINE_VIEW_STORAGE_KEY) === "list"
+      ? "list"
+      : "board";
+  } catch {
+    return "board";
+  }
+};
+
 export function PipelinePage() {
   const navigate = useNavigate();
   const orgRole = authApi.getOrgRole();
@@ -130,13 +152,22 @@ export function PipelinePage() {
   const [scheduleForId, setScheduleForId] = useState<string>();
   const [scheduleTitle, setScheduleTitle] = useState("");
   const [scheduleAt, setScheduleAt] = useState("");
+  const [scheduleDuration, setScheduleDuration] = useState(60);
   const [activityCustomFields, setActivityCustomFields] = useState<
     Record<string, unknown>
   >({});
   const [scheduleCategory, setScheduleCategory] = useState<
     "todo" | "email" | "call" | "meeting" | "document"
   >("todo");
-  const [view, setView] = useState<"board" | "list">("board");
+  const [view, setView] = useState<PipelineView>(getStoredPipelineView);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(PIPELINE_VIEW_STORAGE_KEY, view);
+    } catch {
+      // Keep the view usable when browser storage is unavailable.
+    }
+  }, [view]);
   const [search, setSearch] = useState("");
   const [ownerFilter, setOwnerFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState<"all" | PipelineStageType>(
@@ -363,33 +394,36 @@ export function PipelinePage() {
               className="pl-9"
             />
           </div>
-          <select
-            value={ownerFilter}
-            onChange={(event) => setOwnerFilter(event.target.value)}
-            className="h-9 min-w-40 rounded-md border border-input bg-background px-3 text-sm"
-            aria-label="Filter by owner"
-          >
-            <option value="all">All owners</option>
-            <option value="unassigned">Unassigned</option>
-            {owners.map((owner) => (
-              <option key={owner.id} value={owner.id}>
-                {owner.name}
-              </option>
-            ))}
-          </select>
-          <select
+          <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+            <SelectTrigger className="w-40" aria-label="Filter by owner">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All owners</SelectItem>
+              <SelectItem value="unassigned">Unassigned</SelectItem>
+              {owners.map((owner) => (
+                <SelectItem key={owner.id} value={owner.id}>
+                  {owner.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
             value={typeFilter}
-            onChange={(event) =>
-              setTypeFilter(event.target.value as "all" | PipelineStageType)
+            onValueChange={(value) =>
+              setTypeFilter(value as "all" | PipelineStageType)
             }
-            className="h-9 min-w-36 rounded-md border border-input bg-background px-3 text-sm"
-            aria-label="Filter by outcome"
           >
-            <option value="all">All outcomes</option>
-            <option value="open">Open</option>
-            <option value="won">Closed won</option>
-            <option value="lost">Closed lost</option>
-          </select>
+            <SelectTrigger className="w-36" aria-label="Filter by outcome">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All outcomes</SelectItem>
+              <SelectItem value="open">Open</SelectItem>
+              <SelectItem value="won">Closed won</SelectItem>
+              <SelectItem value="lost">Closed lost</SelectItem>
+            </SelectContent>
+          </Select>
           <div className="flex rounded-md border border-input p-0.5">
             <Button
               variant={view === "board" ? "secondary" : "ghost"}
@@ -899,28 +933,36 @@ export function PipelinePage() {
                       </p>
                     </td>
                     <td className="px-4 py-3">
-                      <select
+                      <Select
                         value={item.stage}
-                        onClick={(event) => event.stopPropagation()}
-                        onChange={(event) =>
+                        onValueChange={(value) =>
                           void moveOpportunity(
                             item.id,
-                            event.target.value,
+                            value,
                             opportunities.filter(
                               (opportunity) =>
-                                opportunity.stage === event.target.value &&
+                                opportunity.stage === value &&
                                 opportunity.id !== item.id,
                             ).length,
                           )
                         }
-                        className="h-8 rounded-md border border-input bg-background px-2 text-xs"
                       >
-                        {stages.map((stage) => (
-                          <option key={stage.id} value={stage.id}>
-                            {stage.label}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger
+                          className="h-8 min-w-32 text-xs"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          {stages.map((stage) => (
+                            <SelectItem key={stage.id} value={stage.id}>
+                              {stage.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </td>
                     <td className="px-4 py-3 font-medium">
                       {formatMoney(item.value, item.currency)}
@@ -980,6 +1022,7 @@ export function PipelinePage() {
             values={activityCustomFields}
             onChange={setActivityCustomFields}
             disabled={addActivity.isPending}
+            excludeFieldKeys={["dueAt"]}
             systemFields={{
               category: (field) => (
                 <div className="grid gap-2">
@@ -987,7 +1030,7 @@ export function PipelinePage() {
                     {field.label}
                     {field.required ? " *" : ""}
                   </Label>
-                  <div className="grid grid-cols-5 gap-1 rounded-md bg-muted/40 p-1">
+                  <div className="flex flex-wrap gap-1 rounded-md bg-muted/40 p-1">
                     {(
                       ["todo", "email", "call", "meeting", "document"] as const
                     ).map((category) => {
@@ -1002,7 +1045,7 @@ export function PipelinePage() {
                             scheduleCategory === category ? "default" : "ghost"
                           }
                           onClick={() => setScheduleCategory(category)}
-                          className="px-1 text-[11px]"
+                          className="min-w-0 px-2 text-[11px]"
                         >
                           <CategoryIcon
                             className={`mr-1.5 h-4 w-4 ${meta.iconColor}`}
@@ -1031,41 +1074,106 @@ export function PipelinePage() {
                   />
                 </div>
               ),
-              dueAt: (field) => (
-                <div className="grid gap-2">
-                  <Label>
-                    {field.label}
-                    {field.required ? " *" : ""}
-                  </Label>
-                  <Input
-                    type="datetime-local"
-                    value={scheduleAt}
-                    onChange={(event) => setScheduleAt(event.target.value)}
-                    required={field.required}
-                  />
-                </div>
-              ),
             }}
           />
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-2">
+              <Label htmlFor="pipeline-activity-date">Date *</Label>
+              <Input
+                id="pipeline-activity-date"
+                type="date"
+                value={scheduleAt.split("T")[0] || ""}
+                onChange={(event) =>
+                  setScheduleAt(
+                    `${event.target.value}T${scheduleAt.split("T")[1] || "09:00"}`,
+                  )
+                }
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="pipeline-activity-time">Time *</Label>
+              <Input
+                id="pipeline-activity-time"
+                type="time"
+                value={scheduleAt.split("T")[1] || ""}
+                onChange={(event) => {
+                  const today = new Date();
+                  const localDate = new Date(
+                    today.getTime() - today.getTimezoneOffset() * 60_000,
+                  )
+                    .toISOString()
+                    .slice(0, 10);
+                  setScheduleAt(
+                    `${scheduleAt.split("T")[0] || localDate}T${event.target.value}`,
+                  );
+                }}
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="pipeline-activity-duration">
+                Duration (minutes) *
+              </Label>
+              <Input
+                id="pipeline-activity-duration"
+                type="number"
+                min={5}
+                max={1440}
+                step={5}
+                value={scheduleDuration}
+                onChange={(event) =>
+                  setScheduleDuration(Number(event.target.value))
+                }
+                required
+              />
+            </div>
+          </div>
           <DialogFooter>
             <Button
               disabled={
-                !scheduleTitle.trim() || !scheduleAt || addActivity.isPending
+                !scheduleTitle.trim() ||
+                !scheduleAt ||
+                scheduleDuration < 5 ||
+                scheduleDuration > 1440 ||
+                addActivity.isPending
               }
               onClick={async () => {
                 if (!scheduleForId) return;
-                await addActivity.mutateAsync({
-                  id: scheduleForId,
-                  content: scheduleTitle.trim(),
-                  dueAt: new Date(scheduleAt).toISOString(),
-                  category: scheduleCategory,
-                  customFields: activityCustomFields,
-                });
-                setScheduleForId(undefined);
-                setScheduleTitle("");
-                setScheduleAt("");
-                setActivityCustomFields({});
-                toast.success("Activity scheduled");
+                try {
+                  const activity = await addActivity.mutateAsync({
+                    id: scheduleForId,
+                    content: scheduleTitle.trim(),
+                    dueAt: new Date(scheduleAt).toISOString(),
+                    category: scheduleCategory,
+                    customFields: activityCustomFields,
+                    durationMinutes: scheduleDuration,
+                  });
+                  setScheduleForId(undefined);
+                  setScheduleTitle("");
+                  setScheduleAt("");
+                  setScheduleDuration(60);
+                  setActivityCustomFields({});
+                  if (activity.calendarSyncStatus === "synced") {
+                    toast.success(
+                      "Activity scheduled and added to Google Calendar",
+                    );
+                  } else if (activity.calendarSyncStatus === "failed") {
+                    toast.error(
+                      `Activity saved, but Google Calendar failed: ${activity.calendarSyncError || "Reconnect Google Calendar"}`,
+                    );
+                  } else {
+                    toast.warning(
+                      "Activity saved in CRM only. Connect Google Calendar to sync it.",
+                    );
+                  }
+                } catch (error: unknown) {
+                  toast.error(
+                    error instanceof Error
+                      ? error.message
+                      : "Failed to schedule activity",
+                  );
+                }
               }}
             >
               Schedule activity

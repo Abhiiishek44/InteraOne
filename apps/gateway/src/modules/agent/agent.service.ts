@@ -20,7 +20,7 @@ export class AgentService {
     if (updateData.phoneNumber) updates.phoneNumber = updateData.phoneNumber;
 
     const agent = await User.findByIdAndUpdate(userId, updates, {
-      new: true,
+      returnDocument: "after",
       runValidators: true,
     }).select("-password");
 
@@ -32,7 +32,7 @@ export class AgentService {
     const agent = await User.findByIdAndUpdate(
       userId,
       { status, lastSeen: new Date() },
-      { new: true },
+      { returnDocument: "after" },
     ).select("name email status lastSeen");
 
     if (agent) logger.info("Agent status updated", { agentId: agent._id, status });

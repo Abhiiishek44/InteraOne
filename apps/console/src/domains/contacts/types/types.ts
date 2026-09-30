@@ -21,7 +21,17 @@ export type ContactAcquisitionSource =
   | ContactChannel
   | "qr"
   | "manual"
+  | "facebook_lead_ads"
+  | "google_forms"
   | "unknown";
+
+export interface ContactIntegrationSource {
+  provider: "facebook_lead_ads" | "google_forms" | string;
+  providerLabel: string;
+  formId: string;
+  formName: string;
+  receivedAt: string | null;
+}
 
 export interface ContactOwner {
   id: string;
@@ -93,6 +103,7 @@ export interface Contact {
   leadStatus: ContactLeadStatus;
   owner: ContactOwner | null;
   acquisitionSource: ContactAcquisitionSource;
+  integrationSources: ContactIntegrationSource[];
   preferredChannel: ContactChannel | null;
   nextFollowUpAt: string | null;
   lastContactedAt: string | null;
@@ -121,11 +132,12 @@ export interface ContactListItem {
     industry?: string;
   } | null;
   tags: string[];
-  source: "ai" | "widget" | "agent" | "owner" | "admin";
+  source: "ai" | "widget" | "agent" | "owner" | "admin" | "integration";
   lifecycleStage: ContactLifecycleStage;
   leadStatus: ContactLeadStatus;
   owner: ContactOwner | null;
   acquisitionSource: ContactAcquisitionSource;
+  integrationSources?: ContactIntegrationSource[];
   preferredChannel: ContactChannel | null;
   nextFollowUpAt: string | null;
   lastContactedAt: string | null;
@@ -186,6 +198,7 @@ export const toContactViewModel = (item: ContactListItem): Contact => ({
   leadStatus: item.leadStatus || "needs_review",
   owner: item.owner || null,
   acquisitionSource: item.acquisitionSource || "unknown",
+  integrationSources: item.integrationSources || [],
   preferredChannel: item.preferredChannel || null,
   nextFollowUpAt: item.nextFollowUpAt || null,
   lastContactedAt: item.lastContactedAt || null,

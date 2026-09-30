@@ -19,6 +19,13 @@ import {
 } from "@/shared/ui/dialog";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/shared/ui/select";
 import type {
   ContactListItem,
   ContactOwner,
@@ -59,6 +66,9 @@ const emptyForm: CreateOpportunityPayload = {
   nextAction: "",
   customFields: {},
 };
+
+const OPPORTUNITY_DIALOG_EXCLUDED_FIELDS = ["primaryContactId"];
+const EMPTY_SELECT_VALUE = "__none__";
 
 export function OpportunityDialog({
   open,
@@ -499,9 +509,87 @@ export function OpportunityDialog({
               </div>
             </>
           )}
+          <div className="grid gap-2 rounded-lg border bg-muted/15 p-4">
+            <div>
+              <Label htmlFor="opportunity-contact-search">
+                Primary contact
+              </Label>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Attach a contact person to this opportunity.
+              </p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">
+              <Input
+                id="opportunity-contact-search"
+                value={contactSearch}
+                onChange={(event) => setContactSearch(event.target.value)}
+                placeholder="Search contacts…"
+                disabled={contactsLoading && !contactResults}
+              />
+              <Select
+                value={form.primaryContactId || EMPTY_SELECT_VALUE}
+                onValueChange={(value) => {
+                  const contact = contactResults?.contacts.find(
+                    (item) => item.id === value,
+                  );
+                  if (contact) {
+                    selectContact(contact);
+                    return;
+                  }
+                  setSelectedContact(null);
+                  setForm((current) => ({
+                    ...current,
+                    contactId: null,
+                    primaryContactId: null,
+                  }));
+                }}
+                disabled={contactsLoading && !contactResults}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={EMPTY_SELECT_VALUE}>
+                    {contactsLoading ? "Loading contacts…" : "Select a contact"}
+                  </SelectItem>
+                  {selectedContact &&
+                    !contactResults?.contacts.some(
+                      (item) => item.id === selectedContact.id,
+                    ) && (
+                      <SelectItem value={selectedContact.id}>
+                        {selectedContact.name}
+                      </SelectItem>
+                    )}
+                  {opportunity?.contact &&
+                    opportunity.contact.id !== selectedContact?.id &&
+                    !contactResults?.contacts.some(
+                      (item) => item.id === opportunity.contact?.id,
+                    ) && (
+                      <SelectItem value={opportunity.contact.id}>
+                        {opportunity.contact.name}
+                      </SelectItem>
+                    )}
+                  {(contactResults?.contacts || []).map((contact) => (
+                    <SelectItem key={contact.id} value={contact.id}>
+                      {contact.name}
+                      {contact.email ? ` — ${contact.email}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {!contactsLoading && contactResults?.contacts.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                No contacts match your search.
+              </p>
+            )}
+          </div>
           <InlineCustomFields
             entityType="opportunities"
             values={form.customFields || {}}
+            alwaysShowRequired={!isEditing}
+            alwaysShowFieldKeys={["ownerId", "expectedCloseAt"]}
+            excludeFieldKeys={OPPORTUNITY_DIALOG_EXCLUDED_FIELDS}
             onChange={(customFields) =>
               setForm((current) => ({ ...current, customFields }))
             }
@@ -515,11 +603,12 @@ export function OpportunityDialog({
                     {field.label}
                     {field.required ? " *" : ""}
                   </Label>
-                  <select
-                    value={form.accountId || ""}
+                  <Select
+                    value={form.accountId || EMPTY_SELECT_VALUE}
                     required={field.required}
-                    onChange={(event) => {
-                      const accountId = event.target.value || null;
+                    onValueChange={(value) => {
+                      const accountId =
+                        value === EMPTY_SELECT_VALUE ? null : value;
                       const account = accountsData?.accounts.find(
                         (item) => item.id === accountId,
                       );
@@ -529,15 +618,21 @@ export function OpportunityDialog({
                         company: account?.name || current.company,
                       }));
                     }}
-                    className="h-9 rounded-md border border-input bg-background px-3 text-sm"
                   >
-                    <option value="">No company selected</option>
-                    {(accountsData?.accounts || []).map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.name}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={EMPTY_SELECT_VALUE}>
+                        No company selected
+                      </SelectItem>
+                      {(accountsData?.accounts || []).map((account) => (
+                        <SelectItem key={account.id} value={account.id}>
+                          {account.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               ),
               primaryContactId: (field) => (
@@ -548,11 +643,11 @@ export function OpportunityDialog({
                     onChange={(event) => setContactSearch(event.target.value)}
                     placeholder="Search contacts…"
                   />
-                  <select
-                    value={form.primaryContactId || ""}
-                    onChange={(event) => {
+                  <Select
+                    value={form.primaryContactId || EMPTY_SELECT_VALUE}
+                    onValueChange={(value) => {
                       const contact = contactResults?.contacts.find(
-                        (item) => item.id === event.target.value,
+                        (item) => item.id === value,
                       );
                       if (contact) selectContact(contact);
                       else
@@ -562,24 +657,30 @@ export function OpportunityDialog({
                           primaryContactId: null,
                         }));
                     }}
-                    className="h-9 rounded-md border border-input bg-background px-3 text-sm"
                   >
-                    <option value="">No primary contact</option>
-                    {opportunity?.contact &&
-                      !contactResults?.contacts.some(
-                        (item) => item.id === opportunity.contact?.id,
-                      ) && (
-                        <option value={opportunity.contact.id}>
-                          {opportunity.contact.name}
-                        </option>
-                      )}
-                    {(contactResults?.contacts || []).map((contact) => (
-                      <option key={contact.id} value={contact.id}>
-                        {contact.name}
-                        {contact.email ? ` — ${contact.email}` : ""}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={EMPTY_SELECT_VALUE}>
+                        No primary contact
+                      </SelectItem>
+                      {opportunity?.contact &&
+                        !contactResults?.contacts.some(
+                          (item) => item.id === opportunity.contact?.id,
+                        ) && (
+                          <SelectItem value={opportunity.contact.id}>
+                            {opportunity.contact.name}
+                          </SelectItem>
+                        )}
+                      {(contactResults?.contacts || []).map((contact) => (
+                        <SelectItem key={contact.id} value={contact.id}>
+                          {contact.name}
+                          {contact.email ? ` — ${contact.email}` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               ),
               title: (field) => (
@@ -605,21 +706,26 @@ export function OpportunityDialog({
                 <div className="grid gap-2">
                   <Label>{field.label}</Label>
                   <div className="flex gap-2">
-                    <select
+                    <Select
                       value={form.currency}
-                      onChange={(event) =>
+                      onValueChange={(value) =>
                         setForm((current) => ({
                           ...current,
-                          currency: event.target
-                            .value as Opportunity["currency"],
+                          currency: value as Opportunity["currency"],
                         }))
                       }
-                      className="h-9 w-24 rounded-md border border-input bg-background px-2 text-sm"
                     >
-                      {["USD", "INR", "EUR", "GBP"].map((currency) => (
-                        <option key={currency}>{currency}</option>
-                      ))}
-                    </select>
+                      <SelectTrigger className="w-24">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {["USD", "INR", "EUR", "GBP"].map((currency) => (
+                          <SelectItem key={currency} value={currency}>
+                            {currency}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <Input
                       type="number"
                       min="0"
@@ -640,48 +746,56 @@ export function OpportunityDialog({
                     {field.label}
                     {field.required ? " *" : ""}
                   </Label>
-                  <select
+                  <Select
                     value={form.stage}
                     disabled={isEditing}
                     required={field.required}
-                    onChange={(event) =>
+                    onValueChange={(value) =>
                       setForm((current) => ({
                         ...current,
-                        stage: event.target.value,
+                        stage: value,
                       }))
                     }
-                    className="h-9 rounded-md border border-input bg-background px-3 text-sm"
                   >
-                    {stages.map((stage) => (
-                      <option key={stage.id} value={stage.id}>
-                        {stage.label}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {stages.map((stage) => (
+                        <SelectItem key={stage.id} value={stage.id}>
+                          {stage.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               ),
               ownerId: (field) => (
                 <div className="grid gap-2">
                   <Label>{field.label}</Label>
-                  <select
-                    value={form.ownerId || ""}
-                    onChange={(event) =>
+                  <Select
+                    value={form.ownerId || EMPTY_SELECT_VALUE}
+                    onValueChange={(value) =>
                       setForm((current) => ({
                         ...current,
-                        ownerId: event.target.value || null,
+                        ownerId: value === EMPTY_SELECT_VALUE ? null : value,
                       }))
                     }
-                    className="h-9 rounded-md border border-input bg-background px-3 text-sm"
                   >
-                    <option value="">
-                      {isEditing ? "Unassigned" : "Use contact owner"}
-                    </option>
-                    {owners.map((owner) => (
-                      <option key={owner.id} value={owner.id}>
-                        {owner.name}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={EMPTY_SELECT_VALUE}>
+                        {isEditing ? "Unassigned" : "Use contact owner"}
+                      </SelectItem>
+                      {owners.map((owner) => (
+                        <SelectItem key={owner.id} value={owner.id}>
+                          {owner.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               ),
               expectedCloseAt: (field) => (

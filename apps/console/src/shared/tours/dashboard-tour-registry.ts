@@ -128,6 +128,7 @@ export function getDashboardTourRouteKey(pathname: string) {
   if (pathname.startsWith("/dashboard/tickets")) return "tickets";
   if (pathname.startsWith("/dashboard/contacts")) return "contacts";
   if (pathname.startsWith("/dashboard/channels")) return "channels";
+  if (pathname.startsWith("/dashboard/integrations")) return "integrations";
   if (pathname.startsWith("/dashboard/agents")) return "agents";
   if (pathname.startsWith("/dashboard/members")) return "members";
   if (pathname.startsWith("/dashboard/knowledge/realtime")) return "knowledge-realtime";

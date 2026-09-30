@@ -10,7 +10,13 @@ import {
 import { useContactOwners } from "@/domains/contacts/hooks/use-contacts";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/shared/ui/card";
 import { Input } from "@/shared/ui/input";
 import { Loader } from "@/shared/ui/loader";
 import { Label } from "@/shared/ui/label";
@@ -22,7 +28,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/shared/ui/dialog";
-import { InlineCustomFields } from "@/domains/crm/components/inline-custom-fields";
+import {
+  CustomFieldsCustomizeButton,
+  InlineCustomFields,
+} from "@/domains/crm/components/inline-custom-fields";
 
 export function AccountDetailsPage() {
   const { accountId } = useParams();
@@ -32,6 +41,8 @@ export function AccountDetailsPage() {
   const { data: owners = [] } = useContactOwners();
   const [note, setNote] = useState("");
   const [editOpen, setEditOpen] = useState(false);
+  const [customizingAdditionalInfo, setCustomizingAdditionalInfo] =
+    useState(false);
   const [edit, setEdit] = useState<{
     name: string;
     website: string;
@@ -225,6 +236,13 @@ export function AccountDetailsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Additional information</CardTitle>
+          {!customizingAdditionalInfo && (
+            <CardAction>
+              <CustomFieldsCustomizeButton
+                onClick={() => setCustomizingAdditionalInfo(true)}
+              />
+            </CardAction>
+          )}
         </CardHeader>
         <CardContent>
           <InlineCustomFields
@@ -232,6 +250,9 @@ export function AccountDetailsPage() {
             values={account.customFields || {}}
             onChange={() => undefined}
             readOnly
+            customizing={customizingAdditionalInfo}
+            onCustomizingChange={setCustomizingAdditionalInfo}
+            showCustomizeButton={false}
           />
         </CardContent>
       </Card>

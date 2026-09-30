@@ -61,7 +61,7 @@ export class CrmViewsService {
     const view = await CrmSavedView.findOneAndUpdate(
       { _id: viewId, organizationId, ownerId },
       { $set: updates },
-      { new: true, runValidators: true },
+      { returnDocument: "after", runValidators: true },
     );
     if (!view) throw new Error("Saved view not found");
     return serializeView(view);

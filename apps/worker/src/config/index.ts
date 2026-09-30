@@ -34,6 +34,20 @@ const config = {
   worker: {
     concurrency: parseInt(process.env.WORKER_CONCURRENCY || "5", 10),
   },
+  leadSources: {
+    encryptionKey: process.env.LEAD_SOURCE_ENCRYPTION_KEY,
+    facebook: {
+      graphApiVersion: process.env.META_GRAPH_API_VERSION || "v26.0",
+    },
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      pollIntervalMs: Math.max(
+        15_000,
+        parseInt(process.env.GOOGLE_FORMS_POLL_INTERVAL_MS || "60000", 10),
+      ),
+    },
+  },
   email: {
     provider: parseEmailProvider(process.env.EMAIL_PROVIDER),
     host: process.env.EMAIL_HOST || "localhost",
