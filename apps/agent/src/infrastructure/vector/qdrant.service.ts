@@ -125,14 +125,14 @@ class QdrantVectorStore implements VectorStore {
     }
 
     const searchParams = {
-      vector,
+      query: vector,
       limit: options.topK ?? 5,
       filter: { must: mustConditions },
       with_payload: true,
     };
 
     console.log(`[Qdrant]   Executing search...`);
-    const results = await this.client.search(COLLECTION, searchParams);
+    const { points: results } = await this.client.query(COLLECTION, searchParams);
 
     console.log(`[Qdrant]   ✓ Search completed`);
     console.log(`[Qdrant]   Results found: ${results.length}`);
