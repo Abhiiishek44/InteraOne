@@ -186,8 +186,8 @@ export const storageController = {
 
   /**
    * GET /api/v1/storage/file?key=<fileKey>
-   * Public proxy: streams the object from MinIO so the browser never needs
-   * to reach the internal MinIO host directly.
+   * Public proxy: streams the object from Silo so the browser never needs
+   * to reach the internal Silo host directly.
    */
   async proxyFile(req: Request, res: Response): Promise<void> {
     const fileKey = req.query.key as string | undefined;

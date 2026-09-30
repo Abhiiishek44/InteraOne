@@ -213,7 +213,7 @@ class KnowledgeService {
       try {
         await StorageService.deleteFile(doc.fileKey);
       } catch (err) {
-        logger.warn("Could not delete MinIO object", { fileKey: doc.fileKey });
+        logger.warn("Could not delete Silo object", { fileKey: doc.fileKey });
       }
     }
 

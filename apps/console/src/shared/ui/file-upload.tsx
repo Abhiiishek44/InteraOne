@@ -167,7 +167,7 @@ export function FileUpload({
 
       const { uploadUrl, fileKey } = presignedResponse.data;
 
-      // Upload file directly to MinIO using presigned URL
+      // Upload file directly to Silo using presigned URL
       await storageApi.uploadFileWithPresignedUrl(uploadUrl, file);
 
       // Generate download URL for the uploaded file
@@ -212,7 +212,7 @@ export function FileUpload({
 
   // Handle file removal
   const handleRemove = async () => {
-    // Delete the file from MinIO if it exists
+    // Delete the file from Silo if it exists
     if (uploadedFileKey) {
       try {
         await storageApi.deleteStorageFile(uploadedFileKey);
