@@ -67,7 +67,7 @@ const emptyForm: CreateOpportunityPayload = {
   customFields: {},
 };
 
-const OPPORTUNITY_DIALOG_EXCLUDED_FIELDS = ["primaryContactId"];
+const OPPORTUNITY_DIALOG_EXCLUDED_FIELDS = ["primaryContactId", "ownerId"];
 const EMPTY_SELECT_VALUE = "__none__";
 
 export function OpportunityDialog({
@@ -222,7 +222,7 @@ export function OpportunityDialog({
             <>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="grid gap-2">
-                  <Label htmlFor="opportunity-company">Company</Label>
+                  <Label htmlFor="opportunity-company">Organization</Label>
                   <select
                     id="opportunity-company"
                     value={form.accountId || ""}
@@ -584,11 +584,45 @@ export function OpportunityDialog({
               </p>
             )}
           </div>
+          <div className="grid gap-2">
+            <Label>Opportunity owner</Label>
+            <Select
+              value={form.ownerId || EMPTY_SELECT_VALUE}
+              onValueChange={(value) =>
+                setForm((current) => ({
+                  ...current,
+                  ownerId: value === EMPTY_SELECT_VALUE ? null : value,
+                }))
+              }
+              disabled={
+                createOpportunity.isPending || updateOpportunity.isPending
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={EMPTY_SELECT_VALUE}>
+                  {isEditing ? "Unassigned" : "Use contact or company owner"}
+                </SelectItem>
+                {owners.map((owner) => (
+                  <SelectItem key={owner.id} value={owner.id}>
+                    {owner.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {!isEditing && !form.ownerId && (
+              <p className="text-xs text-muted-foreground">
+                Defaults to the selected contact owner, then the company owner.
+              </p>
+            )}
+          </div>
           <InlineCustomFields
             entityType="opportunities"
             values={form.customFields || {}}
             alwaysShowRequired={!isEditing}
-            alwaysShowFieldKeys={["ownerId", "expectedCloseAt"]}
+            alwaysShowFieldKeys={["expectedCloseAt"]}
             excludeFieldKeys={OPPORTUNITY_DIALOG_EXCLUDED_FIELDS}
             onChange={(customFields) =>
               setForm((current) => ({ ...current, customFields }))

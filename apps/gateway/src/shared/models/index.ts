@@ -80,13 +80,6 @@ export {
   CrmSavedViewEntity,
 } from "./CrmSavedView";
 export {
-  CrmFieldDefinition,
-  ICrmFieldDefinition,
-  ICrmFieldOption,
-  CrmFieldEntity,
-  CrmFieldType,
-} from "./CrmFieldDefinition";
-export {
   LeadSourceConnection,
   ILeadSourceConnection,
   LeadSourceProvider,

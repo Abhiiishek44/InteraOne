@@ -18,7 +18,14 @@ export function useSalesPipeline() {
 export function useOpportunities() {
   return useQuery({
     queryKey: ["opportunities"],
-    queryFn: opportunitiesApi.list,
+    queryFn: () => opportunitiesApi.list("deal"),
+  });
+}
+
+export function useLeads() {
+  return useQuery({
+    queryKey: ["opportunities", "leads"],
+    queryFn: () => opportunitiesApi.list("lead"),
   });
 }
 
@@ -31,6 +38,26 @@ export function useCreateOpportunity() {
       queryClient.invalidateQueries({ queryKey: ["opportunities"] });
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
     },
+  });
+}
+
+export function useConvertLead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => opportunitiesApi.convertLead(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["opportunities"] });
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+    },
+  });
+}
+
+export function useArchiveLead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => opportunitiesApi.archiveLead(id),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["opportunities", "leads"] }),
   });
 }
 

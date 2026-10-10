@@ -552,7 +552,7 @@ export function TicketDetailPage() {
                 <span className="block truncate">{contactEmail || "Not provided"}</span>
               </DetailRow>
               <DetailRow label="Phone">{contactPhone || "Not provided"}</DetailRow>
-              <DetailRow label="Company">{contactCompany || "Not provided"}</DetailRow>
+              <DetailRow label="Organization">{contactCompany || "Not provided"}</DetailRow>
             </dl>
             {contactTags.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-1">

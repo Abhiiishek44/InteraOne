@@ -32,6 +32,7 @@ import {
   Columns3,
   Building2,
   Plug,
+  Flame,
 } from "lucide-react";
 import { useAuth } from "@/domains/auth/hooks/useAuth";
 import { useLogout } from "@/domains/auth/hooks/useLogout";
@@ -76,8 +77,9 @@ const getBreadcrumbIcon = (path: string, label: string): LucideIcon | null => {
   if (path === "/dashboard") return BarChart3;
   if (path.startsWith("/dashboard/conversations")) return Inbox;
   if (path.startsWith("/dashboard/tickets")) return Ticket;
+  if (path.startsWith("/dashboard/crm/leads")) return Flame;
   if (path.startsWith("/dashboard/crm/pipeline")) return Columns3;
-  if (path.startsWith("/dashboard/crm/companies")) return Building2;
+  if (path.startsWith("/dashboard/crm/organizations")) return Building2;
   if (
     path.startsWith("/dashboard/crm") ||
     path.startsWith("/dashboard/contacts")
@@ -276,8 +278,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     if (canAccessContacts) {
       base.push(
         { label: "CRM Contacts", to: "/dashboard/crm/contacts" },
-        { label: "CRM Companies", to: "/dashboard/crm/companies" },
-        { label: "CRM Pipeline", to: "/dashboard/crm/pipeline" },
+        { label: "CRM Organizations", to: "/dashboard/crm/organizations" },
+        { label: "CRM Leads", to: "/dashboard/crm/leads" },
+        { label: "CRM Deals", to: "/dashboard/crm/pipeline" },
       );
     }
 
@@ -604,6 +607,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const isTicketDetailRoute = /^\/dashboard\/tickets\/[^/]+\/?$/.test(
     location.pathname,
   );
+  const isContactDetailsRoute = /^\/dashboard\/crm\/contacts\/[^/]+\/?$/.test(
+    location.pathname,
+  );
   const tourIdentity = useMemo(
     () => ({
       orgId: activeOrgId,
@@ -695,8 +701,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               </p>
               {[
                 {
-                  label: "Companies",
-                  to: "/dashboard/crm/companies",
+                  label: "Organizations",
+                  to: "/dashboard/crm/organizations",
                   icon: Building2,
                 },
                 {
@@ -705,7 +711,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   icon: Users2,
                 },
                 {
-                  label: "Pipeline",
+                  label: "Leads",
+                  to: "/dashboard/crm/leads",
+                  icon: Flame,
+                },
+                {
+                  label: "Deals",
                   to: "/dashboard/crm/pipeline",
                   icon: Columns3,
                 },
@@ -1348,9 +1359,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 </>
               ) : (
                 <div
-                  className={`min-h-[calc(100vh-4rem)] rounded-2xl border border-border bg-card p-4 sm:p-6 lg:p-8 ${
-                    isTicketRoute ? "" : "shadow-sm"
-                  }`}
+                  className={`min-h-[calc(100vh-4rem)] rounded-2xl border border-border bg-card ${
+                    isContactDetailsRoute
+                      ? "p-2 sm:p-3 lg:p-4"
+                      : "p-4 sm:p-6 lg:p-8"
+                  } ${isTicketRoute ? "" : "shadow-sm"}`}
                 >
                   <UsageBanner />
                   {children}

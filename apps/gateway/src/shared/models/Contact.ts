@@ -40,6 +40,27 @@ export interface IContactNote {
   id: string;
   author: string;
   content: string;
+  pinned?: boolean;
+  createdAt: Date;
+}
+
+export interface IContactTimelineItem {
+  id: string;
+  type: "email" | "file" | "document" | "activity";
+  title: string;
+  content?: string;
+  fileName?: string;
+  fileKey?: string;
+  mimeType?: string;
+  size?: number;
+  activityType?: "call" | "meeting" | "task" | "deadline" | "lunch";
+  startAt?: Date;
+  endAt?: Date;
+  priority?: "none" | "low" | "medium" | "normal" | "high";
+  status?: "scheduled" | "done";
+  location?: string;
+  videoCallUrl?: string;
+  author: string;
   createdAt: Date;
 }
 
@@ -56,6 +77,11 @@ export interface IContactInsights {
   topics: string[];
 }
 
+export interface IContactMethod {
+  value: string;
+  type: "work" | "home" | "mobile" | "other";
+}
+
 export interface IContact extends Document {
   _id: Types.ObjectId;
   organizationId: Types.ObjectId | IOrganization;
@@ -65,6 +91,8 @@ export interface IContact extends Document {
   name: string;
   email?: string;
   phone?: string;
+  emails: IContactMethod[];
+  phones: IContactMethod[];
   company?: string;
   tags: string[];
   source: ContactSource;
@@ -78,6 +106,7 @@ export interface IContact extends Document {
   lastContactedAt?: Date | null;
   lastActivityAt: Date;
   notes: IContactNote[];
+  timelineItems: IContactTimelineItem[];
   conversations: IContactConversation[];
   insights: IContactInsights;
   metadata: Record<string, unknown>;
@@ -109,6 +138,43 @@ const contactSchema = new Schema<IContact>(
     name: { type: String, required: true, trim: true, maxlength: 120 },
     email: { type: String, trim: true, lowercase: true },
     phone: { type: String, trim: true, maxlength: 40 },
+    emails: {
+      type: [
+        new Schema<IContactMethod>(
+          {
+            value: {
+              type: String,
+              required: true,
+              trim: true,
+              lowercase: true,
+            },
+            type: {
+              type: String,
+              enum: ["work", "home", "mobile", "other"],
+              default: "work",
+            },
+          },
+          { _id: false },
+        ),
+      ],
+      default: [],
+    },
+    phones: {
+      type: [
+        new Schema<IContactMethod>(
+          {
+            value: { type: String, required: true, trim: true, maxlength: 40 },
+            type: {
+              type: String,
+              enum: ["work", "home", "mobile", "other"],
+              default: "work",
+            },
+          },
+          { _id: false },
+        ),
+      ],
+      default: [],
+    },
     company: { type: String, trim: true, maxlength: 160 },
     tags: [{ type: String, trim: true, maxlength: 40 }],
     source: {
@@ -163,6 +229,38 @@ const contactSchema = new Schema<IContact>(
         id: { type: String, required: true },
         author: { type: String, required: true },
         content: { type: String, required: true },
+        pinned: { type: Boolean, default: false },
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
+    timelineItems: [
+      {
+        id: { type: String, required: true },
+        type: {
+          type: String,
+          enum: ["email", "file", "document", "activity"],
+          required: true,
+        },
+        title: { type: String, required: true, trim: true, maxlength: 300 },
+        content: { type: String, maxlength: 20000 },
+        fileName: { type: String, trim: true, maxlength: 300 },
+        fileKey: { type: String, trim: true, maxlength: 1000 },
+        mimeType: { type: String, trim: true, maxlength: 200 },
+        size: { type: Number, min: 0 },
+        activityType: {
+          type: String,
+          enum: ["call", "meeting", "task", "deadline", "lunch"],
+        },
+        startAt: { type: Date },
+        endAt: { type: Date },
+        priority: {
+          type: String,
+          enum: ["none", "low", "medium", "normal", "high"],
+        },
+        status: { type: String, enum: ["scheduled", "done"] },
+        location: { type: String, trim: true, maxlength: 500 },
+        videoCallUrl: { type: String, trim: true, maxlength: 1000 },
+        author: { type: String, required: true },
         createdAt: { type: Date, default: Date.now },
       },
     ],

@@ -143,9 +143,7 @@ export function PipelineSettingsDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {isCreating
-              ? "Add pipeline stage"
-              : `Customize ${existingStage.label}`}
+            {isCreating ? "Add deal stage" : `Customize ${existingStage.label}`}
           </DialogTitle>
           <DialogDescription>
             Configure this stage without affecting the layout of other stages.

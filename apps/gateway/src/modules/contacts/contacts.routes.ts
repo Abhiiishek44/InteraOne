@@ -168,6 +168,67 @@ router.delete(
 );
 
 router.post(
+  "/:id/timeline",
+  validateRequest(contactsSchema.addTimelineItem),
+  requireRole("agent"),
+  ContactsController.addTimelineItem,
+);
+
+router.patch(
+  "/:id/timeline/:itemId",
+  validateRequest(contactsSchema.updateTimelineItem),
+  requireRole("agent"),
+  ContactsController.updateTimelineItem,
+);
+
+router.delete(
+  "/:id/timeline/:itemId",
+  requireRole("agent"),
+  ContactsController.deleteTimelineItem,
+);
+
+router.post(
+  "/:id/activities",
+  validateRequest(contactsSchema.addActivity),
+  requireRole("agent"),
+  ContactsController.addActivity,
+);
+
+router.patch(
+  "/:id/activities/:activityId/status",
+  validateRequest(contactsSchema.updateActivityStatus),
+  requireRole("agent"),
+  ContactsController.updateActivityStatus,
+);
+
+router.patch(
+  "/:id/activities/:activityId",
+  validateRequest(contactsSchema.updateActivity),
+  requireRole("agent"),
+  ContactsController.updateActivity,
+);
+
+router.delete(
+  "/:id/activities/:activityId",
+  requireRole("agent"),
+  ContactsController.deleteActivity,
+);
+
+router.patch(
+  "/:id/insights",
+  validateRequest(contactsSchema.updateInsights),
+  requireRole("agent"),
+  ContactsController.updateInsights,
+);
+
+router.post(
+  "/:id/email",
+  validateRequest(contactsSchema.sendContactEmail),
+  requireRole("agent"),
+  ContactsController.sendEmail,
+);
+
+router.post(
   "/:id/tags",
   validateRequest(contactsSchema.addTag),
   requireRole("agent"),

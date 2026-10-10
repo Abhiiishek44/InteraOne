@@ -9,6 +9,7 @@ import { TicketsPage } from "@/domains/tickets/pages/tickets-page";
 import { TicketDetailPage } from "@/domains/tickets/pages/ticket-detail-page";
 import { MembersPage } from "@/domains/member/pages/members-page";
 import { ContactsPage } from "@/domains/contacts/pages/contacts-page";
+import { ContactDetailsPage } from "@/domains/contacts/pages/contact-details-page";
 import { AgentsPage } from "@/domains/agent/pages/page";
 import { WidgetPage } from "@/domains/widget/pages/page";
 import { ConversationLayout } from "@/domains/conversation/components/conversation-layout";
@@ -35,6 +36,8 @@ import { TelegramChannelSetupPage } from "@/domains/channels/pages/telegram-chan
 import { AcceptInvitePage } from "@/domains/auth/pages/accept-invite/page";
 import { PipelinePage } from "@/domains/crm/pages/pipeline-page";
 import { OpportunityDetailsPage } from "@/domains/crm/pages/opportunity-details-page";
+import { LeadsPage } from "@/domains/crm/pages/leads-page";
+import { LeadDetailsPage } from "@/domains/crm/pages/lead-details-page";
 import { AccountsPage } from "@/domains/accounts/pages/accounts-page";
 import { AccountDetailsPage } from "@/domains/accounts/pages/account-details-page";
 
@@ -175,6 +178,16 @@ const router = createBrowserRouter([
     element: <Navigate to="/dashboard/crm/contacts" replace />,
   },
   {
+    path: "/dashboard/crm/contacts/:contactId",
+    element: (
+      <ProtectedRoute requiredRole="agent">
+        <DashboardLayout>
+          <ContactDetailsPage />
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
     path: "/dashboard/crm/contacts",
     element: (
       <ProtectedRoute requiredRole="agent">
@@ -185,7 +198,7 @@ const router = createBrowserRouter([
     ),
   },
   {
-    path: "/dashboard/crm/companies",
+    path: "/dashboard/crm/organizations",
     element: (
       <ProtectedRoute requiredRole="agent">
         <DashboardLayout>
@@ -195,11 +208,35 @@ const router = createBrowserRouter([
     ),
   },
   {
-    path: "/dashboard/crm/companies/:accountId",
+    path: "/dashboard/crm/organizations/:accountId",
     element: (
       <ProtectedRoute requiredRole="agent">
         <DashboardLayout>
           <AccountDetailsPage />
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/dashboard/crm/companies/*",
+    element: <Navigate to="/dashboard/crm/organizations" replace />,
+  },
+  {
+    path: "/dashboard/crm/leads",
+    element: (
+      <ProtectedRoute requiredRole="agent">
+        <DashboardLayout>
+          <LeadsPage />
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/dashboard/crm/leads/:leadId",
+    element: (
+      <ProtectedRoute requiredRole="agent">
+        <DashboardLayout>
+          <LeadDetailsPage />
         </DashboardLayout>
       </ProtectedRoute>
     ),

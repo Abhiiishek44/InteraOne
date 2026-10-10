@@ -2,8 +2,10 @@ import { apiClient } from "@/shared/lib/api-client";
 import type {
   ContactListItem,
   ContactConflictItem,
+  ContactInsight,
   ContactNote,
   ContactOwner,
+  ContactTimelineItem,
   ContactWritePayload,
 } from "../types/types";
 
@@ -134,11 +136,11 @@ class ContactsApi {
   async updateNote(
     id: string,
     noteId: string,
-    content: string,
+    updates: string | { content?: string; pinned?: boolean },
   ): Promise<ContactNote> {
     const res = await apiClient.patch<ApiDataResponse<ContactNote>>(
       `/contacts/${id}/notes/${encodeURIComponent(noteId)}`,
-      { content },
+      typeof updates === "string" ? { content: updates } : updates,
     );
     return res.data;
   }
@@ -147,6 +149,97 @@ class ContactsApi {
     await apiClient.delete(
       `/contacts/${id}/notes/${encodeURIComponent(noteId)}`,
     );
+  }
+
+  async addTimelineItem(
+    id: string,
+    payload: Pick<ContactTimelineItem, "type" | "title" | "fileName" | "fileKey" | "mimeType" | "size">,
+  ): Promise<ContactTimelineItem> {
+    const res = await apiClient.post<ApiDataResponse<ContactTimelineItem>>(
+      `/contacts/${id}/timeline`,
+      payload,
+    );
+    return res.data;
+  }
+
+  async addActivity(
+    id: string,
+    payload: {
+      title: string;
+      content?: string;
+      activityType: "call" | "meeting" | "task" | "deadline" | "lunch";
+      startAt: string;
+      endAt: string;
+      priority: "none" | "low" | "medium" | "normal" | "high";
+      status: "scheduled" | "done";
+      location?: string;
+      videoCallUrl?: string;
+    },
+  ): Promise<ContactTimelineItem> {
+    const res = await apiClient.post<ApiDataResponse<ContactTimelineItem>>(
+      `/contacts/${id}/activities`,
+      payload,
+    );
+    return res.data;
+  }
+
+  async updateActivityStatus(
+    id: string,
+    activityId: string,
+    status: "scheduled" | "done",
+  ): Promise<ContactTimelineItem> {
+    const res = await apiClient.patch<ApiDataResponse<ContactTimelineItem>>(
+      `/contacts/${id}/activities/${encodeURIComponent(activityId)}/status`,
+      { status },
+    );
+    return res.data;
+  }
+
+  async updateActivity(
+    id: string,
+    activityId: string,
+    payload: Parameters<typeof contactsApi.addActivity>[1],
+  ): Promise<ContactTimelineItem> {
+    const res = await apiClient.patch<ApiDataResponse<ContactTimelineItem>>(
+      `/contacts/${id}/activities/${encodeURIComponent(activityId)}`,
+      payload,
+    );
+    return res.data;
+  }
+
+  async deleteActivity(id: string, activityId: string): Promise<void> {
+    await apiClient.delete(`/contacts/${id}/activities/${encodeURIComponent(activityId)}`);
+  }
+
+  async updateTimelineItem(id: string, itemId: string, content: string): Promise<ContactTimelineItem> {
+    const res = await apiClient.patch<ApiDataResponse<ContactTimelineItem>>(
+      `/contacts/${id}/timeline/${encodeURIComponent(itemId)}`,
+      { content },
+    );
+    return res.data;
+  }
+
+  async deleteTimelineItem(id: string, itemId: string): Promise<void> {
+    await apiClient.delete(`/contacts/${id}/timeline/${encodeURIComponent(itemId)}`);
+  }
+
+  async updateInsights(id: string, insights: ContactInsight): Promise<ContactInsight> {
+    const res = await apiClient.patch<ApiDataResponse<ContactInsight>>(
+      `/contacts/${id}/insights`,
+      insights,
+    );
+    return res.data;
+  }
+
+  async sendEmail(
+    id: string,
+    payload: { subject: string; body: string; html?: string; from?: string },
+  ): Promise<ContactTimelineItem> {
+    const res = await apiClient.post<ApiDataResponse<ContactTimelineItem>>(
+      `/contacts/${id}/email`,
+      payload,
+    );
+    return res.data;
   }
 
   async addTag(id: string, tag: string): Promise<string> {

@@ -259,9 +259,7 @@ export class ContactsController {
       const orgId = getOrgId(req);
       const id = req.params.id as string;
       const noteId = req.params.noteId as string;
-      const { content } = req.body as { content: string };
-
-      const note = await contactsService.updateNote(orgId, id, noteId, content);
+      const note = await contactsService.updateNote(orgId, id, noteId, req.body);
       sendResponse(res, 200, true, "Note updated successfully", note);
     } catch (error: any) {
       const notFound = error.message === "Contact note not found";
@@ -288,6 +286,116 @@ export class ContactsController {
         notFound ? 404 : 500,
         error.message || "Failed to delete contact note",
       );
+    }
+  }
+
+  static async addTimelineItem(req: Request, res: Response): Promise<void> {
+    try {
+      const author = (req as AuthenticatedRequest).user.email || "Agent";
+      const item = await contactsService.addTimelineItem(
+        getOrgId(req),
+        req.params.id as string,
+        author,
+        req.body,
+      );
+      sendResponse(res, 201, true, "Contact file added", item);
+    } catch (error: any) {
+      sendError(res, 500, error.message || "Failed to add contact file");
+    }
+  }
+
+  static async addActivity(req: Request, res: Response): Promise<void> {
+    try {
+      const author = (req as AuthenticatedRequest).user.email || "Agent";
+      const item = await contactsService.addActivity(
+        getOrgId(req),
+        req.params.id as string,
+        author,
+        req.body,
+      );
+      sendResponse(res, 201, true, "Activity scheduled", item);
+    } catch (error: any) {
+      sendError(res, 400, error.message || "Failed to schedule activity");
+    }
+  }
+
+  static async updateTimelineItem(req: Request, res: Response): Promise<void> {
+    try {
+      const item = await contactsService.updateTimelineItem(getOrgId(req), req.params.id as string, req.params.itemId as string, req.body.content);
+      sendResponse(res, 200, true, "File description updated", item);
+    } catch (error: any) {
+      sendError(res, error.message === "Contact file not found" ? 404 : 400, error.message || "Failed to update file");
+    }
+  }
+
+  static async deleteTimelineItem(req: Request, res: Response): Promise<void> {
+    try {
+      await contactsService.deleteTimelineItem(getOrgId(req), req.params.id as string, req.params.itemId as string);
+      sendResponse(res, 200, true, "File deleted");
+    } catch (error: any) {
+      sendError(res, error.message === "Contact file not found" ? 404 : 400, error.message || "Failed to delete file");
+    }
+  }
+
+  static async updateActivity(req: Request, res: Response): Promise<void> {
+    try {
+      const activity = await contactsService.updateActivity(getOrgId(req), req.params.id as string, req.params.activityId as string, req.body);
+      sendResponse(res, 200, true, "Activity updated", activity);
+    } catch (error: any) {
+      sendError(res, error.message === "Contact activity not found" ? 404 : 400, error.message || "Failed to update activity");
+    }
+  }
+
+  static async deleteActivity(req: Request, res: Response): Promise<void> {
+    try {
+      await contactsService.deleteTimelineItem(getOrgId(req), req.params.id as string, req.params.activityId as string, "activity");
+      sendResponse(res, 200, true, "Activity deleted");
+    } catch (error: any) {
+      sendError(res, error.message === "Contact activity not found" ? 404 : 400, error.message || "Failed to delete activity");
+    }
+  }
+
+  static async updateActivityStatus(req: Request, res: Response): Promise<void> {
+    try {
+      const activity = await contactsService.updateActivityStatus(
+        getOrgId(req),
+        req.params.id as string,
+        req.params.activityId as string,
+        req.body.status,
+      );
+      sendResponse(res, 200, true, "Activity status updated", activity);
+    } catch (error: any) {
+      const notFound = error.message === "Contact activity not found";
+      sendError(res, notFound ? 404 : 400, error.message || "Failed to update activity");
+    }
+  }
+
+  static async updateInsights(req: Request, res: Response): Promise<void> {
+    try {
+      const insights = await contactsService.updateInsights(
+        getOrgId(req),
+        req.params.id as string,
+        req.body,
+      );
+      sendResponse(res, 200, true, "Contact insights updated", insights);
+    } catch (error: any) {
+      const notFound = error.message === "Contact not found";
+      sendError(res, notFound ? 404 : 400, error.message || "Failed to update contact insights");
+    }
+  }
+
+  static async sendEmail(req: Request, res: Response): Promise<void> {
+    try {
+      const author = (req as AuthenticatedRequest).user.email || "Agent";
+      const item = await contactsService.sendContactEmail(
+        getOrgId(req),
+        req.params.id as string,
+        author,
+        req.body,
+      );
+      sendResponse(res, 201, true, "Email sent successfully", item);
+    } catch (error: any) {
+      sendError(res, 400, error.message || "Failed to send email");
     }
   }
 
