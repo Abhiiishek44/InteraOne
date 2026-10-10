@@ -10,7 +10,6 @@ import {
   Account,
   LeadSourceConnection,
 } from "@shared/models";
-import { CrmFieldsService } from "@modules/crm-fields";
 import { serializeCustomFields } from "@shared/utils/custom-fields";
 import {
   decryptCredential,
@@ -218,12 +217,7 @@ export class OpportunitiesService {
       organizationId: orgId,
       stage: pipelineStage.id,
     });
-    const customFields = await new CrmFieldsService().validateValues(
-      organizationId,
-      "opportunities",
-      input.customFields,
-      true,
-    );
+    const customFields = input.customFields || {};
     const primaryContactId = input.primaryContactId || input.contactId;
     const contact = primaryContactId
       ? await Contact.findOne({
@@ -303,13 +297,6 @@ export class OpportunitiesService {
     input: UpdateOpportunityInput,
   ) {
     const orgId = new Types.ObjectId(organizationId);
-    if (input.customFields !== undefined) {
-      input.customFields = await new CrmFieldsService().validateValues(
-        organizationId,
-        "opportunities",
-        input.customFields,
-      );
-    }
     if (input.ownerId) {
       const membership = await Membership.exists({
         organizationId: orgId,
@@ -496,12 +483,7 @@ export class OpportunitiesService {
     customFieldValues?: Record<string, unknown>,
     durationMinutes = 60,
   ) {
-    const customFields = await new CrmFieldsService().validateValues(
-      organizationId,
-      "activities",
-      customFieldValues,
-      true,
-    );
+    const customFields = customFieldValues || {};
     const activity = {
       id: `activity-${Date.now()}`,
       type: dueAt ? ("planned" as const) : ("note" as const),

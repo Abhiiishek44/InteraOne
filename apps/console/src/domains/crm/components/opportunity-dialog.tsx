@@ -222,7 +222,7 @@ export function OpportunityDialog({
             <>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="grid gap-2">
-                  <Label htmlFor="opportunity-company">Company</Label>
+                  <Label htmlFor="opportunity-company">Organization</Label>
                   <select
                     id="opportunity-company"
                     value={form.accountId || ""}

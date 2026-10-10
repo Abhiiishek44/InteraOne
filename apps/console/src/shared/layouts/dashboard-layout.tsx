@@ -77,7 +77,7 @@ const getBreadcrumbIcon = (path: string, label: string): LucideIcon | null => {
   if (path.startsWith("/dashboard/conversations")) return Inbox;
   if (path.startsWith("/dashboard/tickets")) return Ticket;
   if (path.startsWith("/dashboard/crm/pipeline")) return Columns3;
-  if (path.startsWith("/dashboard/crm/companies")) return Building2;
+  if (path.startsWith("/dashboard/crm/organizations")) return Building2;
   if (
     path.startsWith("/dashboard/crm") ||
     path.startsWith("/dashboard/contacts")
@@ -276,7 +276,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     if (canAccessContacts) {
       base.push(
         { label: "CRM Contacts", to: "/dashboard/crm/contacts" },
-        { label: "CRM Companies", to: "/dashboard/crm/companies" },
+        { label: "CRM Organizations", to: "/dashboard/crm/organizations" },
         { label: "CRM Pipeline", to: "/dashboard/crm/pipeline" },
       );
     }
@@ -697,8 +697,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               </p>
               {[
                 {
-                  label: "Companies",
-                  to: "/dashboard/crm/companies",
+                  label: "Organizations",
+                  to: "/dashboard/crm/organizations",
                   icon: Building2,
                 },
                 {

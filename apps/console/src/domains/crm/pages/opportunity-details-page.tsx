@@ -43,13 +43,7 @@ import {
 } from "@/domains/contacts/hooks/use-contacts";
 import { DeleteConfirmDialog } from "@/shared/components/delete-confirm-dialog";
 import { OpportunityDialog } from "../components/opportunity-dialog";
-import { CrmFieldValues } from "../components/crm-field-values";
-import {
-  CustomFieldsCustomizeButton,
-  InlineCustomFields,
-} from "../components/inline-custom-fields";
-import { useCrmFields } from "../hooks/use-crm-fields";
-import { storageApi } from "@/shared/lib/storage.api";
+import { InlineCustomFields } from "../components/inline-custom-fields";
 import {
   useAddOpportunityActivity,
   useCompleteOpportunityActivity,
@@ -110,7 +104,6 @@ export function OpportunityDetailsPage() {
   const { data: contacts = [] } = useContacts();
   const { data: owners = [] } = useContactOwners();
   const { data: pipeline, isLoading: pipelineLoading } = useSalesPipeline();
-  const { data: opportunityFields = [] } = useCrmFields("opportunities");
   const updateStage = useUpdateOpportunityStage();
   const updateNextAction = useUpdateOpportunityNextAction();
   const addActivity = useAddOpportunityActivity();
@@ -120,8 +113,6 @@ export function OpportunityDetailsPage() {
   const deleteOpportunityNote = useDeleteOpportunityNote();
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [customizingAdditionalInfo, setCustomizingAdditionalInfo] =
-    useState(false);
   const [nextActionEdit, setNextActionEdit] = useState<{
     opportunityId: string;
     value: string;
@@ -153,23 +144,6 @@ export function OpportunityDetailsPage() {
   >({});
   const [currentTime] = useState(() => Date.now());
   const opportunity = opportunities.find((item) => item.id === opportunityId);
-  const visibleImageFields = opportunityFields.filter(
-    (field) => !field.isSystem && field.visible && field.type === "image",
-  );
-  const profileImageField =
-    visibleImageFields.find((field) =>
-      /profile|photo|avatar/i.test(field.label),
-    ) || visibleImageFields[0];
-  const profileImageValue = profileImageField
-    ? opportunity?.customFields?.[profileImageField.key]
-    : undefined;
-  const profileImageKey =
-    profileImageValue &&
-    typeof profileImageValue === "object" &&
-    !Array.isArray(profileImageValue) &&
-    typeof (profileImageValue as Record<string, unknown>).fileKey === "string"
-      ? ((profileImageValue as Record<string, unknown>).fileKey as string)
-      : undefined;
   const contact = contacts.find((item) => item.id === opportunity?.contact?.id);
   const conversation = contact?.conversations.find(
     (item) => !item.id.startsWith("conv-"),
@@ -403,22 +377,14 @@ export function OpportunityDetailsPage() {
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          {profileImageKey ? (
-            <img
-              src={storageApi.getProxyFileUrl(profileImageKey)}
-              alt={`${opportunity.title} profile`}
-              className="h-11 w-11 shrink-0 rounded-full border object-cover"
-            />
-          ) : (
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-              {opportunity.title
-                .split(/\s+/)
-                .slice(0, 2)
-                .map((part) => part[0])
-                .join("")
-                .toUpperCase()}
-            </div>
-          )}
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+            {opportunity.title
+              .split(/\s+/)
+              .slice(0, 2)
+              .map((part) => part[0])
+              .join("")
+              .toUpperCase()}
+          </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-bold">{opportunity.title}</h1>
@@ -546,36 +512,6 @@ export function OpportunityDetailsPage() {
           supporting={opportunity.owner?.email}
         />
       </div>
-
-      <Card>
-        <div className="flex items-center justify-between gap-4 border-b px-5 py-4">
-          <h2 className="font-semibold">Additional information</h2>
-          {!customizingAdditionalInfo && (
-            <CustomFieldsCustomizeButton
-              onClick={() => setCustomizingAdditionalInfo(true)}
-            />
-          )}
-        </div>
-        <CardContent className="p-5">
-          <InlineCustomFields
-            entityType="opportunities"
-            values={opportunity.customFields || {}}
-            onChange={() => undefined}
-            readOnly
-            customizing={customizingAdditionalInfo}
-            onCustomizingChange={setCustomizingAdditionalInfo}
-            showCustomizeButton={false}
-          />
-        </CardContent>
-      </Card>
-
-      {opportunity.account && (
-        <CrmFieldValues
-          entityType="accounts"
-          values={opportunity.account.customFields}
-          title={`${opportunity.account.name} information`}
-        />
-      )}
 
       <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
         <Card>
@@ -723,37 +659,37 @@ export function OpportunityDetailsPage() {
                           : "without a date"}
                       </p>
                       {activity.calendarSyncStatus === "synced" && (
-                          <div className="mt-2 flex flex-wrap gap-3 text-xs">
-                            {activity.googleCalendarEventUrl && (
-                              <a
-                                href={activity.googleCalendarEventUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="font-medium text-primary hover:underline"
-                              >
-                                Open in Google Calendar
-                              </a>
-                            )}
-                            {activity.googleMeetUrl && (
-                              <a
-                                href={activity.googleMeetUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="font-medium text-primary hover:underline"
-                              >
-                                Join Google Meet
-                              </a>
-                            )}
-                          </div>
-                        )}
+                        <div className="mt-2 flex flex-wrap gap-3 text-xs">
+                          {activity.googleCalendarEventUrl && (
+                            <a
+                              href={activity.googleCalendarEventUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-medium text-primary hover:underline"
+                            >
+                              Open in Google Calendar
+                            </a>
+                          )}
+                          {activity.googleMeetUrl && (
+                            <a
+                              href={activity.googleMeetUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-medium text-primary hover:underline"
+                            >
+                              Join Google Meet
+                            </a>
+                          )}
+                        </div>
+                      )}
                       {activity.calendarSyncStatus === "failed" && (
-                          <p
-                            className="mt-2 text-xs text-destructive"
-                            title={activity.calendarSyncError || undefined}
-                          >
-                            Saved in CRM, but Google Calendar sync failed
-                          </p>
-                        )}
+                        <p
+                          className="mt-2 text-xs text-destructive"
+                          title={activity.calendarSyncError || undefined}
+                        >
+                          Saved in CRM, but Google Calendar sync failed
+                        </p>
+                      )}
                     </div>
                     <Button
                       size="sm"

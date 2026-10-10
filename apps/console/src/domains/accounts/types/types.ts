@@ -13,11 +13,19 @@ export interface AccountSummary {
   industry: string;
   description: string;
   phone: string;
+  address: string;
+  linkedinProfile: string;
+  annualRevenue: number | null;
+  numberOfEmployees: number | null;
+  labels: string[];
   tags: string[];
   lifecycleStage: AccountLifecycleStage;
   owner: { id: string; name: string; email?: string } | null;
   contactCount: number;
   opportunityCount: number;
+  closedDeals: number;
+  openDeals: number;
+  nextActivityAt: string | null;
   pipelineValue: number;
   lastActivityAt: string;
   archivedAt: string | null;
@@ -29,7 +37,13 @@ export interface AccountSummary {
 export interface AccountDetail {
   account: Omit<
     AccountSummary,
-    "contactCount" | "opportunityCount" | "pipelineValue" | "lastActivityAt"
+    | "contactCount"
+    | "opportunityCount"
+    | "closedDeals"
+    | "openDeals"
+    | "nextActivityAt"
+    | "pipelineValue"
+    | "lastActivityAt"
   >;
   contacts: Array<{
     id: string;
@@ -47,6 +61,8 @@ export interface AccountDetail {
     currency: string;
     stage: string;
     nextAction: string;
+    expectedCloseAt: string | null;
+    nextActivityAt: string | null;
     primaryContact: { id: string; name: string } | null;
     owner: { id: string; name: string } | null;
     updatedAt: string;
@@ -54,7 +70,18 @@ export interface AccountDetail {
   activity: Array<{
     id: string;
     type: string;
+    title?: string;
     content: string;
+    pinned?: boolean;
+    activityType?: "call" | "meeting" | "task" | "deadline" | "lunch";
+    startAt?: string;
+    endAt?: string;
+    priority?: "none" | "low" | "medium" | "high";
+    status?: "scheduled" | "done";
+    fileName?: string;
+    fileKey?: string;
+    mimeType?: string;
+    size?: number;
     actor?: string;
     createdAt: string;
     contact?: { id: string; name: string };
@@ -68,8 +95,23 @@ export interface AccountWritePayload {
   industry?: string;
   description?: string;
   phone?: string;
+  address?: string;
+  linkedinProfile?: string;
+  annualRevenue?: number | null;
+  numberOfEmployees?: number | null;
+  labels?: string[];
   ownerId?: string | null;
   tags?: string[];
   lifecycleStage?: AccountLifecycleStage;
   customFields?: Record<string, unknown>;
+}
+
+export interface AccountActivityPayload {
+  title: string;
+  content?: string;
+  activityType: "call" | "meeting" | "task" | "deadline" | "lunch";
+  startAt: string;
+  endAt: string;
+  priority: "none" | "low" | "medium" | "high";
+  status: "scheduled" | "done";
 }

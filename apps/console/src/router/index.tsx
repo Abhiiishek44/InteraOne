@@ -196,7 +196,7 @@ const router = createBrowserRouter([
     ),
   },
   {
-    path: "/dashboard/crm/companies",
+    path: "/dashboard/crm/organizations",
     element: (
       <ProtectedRoute requiredRole="agent">
         <DashboardLayout>
@@ -206,7 +206,7 @@ const router = createBrowserRouter([
     ),
   },
   {
-    path: "/dashboard/crm/companies/:accountId",
+    path: "/dashboard/crm/organizations/:accountId",
     element: (
       <ProtectedRoute requiredRole="agent">
         <DashboardLayout>
@@ -214,6 +214,10 @@ const router = createBrowserRouter([
         </DashboardLayout>
       </ProtectedRoute>
     ),
+  },
+  {
+    path: "/dashboard/crm/companies/*",
+    element: <Navigate to="/dashboard/crm/organizations" replace />,
   },
   {
     path: "/dashboard/crm/pipeline",

@@ -55,6 +55,26 @@ export const contactsSchema = {
     name: Joi.string().trim().max(120).required(),
     email: Joi.string().email().allow(""),
     phone: Joi.string().trim().max(40).allow(""),
+    emails: Joi.array()
+      .items(
+        Joi.object({
+          value: Joi.string().trim().email().required(),
+          type: Joi.string()
+            .valid("work", "home", "mobile", "other")
+            .required(),
+        }),
+      )
+      .max(10),
+    phones: Joi.array()
+      .items(
+        Joi.object({
+          value: Joi.string().trim().max(40).required(),
+          type: Joi.string()
+            .valid("work", "home", "mobile", "other")
+            .required(),
+        }),
+      )
+      .max(10),
     company: Joi.string().trim().max(160).allow(""),
     accountId: Joi.string().hex().length(24).allow(null, ""),
     tags: Joi.array().items(Joi.string().trim().max(40)).max(20),
@@ -115,10 +135,14 @@ export const contactsSchema = {
   addActivity: Joi.object({
     title: Joi.string().trim().max(300).required(),
     content: Joi.string().allow("").max(20000),
-    activityType: Joi.string().valid("call", "meeting", "task", "deadline", "lunch").required(),
+    activityType: Joi.string()
+      .valid("call", "meeting", "task", "deadline", "lunch")
+      .required(),
     startAt: Joi.date().iso().required(),
     endAt: Joi.date().iso().min(Joi.ref("startAt")).required(),
-    priority: Joi.string().valid("none", "low", "medium", "normal", "high").required(),
+    priority: Joi.string()
+      .valid("none", "low", "medium", "normal", "high")
+      .required(),
     status: Joi.string().valid("scheduled", "done").required(),
     location: Joi.string().trim().max(500).allow(""),
     videoCallUrl: Joi.string().uri().max(1000).allow(""),
@@ -131,10 +155,14 @@ export const contactsSchema = {
   updateActivity: Joi.object({
     title: Joi.string().trim().max(300).required(),
     content: Joi.string().allow("").max(20000),
-    activityType: Joi.string().valid("call", "meeting", "task", "deadline", "lunch").required(),
+    activityType: Joi.string()
+      .valid("call", "meeting", "task", "deadline", "lunch")
+      .required(),
     startAt: Joi.date().iso().required(),
     endAt: Joi.date().iso().min(Joi.ref("startAt")).required(),
-    priority: Joi.string().valid("none", "low", "medium", "normal", "high").required(),
+    priority: Joi.string()
+      .valid("none", "low", "medium", "normal", "high")
+      .required(),
     status: Joi.string().valid("scheduled", "done").required(),
     location: Joi.string().trim().max(500).allow(""),
     videoCallUrl: Joi.string().uri().max(1000).allow(""),
@@ -169,6 +197,26 @@ export const contactsSchema = {
     name: Joi.string().trim().max(120),
     email: Joi.string().email().allow(""),
     phone: Joi.string().trim().max(40).allow(""),
+    emails: Joi.array()
+      .items(
+        Joi.object({
+          value: Joi.string().trim().email().required(),
+          type: Joi.string()
+            .valid("work", "home", "mobile", "other")
+            .required(),
+        }),
+      )
+      .max(10),
+    phones: Joi.array()
+      .items(
+        Joi.object({
+          value: Joi.string().trim().max(40).required(),
+          type: Joi.string()
+            .valid("work", "home", "mobile", "other")
+            .required(),
+        }),
+      )
+      .max(10),
     company: Joi.string().trim().max(160).allow(""),
     accountId: Joi.string().hex().length(24).allow(null, ""),
     tags: Joi.array().items(Joi.string().trim().max(40)).max(20),

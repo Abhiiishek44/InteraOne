@@ -19,7 +19,6 @@ import {
   UpsertFromAIInput,
 } from "./contacts.types";
 import logger from "@shared/core/logger";
-import { CrmFieldsService } from "@modules/crm-fields";
 import { serializeCustomFields } from "@shared/utils/custom-fields";
 import { ChannelService } from "@modules/channels/channels.service";
 
@@ -278,6 +277,16 @@ export class ContactsService {
         name: contact.name,
         email: contact.email,
         phone: contact.phone,
+        emails: contact.emails?.length
+          ? contact.emails
+          : contact.email
+            ? [{ value: contact.email, type: "work" }]
+            : [],
+        phones: contact.phones?.length
+          ? contact.phones
+          : contact.phone
+            ? [{ value: contact.phone, type: "work" }]
+            : [],
         company: (contact.accountId as any)?.name || contact.company,
         account:
           contact.accountId && typeof contact.accountId === "object"
@@ -323,7 +332,9 @@ export class ContactsService {
           mimeType: item.mimeType || "",
           size: item.size || 0,
           activityType: item.activityType,
-          startAt: item.startAt ? new Date(item.startAt).toISOString() : undefined,
+          startAt: item.startAt
+            ? new Date(item.startAt).toISOString()
+            : undefined,
           endAt: item.endAt ? new Date(item.endAt).toISOString() : undefined,
           priority: item.priority,
           status: item.status,
@@ -449,12 +460,7 @@ export class ContactsService {
     source: "agent" | "admin" | "owner",
   ): Promise<any> {
     await this.validateOwner(organizationId, data.ownerId);
-    const customFields = await new CrmFieldsService().validateValues(
-      organizationId,
-      "contacts",
-      data.customFields,
-      true,
-    );
+    const customFields = data.customFields || {};
 
     const account = data.accountId
       ? await Account.findOne({
@@ -468,12 +474,25 @@ export class ContactsService {
     const tags = (data.tags || [])
       .map((tag) => tag.trim().toLowerCase())
       .filter(Boolean);
+    const emails = (data.emails || [])
+      .map((item) => ({
+        value: item.value.trim().toLowerCase(),
+        type: item.type,
+      }))
+      .filter((item) => item.value);
+    const phones = (data.phones || [])
+      .map((item) => ({ value: item.value.trim(), type: item.type }))
+      .filter((item) => item.value);
+    const primaryEmail = emails[0]?.value || data.email?.trim().toLowerCase();
+    const primaryPhone = phones[0]?.value || data.phone?.trim();
     const contact = await Contact.create({
       organizationId: new Types.ObjectId(organizationId),
       sessionId: `manual:${randomUUID()}`,
       name: data.name?.trim(),
-      ...(data.email?.trim() ? { email: data.email.trim().toLowerCase() } : {}),
-      ...(data.phone?.trim() ? { phone: data.phone.trim() } : {}),
+      ...(primaryEmail ? { email: primaryEmail } : {}),
+      ...(primaryPhone ? { phone: primaryPhone } : {}),
+      emails,
+      phones,
       ...(account?.name
         ? { company: account.name, accountId: account._id }
         : data.company?.trim()
@@ -897,7 +916,8 @@ export class ContactsService {
     input: { content?: string; pinned?: boolean },
   ): Promise<any> {
     const setFields: Record<string, unknown> = {};
-    if (input.content !== undefined) setFields["notes.$.content"] = input.content;
+    if (input.content !== undefined)
+      setFields["notes.$.content"] = input.content;
     if (input.pinned !== undefined) setFields["notes.$.pinned"] = input.pinned;
     const updated = await Contact.findOneAndUpdate(
       {
@@ -1026,10 +1046,21 @@ export class ContactsService {
       {
         organizationId: new Types.ObjectId(organizationId),
         _id: new Types.ObjectId(contactId),
-        timelineItems: { $elemMatch: { id: itemId, type: { $in: ["file", "document"] } } },
+        timelineItems: {
+          $elemMatch: { id: itemId, type: { $in: ["file", "document"] } },
+        },
       },
-      { $set: { "timelineItems.$[item].content": content, lastActivityAt: new Date() } },
-      { arrayFilters: [{ "item.id": itemId }], returnDocument: "after", runValidators: true },
+      {
+        $set: {
+          "timelineItems.$[item].content": content,
+          lastActivityAt: new Date(),
+        },
+      },
+      {
+        arrayFilters: [{ "item.id": itemId }],
+        returnDocument: "after",
+        runValidators: true,
+      },
     );
     if (!updated) throw new Error("Contact file not found");
     return updated.timelineItems.find((item) => item.id === itemId);
@@ -1041,16 +1072,24 @@ export class ContactsService {
     itemId: string,
     type?: "activity" | "file",
   ): Promise<void> {
-    const allowedTypes = type === "activity" ? ["activity"] : ["file", "document"];
+    const allowedTypes =
+      type === "activity" ? ["activity"] : ["file", "document"];
     const result = await Contact.updateOne(
       {
         organizationId: new Types.ObjectId(organizationId),
         _id: new Types.ObjectId(contactId),
-        timelineItems: { $elemMatch: { id: itemId, type: { $in: allowedTypes } } },
+        timelineItems: {
+          $elemMatch: { id: itemId, type: { $in: allowedTypes } },
+        },
       },
       { $pull: { timelineItems: { id: itemId } } },
     );
-    if (result.modifiedCount === 0) throw new Error(type === "activity" ? "Contact activity not found" : "Contact file not found");
+    if (result.modifiedCount === 0)
+      throw new Error(
+        type === "activity"
+          ? "Contact activity not found"
+          : "Contact file not found",
+      );
   }
 
   async updateActivity(
@@ -1058,14 +1097,25 @@ export class ContactsService {
     contactId: string,
     activityId: string,
     input: {
-      title: string; content?: string; activityType: "call" | "meeting" | "task" | "deadline" | "lunch";
-      startAt: string; endAt: string; priority: "none" | "low" | "medium" | "normal" | "high";
-      status: "scheduled" | "done"; location?: string; videoCallUrl?: string;
+      title: string;
+      content?: string;
+      activityType: "call" | "meeting" | "task" | "deadline" | "lunch";
+      startAt: string;
+      endAt: string;
+      priority: "none" | "low" | "medium" | "normal" | "high";
+      status: "scheduled" | "done";
+      location?: string;
+      videoCallUrl?: string;
     },
   ): Promise<any> {
     const fields: Record<string, unknown> = { lastActivityAt: new Date() };
-    Object.entries({ ...input, startAt: new Date(input.startAt), endAt: new Date(input.endAt) })
-      .forEach(([key, value]) => { fields[`timelineItems.$[activity].${key}`] = value; });
+    Object.entries({
+      ...input,
+      startAt: new Date(input.startAt),
+      endAt: new Date(input.endAt),
+    }).forEach(([key, value]) => {
+      fields[`timelineItems.$[activity].${key}`] = value;
+    });
     const updated = await Contact.findOneAndUpdate(
       {
         organizationId: new Types.ObjectId(organizationId),
@@ -1073,7 +1123,13 @@ export class ContactsService {
         timelineItems: { $elemMatch: { id: activityId, type: "activity" } },
       },
       { $set: fields },
-      { arrayFilters: [{ "activity.id": activityId, "activity.type": "activity" }], returnDocument: "after", runValidators: true },
+      {
+        arrayFilters: [
+          { "activity.id": activityId, "activity.type": "activity" },
+        ],
+        returnDocument: "after",
+        runValidators: true,
+      },
     );
     if (!updated) throw new Error("Contact activity not found");
     return updated.timelineItems.find((item) => item.id === activityId);
@@ -1098,7 +1154,9 @@ export class ContactsService {
         },
       },
       {
-        arrayFilters: [{ "activity.id": activityId, "activity.type": "activity" }],
+        arrayFilters: [
+          { "activity.id": activityId, "activity.type": "activity" },
+        ],
         returnDocument: "after",
         runValidators: true,
       },
@@ -1117,7 +1175,11 @@ export class ContactsService {
   async updateInsights(
     organizationId: string,
     contactId: string,
-    insights: { summary: string; sentiment: "positive" | "neutral" | "negative"; topics: string[] },
+    insights: {
+      summary: string;
+      sentiment: "positive" | "neutral" | "negative";
+      topics: string[];
+    },
   ): Promise<any> {
     const updated = await Contact.findOneAndUpdate(
       {
@@ -1142,7 +1204,8 @@ export class ContactsService {
       _id: new Types.ObjectId(contactId),
     });
     if (!contact) throw new Error("Contact not found");
-    if (!contact.email) throw new Error("Contact does not have an email address");
+    if (!contact.email)
+      throw new Error("Contact does not have an email address");
 
     const channel = await Channel.findOne({
       organizationId: new Types.ObjectId(organizationId),
@@ -1150,7 +1213,10 @@ export class ContactsService {
       isActive: true,
       "config.email.verificationStatus": "verified",
     });
-    if (!channel) throw new Error("Connect and verify an email channel before sending email");
+    if (!channel)
+      throw new Error(
+        "Connect and verify an email channel before sending email",
+      );
 
     const result = await ChannelService.sendViaChannel(
       organizationId,
@@ -1175,7 +1241,10 @@ export class ContactsService {
       { _id: contact._id, organizationId: new Types.ObjectId(organizationId) },
       {
         $push: { timelineItems: { $each: [item], $position: 0 } },
-        $set: { lastActivityAt: item.createdAt, lastContactedAt: item.createdAt },
+        $set: {
+          lastActivityAt: item.createdAt,
+          lastContactedAt: item.createdAt,
+        },
       },
     );
     return { ...item, messageId: result.messageId };
@@ -1308,17 +1377,12 @@ export class ContactsService {
     data: ContactWriteInput,
   ): Promise<any> {
     await this.validateOwner(organizationId, data.ownerId);
-    if (data.customFields !== undefined) {
-      data.customFields = await new CrmFieldsService().validateValues(
-        organizationId,
-        "contacts",
-        data.customFields,
-      );
-    }
     const {
       name,
       email,
       phone,
+      emails,
+      phones,
       company,
       accountId,
       tags,
@@ -1338,6 +1402,25 @@ export class ContactsService {
     else if (email === "") unsetFields.email = 1;
     if (phone) updateFields.phone = phone;
     else if (phone === "") unsetFields.phone = 1;
+    if (emails !== undefined) {
+      updateFields.emails = emails
+        .map((item) => ({
+          value: item.value.trim().toLowerCase(),
+          type: item.type,
+        }))
+        .filter((item) => item.value);
+      const primary = updateFields.emails[0]?.value;
+      if (primary) updateFields.email = primary;
+      else unsetFields.email = 1;
+    }
+    if (phones !== undefined) {
+      updateFields.phones = phones
+        .map((item) => ({ value: item.value.trim(), type: item.type }))
+        .filter((item) => item.value);
+      const primary = updateFields.phones[0]?.value;
+      if (primary) updateFields.phone = primary;
+      else unsetFields.phone = 1;
+    }
     if (company !== undefined) updateFields.company = company;
     if (accountId !== undefined) {
       if (accountId) {

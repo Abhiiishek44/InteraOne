@@ -77,6 +77,11 @@ export interface IContactInsights {
   topics: string[];
 }
 
+export interface IContactMethod {
+  value: string;
+  type: "work" | "home" | "mobile" | "other";
+}
+
 export interface IContact extends Document {
   _id: Types.ObjectId;
   organizationId: Types.ObjectId | IOrganization;
@@ -86,6 +91,8 @@ export interface IContact extends Document {
   name: string;
   email?: string;
   phone?: string;
+  emails: IContactMethod[];
+  phones: IContactMethod[];
   company?: string;
   tags: string[];
   source: ContactSource;
@@ -131,6 +138,43 @@ const contactSchema = new Schema<IContact>(
     name: { type: String, required: true, trim: true, maxlength: 120 },
     email: { type: String, trim: true, lowercase: true },
     phone: { type: String, trim: true, maxlength: 40 },
+    emails: {
+      type: [
+        new Schema<IContactMethod>(
+          {
+            value: {
+              type: String,
+              required: true,
+              trim: true,
+              lowercase: true,
+            },
+            type: {
+              type: String,
+              enum: ["work", "home", "mobile", "other"],
+              default: "work",
+            },
+          },
+          { _id: false },
+        ),
+      ],
+      default: [],
+    },
+    phones: {
+      type: [
+        new Schema<IContactMethod>(
+          {
+            value: { type: String, required: true, trim: true, maxlength: 40 },
+            type: {
+              type: String,
+              enum: ["work", "home", "mobile", "other"],
+              default: "work",
+            },
+          },
+          { _id: false },
+        ),
+      ],
+      default: [],
+    },
     company: { type: String, trim: true, maxlength: 160 },
     tags: [{ type: String, trim: true, maxlength: 40 }],
     source: {
@@ -192,17 +236,27 @@ const contactSchema = new Schema<IContact>(
     timelineItems: [
       {
         id: { type: String, required: true },
-        type: { type: String, enum: ["email", "file", "document", "activity"], required: true },
+        type: {
+          type: String,
+          enum: ["email", "file", "document", "activity"],
+          required: true,
+        },
         title: { type: String, required: true, trim: true, maxlength: 300 },
         content: { type: String, maxlength: 20000 },
         fileName: { type: String, trim: true, maxlength: 300 },
         fileKey: { type: String, trim: true, maxlength: 1000 },
         mimeType: { type: String, trim: true, maxlength: 200 },
         size: { type: Number, min: 0 },
-        activityType: { type: String, enum: ["call", "meeting", "task", "deadline", "lunch"] },
+        activityType: {
+          type: String,
+          enum: ["call", "meeting", "task", "deadline", "lunch"],
+        },
         startAt: { type: Date },
         endAt: { type: Date },
-        priority: { type: String, enum: ["none", "low", "medium", "normal", "high"] },
+        priority: {
+          type: String,
+          enum: ["none", "low", "medium", "normal", "high"],
+        },
         status: { type: String, enum: ["scheduled", "done"] },
         location: { type: String, trim: true, maxlength: 500 },
         videoCallUrl: { type: String, trim: true, maxlength: 1000 },

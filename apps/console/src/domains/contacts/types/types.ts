@@ -25,6 +25,12 @@ export type ContactAcquisitionSource =
   | "google_forms"
   | "unknown";
 
+export type ContactMethodType = "work" | "home" | "mobile" | "other";
+export interface ContactMethod {
+  value: string;
+  type: ContactMethodType;
+}
+
 export interface ContactIntegrationSource {
   provider: "facebook_lead_ads" | "google_forms" | string;
   providerLabel: string;
@@ -43,6 +49,8 @@ export interface ContactWritePayload {
   name?: string;
   email?: string;
   phone?: string;
+  emails?: ContactMethod[];
+  phones?: ContactMethod[];
   company?: string;
   accountId?: string | null;
   tags?: string[];
@@ -112,6 +120,8 @@ export interface Contact {
   name: string;
   email?: string;
   phone?: string;
+  emails?: ContactMethod[];
+  phones?: ContactMethod[];
   company?: string;
   account?: {
     id: string;
@@ -146,6 +156,8 @@ export interface ContactListItem {
   name: string;
   email?: string;
   phone?: string;
+  emails?: ContactMethod[];
+  phones?: ContactMethod[];
   company?: string;
   account?: {
     id: string;
@@ -214,6 +226,10 @@ export const toContactViewModel = (item: ContactListItem): Contact => ({
   name: item.name,
   email: item.email,
   phone: item.phone,
+  emails:
+    item.emails || (item.email ? [{ value: item.email, type: "work" }] : []),
+  phones:
+    item.phones || (item.phone ? [{ value: item.phone, type: "work" }] : []),
   company: item.company,
   account: item.account || null,
   tags: item.tags || [],
