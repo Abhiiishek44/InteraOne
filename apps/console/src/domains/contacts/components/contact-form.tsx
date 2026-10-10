@@ -85,6 +85,7 @@ export function ContactForm({
   const [accountId, setAccountId] = useState(initialValues?.accountId || "");
   const { data: accountsData } = useAccounts("", 100);
   const [tags, setTags] = useState<string[]>(initialValues?.tags || []);
+  const [labelInput, setLabelInput] = useState("");
   const [newTag, setNewTag] = useState("");
   const [lifecycleStage, setLifecycleStage] = useState<ContactLifecycleStage>(
     initialValues?.lifecycleStage || "new",
@@ -115,7 +116,15 @@ export function ContactForm({
       phone: phone.trim() || undefined,
       company: company.trim() || undefined,
       accountId: accountId || null,
-      tags,
+      tags: Array.from(
+        new Set([
+          ...tags,
+          ...labelInput
+            .split(",")
+            .map((label) => label.trim())
+            .filter(Boolean),
+        ]),
+      ),
       lifecycleStage,
       leadStatus,
       ownerId: ownerId || null,
@@ -130,11 +139,114 @@ export function ContactForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
+      {mode === "create" ? (
+        <>
+          <div className="grid gap-2">
+            <Label htmlFor="contact-name">Name *</Label>
+            <Input
+              id="contact-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Enter name"
+              required
+              disabled={loading}
+              autoFocus
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="contact-organization">Organization</Label>
+            <Input
+              id="contact-organization"
+              value={company}
+              onChange={(event) => {
+                setCompany(event.target.value);
+                setAccountId("");
+              }}
+              placeholder="Organization name"
+              disabled={loading}
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="contact-phone">Phone</Label>
+            <div className="grid grid-cols-[1fr_140px] gap-2">
+              <Input
+                id="contact-phone"
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+                placeholder="Phone number"
+                disabled={loading}
+              />
+              <Select value="work" disabled={loading}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="work">Work</SelectItem></SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="contact-email">Email</Label>
+            <div className="grid grid-cols-[1fr_140px] gap-2">
+              <Input
+                id="contact-email"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="Email address"
+                disabled={loading}
+              />
+              <Select value="work" disabled={loading}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="work">Work</SelectItem></SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="contact-labels">Labels</Label>
+            <Input
+              id="contact-labels"
+              value={labelInput}
+              onChange={(event) => setLabelInput(event.target.value)}
+              placeholder="Add labels (separate with commas)"
+              disabled={loading}
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <Label>Owner</Label>
+            <Select
+              value={ownerId || "unassigned"}
+              onValueChange={(value) =>
+                setOwnerId(value === "unassigned" ? "" : value)
+              }
+              disabled={loading}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
+                {ownerOptions.map((owner) => (
+                  <SelectItem key={owner.id} value={owner.id}>{owner.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </>
+      ) : (
       <InlineCustomFields
         entityType="contacts"
         values={customFields}
         onChange={setCustomFields}
         disabled={loading}
+        alwaysShowFieldKeys={[
+          "name",
+          "company",
+          "phone",
+          "email",
+          "tags",
+          "ownerId",
+        ]}
         systemFields={{
           name: (field) => (
             <div className="grid gap-2">
@@ -442,6 +554,7 @@ export function ContactForm({
           ),
         }}
       />
+      )}
 
       <DialogFooter className="flex items-center gap-2">
         <Button

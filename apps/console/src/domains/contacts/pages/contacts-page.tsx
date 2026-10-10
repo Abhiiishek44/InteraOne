@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { ContactDetailsCard } from "../components/contact-details-card";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
@@ -25,12 +24,20 @@ import {
   Search,
   SlidersHorizontal,
   Users,
-  Clock,
-  MessagesSquare,
   AlertTriangle,
   Loader2,
   Tag,
-  Cable,
+  Building2,
+  CalendarClock,
+  CircleCheckBig,
+  CircleDotDashed,
+  ChevronLeft,
+  ChevronRight,
+  GripVertical,
+  Mail,
+  Pencil,
+  Phone,
+  UserRound,
 } from "lucide-react";
 import { ContactDialog } from "@/domains/contacts/components/contact-form";
 import {
@@ -39,7 +46,9 @@ import {
   useDeleteContacts,
   useBulkAddTags,
   useCreateContact,
+  useContactOwners,
   useContactsPage,
+  useUpdateContact,
 } from "../hooks/use-contacts";
 import type {
   ContactListItem,
@@ -58,6 +67,10 @@ import {
 import { DeleteConfirmDialog } from "@/shared/components/delete-confirm-dialog";
 import { SavedViewControls } from "@/domains/crm/components/saved-view-controls";
 import type { SavedViewState } from "@/domains/crm/types/saved-view";
+import {
+  useOpportunities,
+  useSalesPipeline,
+} from "@/domains/crm/hooks/use-opportunities";
 
 const TAG_OPTIONS = ["VIP", "Enterprise", "Trial", "Billing", "At Risk"];
 const SORT_OPTIONS = [
@@ -146,14 +159,12 @@ const formatDate = (iso: string) =>
     year: "numeric",
   });
 
-const formatRelative = (iso: string) => {
-  const diff = Date.now() - new Date(iso).getTime();
-  const hours = diff / (1000 * 60 * 60);
-  if (hours < 1) return "Just now";
-  if (hours < 24) return `${Math.floor(hours)}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return formatDate(iso);
+const lifecycleStyle = (stage: Contact["lifecycleStage"]) => {
+  if (stage === "customer") return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300";
+  if (stage === "opportunity") return "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300";
+  if (stage === "qualified") return "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300";
+  if (stage === "inactive" || stage === "lost") return "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300";
+  return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300";
 };
 
 const isRecentlyActive = (iso: string) => {
@@ -161,13 +172,177 @@ const isRecentlyActive = (iso: string) => {
   return diff < 30 * 60 * 1000;
 };
 
+type EditableContactField = "name" | "company" | "email" | "phone" | "ownerId";
+type ContactColumnId = "contact" | "organization" | "email" | "phone" | "openDeals" | "wonDeals" | "nextActivity" | "owner";
+
+const CONTACT_COLUMNS: Record<ContactColumnId, { label: string; width: string }> = {
+  contact: { label: "Contact", width: "minmax(280px,1.4fr)" },
+  organization: { label: "Organization", width: "minmax(210px,1fr)" },
+  email: { label: "Email", width: "minmax(255px,1.2fr)" },
+  phone: { label: "Phone", width: "minmax(180px,.8fr)" },
+  openDeals: { label: "Open deals", width: "155px" },
+  wonDeals: { label: "Won deals", width: "155px" },
+  nextActivity: { label: "Next activity", width: "minmax(210px,1fr)" },
+  owner: { label: "Owner", width: "minmax(200px,.9fr)" },
+};
+const DEFAULT_CONTACT_COLUMN_ORDER = Object.keys(CONTACT_COLUMNS) as ContactColumnId[];
+
+type InlineEditor = {
+  contact: Contact;
+  field: EditableContactField;
+  value: string;
+};
+
+const INLINE_FIELD_LABELS: Record<EditableContactField, string> = {
+  name: "name",
+  company: "organization",
+  email: "email",
+  phone: "phone",
+  ownerId: "owner",
+};
+
+function EditableContactCell({
+  contact,
+  field,
+  editor,
+  onEdit,
+  onCancel,
+  onChange,
+  onSave,
+  onOpenContact,
+  saving,
+  ownerOptions,
+  className,
+  order,
+  children,
+}: {
+  contact: Contact;
+  field: EditableContactField;
+  editor: InlineEditor | null;
+  onEdit: (event: MouseEvent, contact: Contact, field: EditableContactField) => void;
+  onCancel: () => void;
+  onChange: (value: string) => void;
+  onSave: () => Promise<void>;
+  onOpenContact?: () => void;
+  saving: boolean;
+  ownerOptions: Array<{ id: string; name: string }>;
+  className?: string;
+  order?: number;
+  children: ReactNode;
+}) {
+  const isEditing = editor?.contact.id === contact.id && editor.field === field;
+  const label = INLINE_FIELD_LABELS[field];
+
+  return (
+    <div className={`relative h-full min-w-0 border-r border-border/40 ${className || ""}`} style={{ order }}>
+      {onOpenContact ? (
+        <div className="group flex h-full min-w-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpenContact();
+            }}
+            className="min-w-0 flex-1 rounded px-1 py-1 text-left outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+            title="Open contact details"
+          >
+            {children}
+          </button>
+          <button
+            type="button"
+            onClick={(event) => onEdit(event, contact, field)}
+            className="shrink-0 rounded p-1 text-muted-foreground opacity-0 outline-none transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+            title={`Edit ${label}`}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={(event) => onEdit(event, contact, field)}
+          className="group flex h-full w-full min-w-0 items-center gap-1 rounded px-1 py-1 text-left outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+          title={`Edit ${label}`}
+        >
+          {children}
+          <Pencil className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
+        </button>
+      )}
+
+      {isEditing && (
+        <form
+          className={`absolute z-50 w-64 rounded-xl border border-border bg-background p-3 shadow-xl ${
+            field === "ownerId" ? "right-1 top-full mt-1" : "left-1 top-full mt-1"
+          }`}
+          onClick={(event) => event.stopPropagation()}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void onSave();
+          }}
+        >
+          <Label className="mb-2 block text-sm font-medium">
+            Edit {label}
+          </Label>
+          {field === "ownerId" ? (
+            <Select
+              value={editor.value || "unassigned"}
+              onValueChange={(nextValue) =>
+                onChange(nextValue === "unassigned" ? "" : nextValue)
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select owner" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
+                {ownerOptions.map((owner) => (
+                  <SelectItem key={owner.id} value={owner.id}>
+                    {owner.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input
+              autoFocus
+              type={field === "email" ? "email" : "text"}
+              value={editor.value}
+              onChange={(event) => onChange(event.target.value)}
+              placeholder={`Enter ${label}`}
+            />
+          )}
+          <div className="mt-3 flex justify-end gap-2 border-t border-border pt-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={saving}
+              onClick={onCancel}
+              className="cursor-pointer"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={saving || (field === "name" && !editor.value.trim())}
+              className="cursor-pointer"
+            >
+              {saving ? "Saving…" : "Save"}
+            </Button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
 export function ContactsPage() {
   const navigate = useNavigate();
   const [isConflictSheetOpen, setIsConflictSheetOpen] = useState(false);
   const [focusedConflictContactId, setFocusedConflictContactId] = useState<
     string | null
   >(null);
-  const [selectedContactId, setSelectedContactId] = useState<string>("");
   const [searchValue, setSearchValue] = useState("");
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [activityFilter, setActivityFilter] = useState<string>("all");
@@ -181,6 +356,33 @@ export function ContactsPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isBulkTagDialogOpen, setIsBulkTagDialogOpen] = useState(false);
   const [bulkTagsInput, setBulkTagsInput] = useState("");
+  const [inlineEditor, setInlineEditor] = useState<InlineEditor | null>(null);
+  const [draggedColumn, setDraggedColumn] = useState<ContactColumnId | null>(null);
+  const [columnOrder, setColumnOrder] = useState<ContactColumnId[]>(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem("contacts-column-order") || "[]") as ContactColumnId[];
+      return saved.length === DEFAULT_CONTACT_COLUMN_ORDER.length && DEFAULT_CONTACT_COLUMN_ORDER.every((id) => saved.includes(id)) ? saved : DEFAULT_CONTACT_COLUMN_ORDER;
+    } catch {
+      return DEFAULT_CONTACT_COLUMN_ORDER;
+    }
+  });
+
+  useEffect(() => {
+    window.localStorage.setItem("contacts-column-order", JSON.stringify(columnOrder));
+  }, [columnOrder]);
+
+  const moveColumn = (source: ContactColumnId, targetIndex: number) => {
+    setColumnOrder((current) => {
+      const sourceIndex = current.indexOf(source);
+      if (sourceIndex < 0) return current;
+      const next = [...current];
+      next.splice(sourceIndex, 1);
+      next.splice(Math.max(0, Math.min(targetIndex, next.length)), 0, source);
+      return next;
+    });
+  };
+  const columnPosition = (id: ContactColumnId) => columnOrder.indexOf(id);
+  const columnGridTemplate = columnOrder.map((id) => CONTACT_COLUMNS[id].width).join(" ");
 
   const {
     data: contactsPage,
@@ -198,31 +400,25 @@ export function ContactsPage() {
     conversationRange: conversationFilter,
     sort: sortValue,
   });
-  const rawContacts = contactsPage?.contacts || [];
   const { data: conflicts = [] } = usePendingConflicts();
+  const { data: opportunities = [] } = useOpportunities();
+  const { data: pipeline } = useSalesPipeline();
 
   const resolveConflictMutation = useResolveConflict();
   const deleteContactsMutation = useDeleteContacts();
   const bulkAddTagsMutation = useBulkAddTags();
   const createContactMutation = useCreateContact();
+  const updateContactMutation = useUpdateContact();
+  const { data: ownerOptions = [] } = useContactOwners();
 
   const loadError = loadErrorData ? loadErrorData.message : "";
 
   const contacts = useMemo(
-    () => rawContacts.map(toContactViewModel),
-    [rawContacts],
+    () => (contactsPage?.contacts || []).map(toContactViewModel),
+    [contactsPage?.contacts],
   );
 
   const filteredContacts = contacts;
-  const fallbackContactId = contacts[0]?.id || "";
-  const effectiveSelectedContactId = contacts.some(
-    (contact) => contact.id === selectedContactId,
-  )
-    ? selectedContactId
-    : fallbackContactId;
-  const selectedContact = contacts.find(
-    (contact) => contact.id === effectiveSelectedContactId,
-  );
   const displayedContacts = contacts;
   const paginatedContacts = contacts;
   const totalItems = contactsPage?.total || 0;
@@ -250,6 +446,60 @@ export function ContactsPage() {
     setCurrentPage(Math.max(1, Math.min(page, totalPages)));
   const goToNext = () => goToPage(currentPage + 1);
   const goPrev = () => goToPage(currentPage - 1);
+
+  const openInlineEditor = (
+    event: MouseEvent,
+    contact: Contact,
+    field: EditableContactField,
+  ) => {
+    event.stopPropagation();
+    const values: Record<EditableContactField, string> = {
+      name: contact.name,
+      company: contact.company || "",
+      email: contact.email || "",
+      phone: contact.phone || "",
+      ownerId: contact.owner?.id || "",
+    };
+    setInlineEditor({ contact, field, value: values[field] });
+  };
+
+  const saveInlineEditor = async () => {
+    if (!inlineEditor) return;
+    const { contact, field, value } = inlineEditor;
+    if (field === "name" && !value.trim()) return;
+    try {
+      await updateContactMutation.mutateAsync({
+        id: contact.id,
+        [field]: field === "ownerId" ? value || null : value.trim(),
+      });
+      setInlineEditor(null);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Failed to update contact");
+    }
+  };
+
+  const dealCountsByContact = useMemo(() => {
+    const stageTypes = new Map(
+      (pipeline?.stages || []).map((stage) => [stage.id, stage.type]),
+    );
+    const counts = new Map<string, { open: number; closed: number }>();
+
+    opportunities.forEach((opportunity) => {
+      const contactId = opportunity.contact?.id;
+      if (!contactId) return;
+      const current = counts.get(contactId) || { open: 0, closed: 0 };
+      const stageType = stageTypes.get(opportunity.stage);
+      const isClosed =
+        stageType === "won" ||
+        stageType === "lost" ||
+        /won|lost|closed/i.test(opportunity.stage);
+      if (isClosed) current.closed += 1;
+      else current.open += 1;
+      counts.set(contactId, current);
+    });
+
+    return counts;
+  }, [opportunities, pipeline]);
 
   useEffect(() => {
     const timeout = setTimeout(() => setCurrentPage(1), 0);
@@ -319,7 +569,7 @@ export function ContactsPage() {
     try {
       const created = await createContactMutation.mutateAsync(payload);
       const createdId = created?._id || created?.id;
-      if (createdId) setSelectedContactId(createdId);
+      if (createdId) navigate(`/dashboard/crm/contacts/${createdId}`);
     } catch (err) {
       throw err instanceof Error ? err : new Error("Failed to create contact");
     }
@@ -398,7 +648,6 @@ export function ContactsPage() {
     try {
       await deleteContactsMutation.mutateAsync(selectedContacts);
       setSelectedContacts([]);
-      setSelectedContactId("");
       setIsDeleteDialogOpen(false);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to delete contacts");
@@ -665,7 +914,7 @@ export function ContactsPage() {
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
+        <div>
           <Card className="min-w-0" data-tour-id="page-contacts-list">
             <CardHeader className="border-b space-y-4">
               <div className="flex items-center justify-between gap-4">
@@ -767,23 +1016,41 @@ export function ContactsPage() {
                 </span>
               </div>
 
-              <div className="flex flex-col gap-1">
+              <div className="overflow-x-auto rounded-xl border border-border/80 bg-background shadow-sm">
+                <div className="min-w-[1720px]">
+                  <div className="grid items-stretch border-b-2 border-primary/20 bg-slate-100/90 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-700 dark:bg-slate-900/80 dark:text-slate-200" style={{ gridTemplateColumns: `48px ${columnGridTemplate}` }}>
+                    <span className="border-r border-border/60 px-4 py-4" />
+                    {columnOrder.map((columnId, index) => {
+                      const HeaderIcon = columnId === "contact" ? UserRound : columnId === "organization" ? Building2 : columnId === "email" ? Mail : columnId === "phone" ? Phone : columnId === "openDeals" ? CircleDotDashed : columnId === "wonDeals" ? CircleCheckBig : columnId === "nextActivity" ? CalendarClock : UserRound;
+                      return <div key={columnId} draggable onDragStart={(event) => { setDraggedColumn(columnId); event.dataTransfer.effectAllowed = "move"; }} onDragEnd={() => setDraggedColumn(null)} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; }} onDrop={(event) => { event.preventDefault(); if (draggedColumn && draggedColumn !== columnId) moveColumn(draggedColumn, index); setDraggedColumn(null); }} className={`group flex cursor-grab items-center gap-1 border-r border-border/60 px-2 py-3 last:border-r-0 active:cursor-grabbing ${draggedColumn === columnId ? "bg-primary/10 opacity-60" : "hover:bg-primary/[0.05]"}`}>
+                        <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground/70" />
+                        <HeaderIcon className="h-3.5 w-3.5 shrink-0 text-primary" />
+                        <span className="min-w-0 flex-1 truncate">{CONTACT_COLUMNS[columnId].label}</span>
+                        <span className="hidden shrink-0 group-hover:flex group-focus-within:flex">
+                          <button type="button" disabled={index === 0} onClick={() => moveColumn(columnId, index - 1)} className="rounded p-0.5 hover:bg-background disabled:opacity-20" aria-label={`Move ${CONTACT_COLUMNS[columnId].label} left`}><ChevronLeft className="h-3.5 w-3.5" /></button>
+                          <button type="button" disabled={index === columnOrder.length - 1} onClick={() => moveColumn(columnId, index + 1)} className="rounded p-0.5 hover:bg-background disabled:opacity-20" aria-label={`Move ${CONTACT_COLUMNS[columnId].label} right`}><ChevronRight className="h-3.5 w-3.5" /></button>
+                        </span>
+                      </div>;
+                    })}
+                  </div>
+
+                  <div className="flex flex-col">
                 {paginatedContacts.map((contact) => {
-                  const isActive = contact.id === effectiveSelectedContactId;
                   const isSelected = selectedContacts.includes(contact.id);
+                  const dealCounts = dealCountsByContact.get(contact.id) || {
+                    open: 0,
+                    closed: 0,
+                  };
                   return (
                     <div
                       key={contact.id}
-                      className={`relative w-full rounded-lg border-l-4 py-3.5 px-4 text-left transition-all select-none ${
-                        isActive
-                          ? "bg-primary/[0.04] border-l-primary shadow-xs"
-                          : isSelected
-                            ? "bg-primary/[0.015] border-l-transparent"
-                            : "hover:bg-muted/30 border-l-transparent"
+                      className={`relative grid min-h-[68px] grid-cols-[48px_minmax(0,1fr)] text-left transition-all select-none border-b border-border/70 last:border-b-0 ${
+                        isSelected
+                          ? "bg-primary/[0.07] shadow-[inset_3px_0_0_hsl(var(--primary))]"
+                          : "hover:bg-muted/30"
                       }`}
                     >
-                      <div className="flex items-start gap-4">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center justify-center border-r border-border/40 px-3 py-4">
                           <input
                             type="checkbox"
                             aria-label={`Select ${contact.name} for bulk actions`}
@@ -791,45 +1058,42 @@ export function ContactsPage() {
                             onChange={() => toggleBulkSelect(contact.id)}
                             className="accent-primary cursor-pointer"
                           />
-                          <div className="relative">
-                            <div className="h-10 w-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-semibold">
-                              {contact.name
-                                .split(" ")
-                                .map((part) => part[0])
-                                .join("")
-                                .slice(0, 2)
-                                .toUpperCase()}
-                            </div>
-                            <span
-                              className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background ${
-                                contact.isOnline
-                                  ? "bg-emerald-500"
-                                  : isRecentlyActive(contact.lastActivity)
-                                    ? "bg-amber-400"
-                                    : "bg-muted"
-                              }`}
-                              title={
-                                contact.isOnline ? "Online" : "Recently active"
-                              }
-                            />
-                          </div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedContactId(contact.id)}
-                          className="grid min-w-0 flex-1 cursor-pointer grid-cols-1 gap-y-3 text-left md:grid-cols-[minmax(200px,240px)_minmax(220px,250px)_minmax(160px,1fr)] md:gap-x-4"
-                        >
-                          <div className="min-w-0">
-                            <div className="flex min-w-0 items-center gap-2">
-                              <h3 className="truncate font-semibold text-foreground">
-                                {contact.name}
-                              </h3>
-                              <Badge
-                                variant="outline"
-                                className="text-[10px] capitalize"
-                              >
-                                {contact.lifecycleStage}
-                              </Badge>
+                        <div className="grid min-w-0 text-left" style={{ gridTemplateColumns: columnGridTemplate }}>
+                          <EditableContactCell
+                            contact={contact}
+                            field="name"
+                            editor={inlineEditor}
+                            onEdit={openInlineEditor}
+                            onCancel={() => setInlineEditor(null)}
+                            onChange={(value) =>
+                              setInlineEditor((current) =>
+                                current ? { ...current, value } : null,
+                              )
+                            }
+                            onSave={saveInlineEditor}
+                            onOpenContact={() =>
+                              navigate(`/dashboard/crm/contacts/${contact.id}`)
+                            }
+                            saving={updateContactMutation.isPending}
+                            ownerOptions={ownerOptions}
+                            order={columnPosition("contact")}
+                            className="min-w-0 px-4 py-3"
+                          >
+                            <div className="flex min-w-0 items-center gap-3">
+                              <div className="relative shrink-0">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/70 text-sm font-semibold text-primary-foreground shadow-sm">
+                                  {contact.name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}
+                                </div>
+                                <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background ${contact.isOnline ? "bg-emerald-500" : isRecentlyActive(contact.lastActivity) ? "bg-amber-400" : "bg-slate-300 dark:bg-slate-600"}`} title={contact.isOnline ? "Online" : "Recently active"} />
+                              </div>
+                              <div className="min-w-0">
+                                <h3 className="truncate font-semibold text-foreground">{contact.name}</h3>
+                                <div className="mt-1 flex items-center gap-1.5">
+                                  <Badge variant="outline" className={`h-5 px-1.5 text-[10px] font-medium capitalize ${lifecycleStyle(contact.lifecycleStage)}`}>{contact.lifecycleStage}</Badge>
+                                  {contact.tags.slice(0, 1).map((tag) => <span key={tag} className="max-w-20 truncate rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{tag}</span>)}
+                                </div>
+                              </div>
                               {contact.conflicts &&
                                 contact.conflicts.length > 0 && (
                                   <Badge
@@ -841,81 +1105,93 @@ export function ContactsPage() {
                                   </Badge>
                                 )}
                             </div>
-                            <p className="truncate text-sm text-muted-foreground">
-                              {contact.email ||
-                                contact.phone ||
-                                "No contact info"}
-                            </p>
-                            <div className="mt-1.5 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-                              <Cable className="h-3 w-3 shrink-0" />
-                              <span className="shrink-0 font-medium text-foreground/80">
-                                {contact.integrationSources[0]?.providerLabel ||
-                                  formatSourceLabel(contact.acquisitionSource)}
-                              </span>
-                              {contact.integrationSources[0] && (
-                                <>
-                                  <span aria-hidden="true">·</span>
-                                  <span
-                                    className="truncate"
-                                    title={
-                                      contact.integrationSources[0].formName
-                                    }
-                                  >
-                                    {contact.integrationSources[0].formName}
-                                  </span>
-                                  {contact.integrationSources.length > 1 && (
-                                    <span className="shrink-0">
-                                      +{contact.integrationSources.length - 1}
-                                    </span>
-                                  )}
-                                </>
-                              )}
-                            </div>
+                          </EditableContactCell>
+                          <EditableContactCell
+                            contact={contact}
+                            field="company"
+                            editor={inlineEditor}
+                            onEdit={openInlineEditor}
+                            onCancel={() => setInlineEditor(null)}
+                            onChange={(value) => setInlineEditor((current) => current ? { ...current, value } : null)}
+                            onSave={saveInlineEditor}
+                            saving={updateContactMutation.isPending}
+                            ownerOptions={ownerOptions}
+                            order={columnPosition("organization")}
+                            className="flex min-w-0 items-center gap-2 px-4 py-3 text-sm text-muted-foreground"
+                          >
+                            <Building2 className="h-4 w-4 shrink-0 text-indigo-500" />
+                            <span className="truncate" title={contact.company}>
+                              {contact.company || "—"}
+                            </span>
+                          </EditableContactCell>
+                          <EditableContactCell
+                            contact={contact}
+                            field="email"
+                            editor={inlineEditor}
+                            onEdit={openInlineEditor}
+                            onCancel={() => setInlineEditor(null)}
+                            onChange={(value) => setInlineEditor((current) => current ? { ...current, value } : null)}
+                            onSave={saveInlineEditor}
+                            saving={updateContactMutation.isPending}
+                            ownerOptions={ownerOptions}
+                            order={columnPosition("email")}
+                            className="flex min-w-0 items-center gap-2 px-4 py-3 text-sm text-muted-foreground"
+                          >
+                            <Mail className="h-4 w-4 shrink-0 text-rose-500" />
+                            <span className="truncate" title={contact.email}>
+                              {contact.email || "—"}
+                            </span>
+                          </EditableContactCell>
+                          <EditableContactCell
+                            contact={contact}
+                            field="phone"
+                            editor={inlineEditor}
+                            onEdit={openInlineEditor}
+                            onCancel={() => setInlineEditor(null)}
+                            onChange={(value) => setInlineEditor((current) => current ? { ...current, value } : null)}
+                            onSave={saveInlineEditor}
+                            saving={updateContactMutation.isPending}
+                            ownerOptions={ownerOptions}
+                            order={columnPosition("phone")}
+                            className="flex min-w-0 items-center gap-2 px-4 py-3 text-sm text-muted-foreground"
+                          >
+                            <Phone className="h-4 w-4 shrink-0 text-sky-600" />
+                            <span className="truncate">{contact.phone || "—"}</span>
+                          </EditableContactCell>
+                          <div className="flex items-center border-r border-border/40 px-4 py-3 text-sm" style={{ order: columnPosition("openDeals") }}>
+                            <span className="inline-flex min-w-12 items-center justify-center gap-1.5 rounded-full bg-sky-50 px-2 py-1 font-semibold text-sky-700 dark:bg-sky-950/40 dark:text-sky-300"><CircleDotDashed className="h-3.5 w-3.5" />{dealCounts.open}</span>
                           </div>
-                          <div className="min-w-0 text-sm text-muted-foreground">
-                            <div className="truncate font-medium text-foreground">
-                              {contact.company || "Independent"}
-                            </div>
-                            <div className="mt-0.5 text-xs capitalize">
-                              {contact.owner?.name || "Unassigned"} ·{" "}
-                              {contact.leadStatus.replace("_", " ")}
-                            </div>
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {contact.tags.slice(0, 3).map((tag) => (
-                                <Badge
-                                  key={tag}
-                                  variant="secondary"
-                                  className="text-xs"
-                                >
-                                  {tag}
-                                </Badge>
-                              ))}
-                              {contact.tags.length > 3 && (
-                                <span className="text-xs text-muted-foreground">
-                                  +{contact.tags.length - 3}
-                                </span>
-                              )}
-                            </div>
+                          <div className="flex items-center border-r border-border/40 px-4 py-3 text-sm" style={{ order: columnPosition("wonDeals") }}>
+                            <span className="inline-flex min-w-12 items-center justify-center gap-1.5 rounded-full bg-emerald-50 px-2 py-1 font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"><CircleCheckBig className="h-3.5 w-3.5" />{dealCounts.closed}</span>
                           </div>
-                          <div className="min-w-0 text-sm text-muted-foreground md:w-[200px] md:justify-self-end">
-                            <div className="flex items-center gap-2">
-                              <Clock className="h-4 w-4" />
-                              <span>
-                                {formatRelative(contact.lastActivity)}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2 mt-1">
-                              <MessagesSquare className="h-4 w-4" />
-                              <span>
-                                {contact.conversationCount} conversations
-                              </span>
-                            </div>
+                          <div className="flex min-w-0 items-center border-r border-border/40 px-4 py-3 text-sm text-muted-foreground" style={{ order: columnPosition("nextActivity") }}>
+                            <span className={`inline-flex max-w-full items-center gap-2 rounded-full px-2.5 py-1 ${contact.nextFollowUpAt ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300" : "bg-muted/70"}`}><CalendarClock className="h-3.5 w-3.5 shrink-0" /><span className="truncate">
+                              {contact.nextFollowUpAt
+                                ? formatDate(contact.nextFollowUpAt)
+                                : "Not scheduled"}
+                            </span></span>
                           </div>
-                        </button>
-                      </div>
+                          <EditableContactCell
+                            contact={contact}
+                            field="ownerId"
+                            editor={inlineEditor}
+                            onEdit={openInlineEditor}
+                            onCancel={() => setInlineEditor(null)}
+                            onChange={(value) => setInlineEditor((current) => current ? { ...current, value } : null)}
+                            onSave={saveInlineEditor}
+                            saving={updateContactMutation.isPending}
+                            ownerOptions={ownerOptions}
+                            order={columnPosition("owner")}
+                            className="min-w-0 px-4 py-3 text-sm text-muted-foreground"
+                          >
+                            <span className="flex min-w-0 items-center gap-2"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">{contact.owner?.name ? contact.owner.name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase() : "—"}</span><span className="truncate font-medium text-foreground">{contact.owner?.name || "Unassigned"}</span></span>
+                          </EditableContactCell>
+                        </div>
                     </div>
                   );
                 })}
+                  </div>
+                </div>
               </div>
 
               {!isLoadingContacts && displayedContacts.length === 0 && (
@@ -995,26 +1271,6 @@ export function ContactsPage() {
             </CardContent>
           </Card>
 
-          <Card className="h-fit xl:sticky xl:top-6">
-            <CardHeader className="border-b">
-              <CardTitle className="text-base">Contact details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {!selectedContact ? (
-                <div className="text-sm text-muted-foreground">
-                  Select a contact to see details.
-                </div>
-              ) : (
-                <ContactDetailsCard
-                  contact={selectedContact}
-                  onResolveConflictsClick={() => {
-                    setFocusedConflictContactId(selectedContact.id);
-                    setIsConflictSheetOpen(true);
-                  }}
-                />
-              )}
-            </CardContent>
-          </Card>
         </div>
       </div>
 
@@ -1087,7 +1343,7 @@ export function ContactsPage() {
             </DialogTitle>
             <DialogDescription>
               {focusedConflictContactId
-                ? `Review and resolve conflicting profile details captured for ${selectedContact?.name || "this contact"}.`
+                ? "Review and resolve conflicting profile details captured for this contact."
                 : "Multiple conflicting profile details were captured during user conversations. Resolve them below to maintain profile integrity."}
             </DialogDescription>
           </DialogHeader>

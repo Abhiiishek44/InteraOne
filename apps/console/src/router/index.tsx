@@ -9,6 +9,7 @@ import { TicketsPage } from "@/domains/tickets/pages/tickets-page";
 import { TicketDetailPage } from "@/domains/tickets/pages/ticket-detail-page";
 import { MembersPage } from "@/domains/member/pages/members-page";
 import { ContactsPage } from "@/domains/contacts/pages/contacts-page";
+import { ContactDetailsPage } from "@/domains/contacts/pages/contact-details-page";
 import { AgentsPage } from "@/domains/agent/pages/page";
 import { WidgetPage } from "@/domains/widget/pages/page";
 import { ConversationLayout } from "@/domains/conversation/components/conversation-layout";
@@ -173,6 +174,16 @@ const router = createBrowserRouter([
   {
     path: "/dashboard/crm",
     element: <Navigate to="/dashboard/crm/contacts" replace />,
+  },
+  {
+    path: "/dashboard/crm/contacts/:contactId",
+    element: (
+      <ProtectedRoute requiredRole="agent">
+        <DashboardLayout>
+          <ContactDetailsPage />
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
   },
   {
     path: "/dashboard/crm/contacts",

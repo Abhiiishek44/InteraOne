@@ -60,6 +60,27 @@ export interface ContactNote {
   id: string;
   author: string;
   content: string;
+  pinned?: boolean;
+  createdAt: string;
+}
+
+export interface ContactTimelineItem {
+  id: string;
+  type: "email" | "file" | "document" | "activity";
+  title: string;
+  content?: string;
+  fileName?: string;
+  fileKey?: string;
+  mimeType?: string;
+  size?: number;
+  activityType?: "call" | "meeting" | "task" | "deadline" | "lunch";
+  startAt?: string;
+  endAt?: string;
+  priority?: "none" | "low" | "medium" | "normal" | "high";
+  status?: "scheduled" | "done";
+  location?: string;
+  videoCallUrl?: string;
+  author: string;
   createdAt: string;
 }
 
@@ -112,6 +133,7 @@ export interface Contact {
   isOnline: boolean;
   conversationCount: number;
   notes: ContactNote[];
+  timelineItems?: ContactTimelineItem[];
   conversations: ContactConversation[];
   insights: ContactInsight;
   conflicts: ContactConflict[];
@@ -147,6 +169,7 @@ export interface ContactListItem {
     content: string;
     createdAt: string;
   }>;
+  timelineItems?: ContactTimelineItem[];
   conversations: Array<{
     id: string;
     status: "open" | "resolved" | "closed";
@@ -207,6 +230,7 @@ export const toContactViewModel = (item: ContactListItem): Contact => ({
   isOnline: false,
   conversationCount: item.conversationCount,
   notes: item.notes || [],
+  timelineItems: item.timelineItems || [],
   conversations:
     item.conversations && item.conversations.length > 0
       ? item.conversations

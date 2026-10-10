@@ -11,6 +11,7 @@ import {
   DEFAULT_PIPELINE_STAGES,
   Account,
   LeadSourceForm,
+  Channel,
 } from "@shared/models";
 import {
   ContactWriteInput,
@@ -20,6 +21,7 @@ import {
 import logger from "@shared/core/logger";
 import { CrmFieldsService } from "@modules/crm-fields";
 import { serializeCustomFields } from "@shared/utils/custom-fields";
+import { ChannelService } from "@modules/channels/channels.service";
 
 export class ContactsService {
   async listContacts(
@@ -308,7 +310,27 @@ export class ContactsService {
           id: note.id,
           author: note.author,
           content: note.content,
+          pinned: Boolean(note.pinned),
           createdAt: new Date(note.createdAt).toISOString(),
+        })),
+        timelineItems: (contact.timelineItems || []).map((item: any) => ({
+          id: item.id,
+          type: item.type,
+          title: item.title,
+          content: item.content || "",
+          fileName: item.fileName || "",
+          fileKey: item.fileKey || "",
+          mimeType: item.mimeType || "",
+          size: item.size || 0,
+          activityType: item.activityType,
+          startAt: item.startAt ? new Date(item.startAt).toISOString() : undefined,
+          endAt: item.endAt ? new Date(item.endAt).toISOString() : undefined,
+          priority: item.priority,
+          status: item.status,
+          location: item.location || "",
+          videoCallUrl: item.videoCallUrl || "",
+          author: item.author,
+          createdAt: new Date(item.createdAt).toISOString(),
         })),
         conversations: convListItems,
         conflicts: contactConflicts,
@@ -766,6 +788,7 @@ export class ContactsService {
         id: note.id,
         author: note.author,
         content: note.content,
+        pinned: Boolean(note.pinned),
         createdAt: new Date(note.createdAt).toISOString(),
       })),
       conversations: (contact.conversations || []).map((conversation: any) => ({
@@ -871,17 +894,18 @@ export class ContactsService {
     organizationId: string,
     contactId: string,
     noteId: string,
-    content: string,
+    input: { content?: string; pinned?: boolean },
   ): Promise<any> {
+    const setFields: Record<string, unknown> = {};
+    if (input.content !== undefined) setFields["notes.$.content"] = input.content;
+    if (input.pinned !== undefined) setFields["notes.$.pinned"] = input.pinned;
     const updated = await Contact.findOneAndUpdate(
       {
         organizationId: new Types.ObjectId(organizationId),
         _id: new Types.ObjectId(contactId),
         "notes.id": noteId,
       },
-      {
-        $set: { "notes.$.content": content },
-      },
+      { $set: setFields },
       { returnDocument: "after" },
     ).lean();
 
@@ -894,6 +918,7 @@ export class ContactsService {
       id: note.id,
       author: note.author,
       content: note.content,
+      pinned: Boolean(note.pinned),
       createdAt: new Date(note.createdAt).toISOString(),
     };
   }
@@ -915,6 +940,245 @@ export class ContactsService {
     );
 
     if (result.modifiedCount === 0) throw new Error("Contact note not found");
+  }
+
+  async addTimelineItem(
+    organizationId: string,
+    contactId: string,
+    author: string,
+    input: {
+      type: "file" | "document";
+      title: string;
+      fileName: string;
+      fileKey: string;
+      mimeType?: string;
+      size?: number;
+    },
+  ): Promise<any> {
+    const item = {
+      id: `timeline-${randomUUID()}`,
+      ...input,
+      author,
+      createdAt: new Date(),
+    };
+    const updated = await Contact.findOneAndUpdate(
+      {
+        organizationId: new Types.ObjectId(organizationId),
+        _id: new Types.ObjectId(contactId),
+      },
+      {
+        $push: { timelineItems: { $each: [item], $position: 0 } },
+        $set: { lastActivityAt: item.createdAt },
+      },
+      { returnDocument: "after" },
+    );
+    if (!updated) throw new Error("Contact not found");
+    return item;
+  }
+
+  async addActivity(
+    organizationId: string,
+    contactId: string,
+    author: string,
+    input: {
+      title: string;
+      content?: string;
+      activityType: "call" | "meeting" | "task" | "deadline" | "lunch";
+      startAt: string;
+      endAt: string;
+      priority: "none" | "low" | "medium" | "normal" | "high";
+      status: "scheduled" | "done";
+      location?: string;
+      videoCallUrl?: string;
+    },
+  ): Promise<any> {
+    const item = {
+      id: `timeline-${randomUUID()}`,
+      type: "activity" as const,
+      ...input,
+      startAt: new Date(input.startAt),
+      endAt: new Date(input.endAt),
+      author,
+      createdAt: new Date(),
+    };
+    const updated = await Contact.findOneAndUpdate(
+      {
+        organizationId: new Types.ObjectId(organizationId),
+        _id: new Types.ObjectId(contactId),
+      },
+      {
+        $push: { timelineItems: { $each: [item], $position: 0 } },
+        $set: { lastActivityAt: item.createdAt },
+      },
+      { returnDocument: "after" },
+    );
+    if (!updated) throw new Error("Contact not found");
+    return item;
+  }
+
+  async updateTimelineItem(
+    organizationId: string,
+    contactId: string,
+    itemId: string,
+    content: string,
+  ): Promise<any> {
+    const updated = await Contact.findOneAndUpdate(
+      {
+        organizationId: new Types.ObjectId(organizationId),
+        _id: new Types.ObjectId(contactId),
+        timelineItems: { $elemMatch: { id: itemId, type: { $in: ["file", "document"] } } },
+      },
+      { $set: { "timelineItems.$[item].content": content, lastActivityAt: new Date() } },
+      { arrayFilters: [{ "item.id": itemId }], returnDocument: "after", runValidators: true },
+    );
+    if (!updated) throw new Error("Contact file not found");
+    return updated.timelineItems.find((item) => item.id === itemId);
+  }
+
+  async deleteTimelineItem(
+    organizationId: string,
+    contactId: string,
+    itemId: string,
+    type?: "activity" | "file",
+  ): Promise<void> {
+    const allowedTypes = type === "activity" ? ["activity"] : ["file", "document"];
+    const result = await Contact.updateOne(
+      {
+        organizationId: new Types.ObjectId(organizationId),
+        _id: new Types.ObjectId(contactId),
+        timelineItems: { $elemMatch: { id: itemId, type: { $in: allowedTypes } } },
+      },
+      { $pull: { timelineItems: { id: itemId } } },
+    );
+    if (result.modifiedCount === 0) throw new Error(type === "activity" ? "Contact activity not found" : "Contact file not found");
+  }
+
+  async updateActivity(
+    organizationId: string,
+    contactId: string,
+    activityId: string,
+    input: {
+      title: string; content?: string; activityType: "call" | "meeting" | "task" | "deadline" | "lunch";
+      startAt: string; endAt: string; priority: "none" | "low" | "medium" | "normal" | "high";
+      status: "scheduled" | "done"; location?: string; videoCallUrl?: string;
+    },
+  ): Promise<any> {
+    const fields: Record<string, unknown> = { lastActivityAt: new Date() };
+    Object.entries({ ...input, startAt: new Date(input.startAt), endAt: new Date(input.endAt) })
+      .forEach(([key, value]) => { fields[`timelineItems.$[activity].${key}`] = value; });
+    const updated = await Contact.findOneAndUpdate(
+      {
+        organizationId: new Types.ObjectId(organizationId),
+        _id: new Types.ObjectId(contactId),
+        timelineItems: { $elemMatch: { id: activityId, type: "activity" } },
+      },
+      { $set: fields },
+      { arrayFilters: [{ "activity.id": activityId, "activity.type": "activity" }], returnDocument: "after", runValidators: true },
+    );
+    if (!updated) throw new Error("Contact activity not found");
+    return updated.timelineItems.find((item) => item.id === activityId);
+  }
+
+  async updateActivityStatus(
+    organizationId: string,
+    contactId: string,
+    activityId: string,
+    status: "scheduled" | "done",
+  ): Promise<any> {
+    const updated = await Contact.findOneAndUpdate(
+      {
+        organizationId: new Types.ObjectId(organizationId),
+        _id: new Types.ObjectId(contactId),
+        timelineItems: { $elemMatch: { id: activityId, type: "activity" } },
+      },
+      {
+        $set: {
+          "timelineItems.$[activity].status": status,
+          lastActivityAt: new Date(),
+        },
+      },
+      {
+        arrayFilters: [{ "activity.id": activityId, "activity.type": "activity" }],
+        returnDocument: "after",
+        runValidators: true,
+      },
+    );
+    if (!updated) throw new Error("Contact activity not found");
+
+    const activity = updated.timelineItems.find(
+      (item) => item.id === activityId && item.type === "activity",
+    );
+    if (!activity || activity.status !== status) {
+      throw new Error("Activity status was not persisted");
+    }
+    return activity;
+  }
+
+  async updateInsights(
+    organizationId: string,
+    contactId: string,
+    insights: { summary: string; sentiment: "positive" | "neutral" | "negative"; topics: string[] },
+  ): Promise<any> {
+    const updated = await Contact.findOneAndUpdate(
+      {
+        organizationId: new Types.ObjectId(organizationId),
+        _id: new Types.ObjectId(contactId),
+      },
+      { $set: { insights, lastActivityAt: new Date() } },
+      { returnDocument: "after", runValidators: true },
+    );
+    if (!updated) throw new Error("Contact not found");
+    return updated.insights;
+  }
+
+  async sendContactEmail(
+    organizationId: string,
+    contactId: string,
+    author: string,
+    input: { subject: string; body: string; html?: string; from?: string },
+  ): Promise<any> {
+    const contact = await Contact.findOne({
+      organizationId: new Types.ObjectId(organizationId),
+      _id: new Types.ObjectId(contactId),
+    });
+    if (!contact) throw new Error("Contact not found");
+    if (!contact.email) throw new Error("Contact does not have an email address");
+
+    const channel = await Channel.findOne({
+      organizationId: new Types.ObjectId(organizationId),
+      type: "email",
+      isActive: true,
+      "config.email.verificationStatus": "verified",
+    });
+    if (!channel) throw new Error("Connect and verify an email channel before sending email");
+
+    const result = await ChannelService.sendViaChannel(
+      organizationId,
+      channel._id.toString(),
+      {
+        to: contact.email,
+        subject: input.subject,
+        body: input.body,
+        html: input.html || undefined,
+        from: input.from || undefined,
+      },
+    );
+    const item = {
+      id: `timeline-${randomUUID()}`,
+      type: "email" as const,
+      title: input.subject,
+      content: input.html || input.body,
+      author,
+      createdAt: new Date(),
+    };
+    await Contact.updateOne(
+      { _id: contact._id, organizationId: new Types.ObjectId(organizationId) },
+      {
+        $push: { timelineItems: { $each: [item], $position: 0 } },
+        $set: { lastActivityAt: item.createdAt, lastContactedAt: item.createdAt },
+      },
+    );
+    return { ...item, messageId: result.messageId };
   }
 
   async addTag(

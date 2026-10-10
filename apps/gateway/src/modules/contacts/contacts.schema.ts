@@ -99,7 +99,62 @@ export const contactsSchema = {
   }),
 
   updateNote: Joi.object({
-    content: Joi.string().trim().max(2000).required(),
+    content: Joi.string().trim().max(2000),
+    pinned: Joi.boolean(),
+  }).or("content", "pinned"),
+
+  addTimelineItem: Joi.object({
+    type: Joi.string().valid("file", "document").required(),
+    title: Joi.string().trim().max(300).required(),
+    fileName: Joi.string().trim().max(300).required(),
+    fileKey: Joi.string().trim().max(1000).required(),
+    mimeType: Joi.string().trim().max(200).allow(""),
+    size: Joi.number().integer().min(0),
+  }),
+
+  addActivity: Joi.object({
+    title: Joi.string().trim().max(300).required(),
+    content: Joi.string().allow("").max(20000),
+    activityType: Joi.string().valid("call", "meeting", "task", "deadline", "lunch").required(),
+    startAt: Joi.date().iso().required(),
+    endAt: Joi.date().iso().min(Joi.ref("startAt")).required(),
+    priority: Joi.string().valid("none", "low", "medium", "normal", "high").required(),
+    status: Joi.string().valid("scheduled", "done").required(),
+    location: Joi.string().trim().max(500).allow(""),
+    videoCallUrl: Joi.string().uri().max(1000).allow(""),
+  }),
+
+  updateActivityStatus: Joi.object({
+    status: Joi.string().valid("scheduled", "done").required(),
+  }),
+
+  updateActivity: Joi.object({
+    title: Joi.string().trim().max(300).required(),
+    content: Joi.string().allow("").max(20000),
+    activityType: Joi.string().valid("call", "meeting", "task", "deadline", "lunch").required(),
+    startAt: Joi.date().iso().required(),
+    endAt: Joi.date().iso().min(Joi.ref("startAt")).required(),
+    priority: Joi.string().valid("none", "low", "medium", "normal", "high").required(),
+    status: Joi.string().valid("scheduled", "done").required(),
+    location: Joi.string().trim().max(500).allow(""),
+    videoCallUrl: Joi.string().uri().max(1000).allow(""),
+  }),
+
+  updateTimelineItem: Joi.object({
+    content: Joi.string().allow("").max(20000).required(),
+  }),
+
+  updateInsights: Joi.object({
+    summary: Joi.string().trim().max(4000).required(),
+    sentiment: Joi.string().valid("positive", "neutral", "negative").required(),
+    topics: Joi.array().items(Joi.string().trim().max(100)).max(20).required(),
+  }),
+
+  sendContactEmail: Joi.object({
+    subject: Joi.string().trim().max(300).required(),
+    body: Joi.string().trim().max(20000).required(),
+    html: Joi.string().max(50000).allow(""),
+    from: Joi.string().email().allow(""),
   }),
 
   addTag: Joi.object({

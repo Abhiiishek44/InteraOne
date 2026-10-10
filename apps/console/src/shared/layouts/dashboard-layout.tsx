@@ -604,6 +604,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const isTicketDetailRoute = /^\/dashboard\/tickets\/[^/]+\/?$/.test(
     location.pathname,
   );
+  const isContactDetailsRoute =
+    /^\/dashboard\/crm\/contacts\/[^/]+\/?$/.test(location.pathname);
   const tourIdentity = useMemo(
     () => ({
       orgId: activeOrgId,
@@ -1348,7 +1350,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 </>
               ) : (
                 <div
-                  className={`min-h-[calc(100vh-4rem)] rounded-2xl border border-border bg-card p-4 sm:p-6 lg:p-8 ${
+                  className={`min-h-[calc(100vh-4rem)] rounded-2xl border border-border bg-card ${
+                    isContactDetailsRoute ? "p-2 sm:p-3 lg:p-4" : "p-4 sm:p-6 lg:p-8"
+                  } ${
                     isTicketRoute ? "" : "shadow-sm"
                   }`}
                 >
