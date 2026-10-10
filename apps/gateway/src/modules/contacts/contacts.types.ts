@@ -17,6 +17,8 @@ export interface ContactWriteInput {
   name?: string;
   email?: string;
   phone?: string;
+  emails?: Array<{ value: string; type: "work" | "home" | "mobile" | "other" }>;
+  phones?: Array<{ value: string; type: "work" | "home" | "mobile" | "other" }>;
   company?: string;
   accountId?: string | null;
   tags?: string[];

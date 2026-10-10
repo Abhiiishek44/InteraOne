@@ -22,9 +22,10 @@ interface ActivityResponse {
 }
 
 export const opportunitiesApi = {
-  async list(): Promise<Opportunity[]> {
-    const response =
-      await apiClient.get<OpportunitiesResponse>("/opportunities");
+  async list(recordType: "lead" | "deal" = "deal"): Promise<Opportunity[]> {
+    const response = await apiClient.get<OpportunitiesResponse>(
+      `/opportunities?type=${recordType}`,
+    );
     return response.data?.opportunities || [];
   },
 
@@ -43,8 +44,11 @@ export const opportunitiesApi = {
     return response.data.pipeline;
   },
 
-  async create(payload: CreateOpportunityPayload): Promise<void> {
-    await apiClient.post("/opportunities", payload);
+  async create(payload: CreateOpportunityPayload): Promise<{ _id: string }> {
+    const response = await apiClient.post<{
+      data: { opportunity: { _id: string } };
+    }>("/opportunities", payload);
+    return response.data.opportunity;
   },
 
   async update(id: string, payload: UpdateOpportunityPayload): Promise<void> {
@@ -53,6 +57,14 @@ export const opportunitiesApi = {
 
   async remove(id: string): Promise<void> {
     await apiClient.delete(`/opportunities/${id}`);
+  },
+
+  async convertLead(id: string): Promise<void> {
+    await apiClient.post(`/opportunities/${id}/convert-to-deal`);
+  },
+
+  async archiveLead(id: string): Promise<void> {
+    await apiClient.post(`/opportunities/${id}/archive`);
   },
 
   async updateStage(id: string, stage: OpportunityStage): Promise<void> {
@@ -86,11 +98,11 @@ export const opportunitiesApi = {
     const response = await apiClient.post<ActivityResponse>(
       `/opportunities/${id}/activities`,
       {
-      content,
-      dueAt,
-      category,
-      customFields,
-      durationMinutes,
+        content,
+        dueAt,
+        category,
+        customFields,
+        durationMinutes,
       },
     );
     return response.data.activity;

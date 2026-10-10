@@ -29,7 +29,8 @@ export class OpportunitiesController {
 
   static async list(req: Request, res: Response) {
     try {
-      const opportunities = await service.list(getOrgId(req));
+      const recordType = req.query.type === "lead" ? "lead" : "deal";
+      const opportunities = await service.list(getOrgId(req), recordType);
       sendResponse(res, 200, true, "Opportunities retrieved", {
         opportunities,
       });
@@ -68,6 +69,32 @@ export class OpportunitiesController {
     } catch (error: any) {
       const status = error.message === "Opportunity not found" ? 404 : 400;
       sendError(res, status, error.message || "Failed to delete opportunity");
+    }
+  }
+
+  static async convertToDeal(req: Request, res: Response) {
+    try {
+      const opportunity = await service.convertToDeal(
+        getOrgId(req),
+        req.params.id as string,
+      );
+      sendResponse(res, 200, true, "Lead converted to deal", { opportunity });
+    } catch (error: any) {
+      const status = error.message === "Lead not found" ? 404 : 400;
+      sendError(res, status, error.message || "Failed to convert lead");
+    }
+  }
+
+  static async archive(req: Request, res: Response) {
+    try {
+      const opportunity = await service.archiveLead(
+        getOrgId(req),
+        req.params.id as string,
+      );
+      sendResponse(res, 200, true, "Lead archived", { opportunity });
+    } catch (error: any) {
+      const status = error.message === "Lead not found" ? 404 : 400;
+      sendError(res, status, error.message || "Failed to archive lead");
     }
   }
 

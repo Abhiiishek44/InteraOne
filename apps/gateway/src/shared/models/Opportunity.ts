@@ -38,6 +38,11 @@ export interface IOpportunity extends Document {
   primaryContactId?: Types.ObjectId | null;
   accountId?: Types.ObjectId | null;
   title: string;
+  recordType: "lead" | "deal";
+  labels: string[];
+  sourceOrigin?: string;
+  sourceChannel?: string;
+  sourceChannelId?: string;
   company?: string;
   value: number;
   currency: "USD" | "INR" | "EUR" | "GBP";
@@ -51,6 +56,7 @@ export interface IOpportunity extends Document {
   activities: IOpportunityActivity[];
   customFields: Record<string, unknown>;
   sourceSubmissionId?: Types.ObjectId | null;
+  archivedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -78,6 +84,16 @@ const opportunitySchema = new Schema<IOpportunity>(
       default: null,
     },
     title: { type: String, required: true, trim: true, maxlength: 160 },
+    recordType: {
+      type: String,
+      enum: ["lead", "deal"],
+      default: "deal",
+      index: true,
+    },
+    labels: { type: [String], default: [] },
+    sourceOrigin: { type: String, trim: true, maxlength: 120 },
+    sourceChannel: { type: String, trim: true, maxlength: 120 },
+    sourceChannelId: { type: String, trim: true, maxlength: 160 },
     company: { type: String, trim: true, maxlength: 160 },
     value: { type: Number, min: 0, default: 0 },
     currency: {
@@ -160,11 +176,13 @@ const opportunitySchema = new Schema<IOpportunity>(
       ref: "LeadSubmission",
       default: null,
     },
+    archivedAt: { type: Date, default: null },
   },
   { timestamps: true },
 );
 
 opportunitySchema.index({ organizationId: 1, stage: 1, updatedAt: -1 });
+opportunitySchema.index({ organizationId: 1, recordType: 1, archivedAt: 1 });
 opportunitySchema.index({ organizationId: 1, contactId: 1 });
 opportunitySchema.index({ organizationId: 1, primaryContactId: 1 });
 opportunitySchema.index({ organizationId: 1, accountId: 1 });

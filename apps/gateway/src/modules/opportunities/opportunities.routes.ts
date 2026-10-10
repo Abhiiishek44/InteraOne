@@ -24,6 +24,8 @@ router.post(
   validateRequest(opportunitiesSchema.create),
   OpportunitiesController.create,
 );
+router.post("/:id/convert-to-deal", OpportunitiesController.convertToDeal);
+router.post("/:id/archive", OpportunitiesController.archive);
 router.patch(
   "/:id",
   validateRequest(opportunitiesSchema.update),

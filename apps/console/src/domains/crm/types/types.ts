@@ -37,12 +37,22 @@ export interface SalesPipeline {
 export interface Opportunity {
   id: string;
   title: string;
+  recordType: "lead" | "deal";
+  labels: string[];
+  sourceOrigin: string;
+  sourceChannel: string;
+  sourceChannelId: string;
   company?: string;
   account?: {
     id: string;
     name: string;
     website?: string;
+    linkedinProfile?: string;
     industry?: string;
+    address?: string;
+    annualRevenue?: number | null;
+    numberOfEmployees?: number | null;
+    labels?: string[];
     customFields?: Record<string, unknown>;
   } | null;
   value: number;
@@ -75,6 +85,14 @@ export interface Opportunity {
     name: string;
     email?: string;
     phone?: string;
+    phones?: Array<{
+      value: string;
+      type: "work" | "home" | "mobile" | "other";
+    }>;
+    emails?: Array<{
+      value: string;
+      type: "work" | "home" | "mobile" | "other";
+    }>;
     company?: string;
   } | null;
   owner: {
@@ -85,6 +103,7 @@ export interface Opportunity {
   createdAt: string;
   updatedAt: string;
   customFields: Record<string, unknown>;
+  archivedAt?: string | null;
 }
 
 export interface UpdatePipelinePayload {
@@ -97,10 +116,15 @@ export interface CreateOpportunityPayload {
   primaryContactId?: string | null;
   accountId?: string | null;
   title: string;
+  recordType?: "lead" | "deal";
+  labels?: string[];
+  sourceOrigin?: string;
+  sourceChannel?: string;
+  sourceChannelId?: string;
   company?: string;
   value: number;
   currency: Opportunity["currency"];
-  stage: OpportunityStage;
+  stage?: OpportunityStage;
   ownerId?: string | null;
   expectedCloseAt?: string | null;
   nextAction?: string;

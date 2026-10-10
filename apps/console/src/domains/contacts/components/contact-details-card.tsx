@@ -305,7 +305,7 @@ export function ContactDetailsCard({
                 <button
                   type="button"
                   onClick={() =>
-                    navigate(`/dashboard/crm/companies/${contact.account!.id}`)
+                    navigate(`/dashboard/crm/organizations/${contact.account!.id}`)
                   }
                   className="min-w-0 cursor-pointer truncate text-primary hover:underline"
                 >
