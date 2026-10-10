@@ -36,6 +36,8 @@ import { TelegramChannelSetupPage } from "@/domains/channels/pages/telegram-chan
 import { AcceptInvitePage } from "@/domains/auth/pages/accept-invite/page";
 import { PipelinePage } from "@/domains/crm/pages/pipeline-page";
 import { OpportunityDetailsPage } from "@/domains/crm/pages/opportunity-details-page";
+import { LeadsPage } from "@/domains/crm/pages/leads-page";
+import { LeadDetailsPage } from "@/domains/crm/pages/lead-details-page";
 import { AccountsPage } from "@/domains/accounts/pages/accounts-page";
 import { AccountDetailsPage } from "@/domains/accounts/pages/account-details-page";
 
@@ -218,6 +220,26 @@ const router = createBrowserRouter([
   {
     path: "/dashboard/crm/companies/*",
     element: <Navigate to="/dashboard/crm/organizations" replace />,
+  },
+  {
+    path: "/dashboard/crm/leads",
+    element: (
+      <ProtectedRoute requiredRole="agent">
+        <DashboardLayout>
+          <LeadsPage />
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/dashboard/crm/leads/:leadId",
+    element: (
+      <ProtectedRoute requiredRole="agent">
+        <DashboardLayout>
+          <LeadDetailsPage />
+        </DashboardLayout>
+      </ProtectedRoute>
+    ),
   },
   {
     path: "/dashboard/crm/pipeline",

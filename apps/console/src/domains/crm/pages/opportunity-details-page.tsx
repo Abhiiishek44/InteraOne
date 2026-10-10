@@ -357,7 +357,7 @@ export function OpportunityDetailsPage() {
             className="mt-5"
             onClick={() => navigate("/dashboard/crm/pipeline")}
           >
-            Back to pipeline
+            Back to deals
           </Button>
         </CardContent>
       </Card>
@@ -373,7 +373,7 @@ export function OpportunityDetailsPage() {
             variant="outline"
             size="icon"
             onClick={() => navigate("/dashboard/crm/pipeline")}
-            title="Back to pipeline"
+            title="Back to deals"
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
@@ -459,7 +459,7 @@ export function OpportunityDetailsPage() {
 
       <section>
         <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Pipeline progress — select a stage to move this opportunity
+          Deal progress — select a stage to move this deal
         </p>
         <div className="overflow-x-auto rounded-lg border bg-muted/15 p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <div className="flex min-w-max items-center px-1">

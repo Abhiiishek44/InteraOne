@@ -302,7 +302,7 @@ export function PipelinePage() {
         name: pipeline.name,
         stages: reordered.map((stage, order) => ({ ...stage, order })),
       });
-      toast.success("Pipeline stages reordered");
+      toast.success("Deal stages reordered");
     } catch (error: unknown) {
       toast.error(
         error instanceof Error ? error.message : "Failed to reorder stages",
@@ -335,9 +335,7 @@ export function PipelinePage() {
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold">
-              {pipeline?.name || "Sales pipeline"}
-            </h1>
+            <h1 className="text-2xl font-bold">Deals</h1>
             {pipeline?.isDefault && <Badge variant="outline">Default</Badge>}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -346,15 +344,15 @@ export function PipelinePage() {
           </p>
         </div>
         <Button onClick={openCreate} disabled={pipelineLoading}>
-          <Plus className="mr-2 h-4 w-4" /> New opportunity
+          <Plus className="mr-2 h-4 w-4" /> New deal
         </Button>
       </header>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          { label: "Open opportunities", value: metrics.open, icon: Target },
+          { label: "Open deals", value: metrics.open, icon: Target },
           {
-            label: "Open pipeline value",
+            label: "Open deal value",
             value: metrics.value,
             icon: CircleDollarSign,
           },
@@ -885,7 +883,7 @@ export function PipelinePage() {
                 whileHover={{ y: -2 }}
                 whileTap={{ scale: 0.98 }}
                 className="group relative flex h-36 w-20 shrink-0 flex-col items-center justify-center self-start overflow-hidden rounded-xl border bg-gradient-to-b from-card to-muted/30 px-2 text-center text-muted-foreground shadow-xs transition-colors hover:border-primary/40 hover:text-primary hover:shadow-md"
-                title="Add pipeline stage"
+                title="Add deal stage"
               >
                 <span className="absolute inset-y-3 left-0 w-0.5 rounded-r-full bg-primary/35 transition-colors group-hover:bg-primary" />
                 <span className="mb-2.5 flex h-9 w-9 items-center justify-center rounded-lg border bg-background text-foreground shadow-sm transition-all group-hover:border-primary/30 group-hover:bg-primary group-hover:text-primary-foreground">

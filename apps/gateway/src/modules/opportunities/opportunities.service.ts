@@ -26,6 +26,11 @@ interface CreateOpportunityInput {
   primaryContactId?: string | null;
   accountId?: string | null;
   title: string;
+  recordType?: "lead" | "deal";
+  labels?: string[];
+  sourceOrigin?: string;
+  sourceChannel?: string;
+  sourceChannelId?: string;
   company?: string;
   value?: number;
   currency?: "USD" | "INR" | "EUR" | "GBP";
@@ -78,6 +83,8 @@ export class OpportunitiesService {
       const usedStage = await Opportunity.findOne({
         organizationId,
         stage: { $in: protectedStageIds },
+        recordType: { $in: ["deal", null] },
+        archivedAt: null,
       })
         .select("stage")
         .lean();
@@ -130,11 +137,24 @@ export class OpportunitiesService {
     return stage;
   }
 
-  async list(organizationId: string) {
-    const opportunities = await Opportunity.find({ organizationId })
-      .populate("contactId", "name email phone company lifecycleStage")
-      .populate("primaryContactId", "name email phone company lifecycleStage")
-      .populate("accountId", "name website industry customFields")
+  async list(organizationId: string, recordType: "lead" | "deal" = "deal") {
+    const opportunities = await Opportunity.find({
+      organizationId,
+      archivedAt: null,
+      recordType: recordType === "deal" ? { $in: ["deal", null] } : "lead",
+    })
+      .populate(
+        "contactId",
+        "name email phone emails phones company lifecycleStage",
+      )
+      .populate(
+        "primaryContactId",
+        "name email phone emails phones company lifecycleStage",
+      )
+      .populate(
+        "accountId",
+        "name website linkedinProfile industry address annualRevenue numberOfEmployees labels customFields",
+      )
       .populate("ownerId", "name email")
       .sort({ stage: 1, position: 1, updatedAt: -1 })
       .lean();
@@ -142,13 +162,23 @@ export class OpportunitiesService {
     return opportunities.map((opportunity: any) => ({
       id: opportunity._id.toString(),
       title: opportunity.title,
+      recordType: opportunity.recordType || "deal",
+      labels: opportunity.labels || [],
+      sourceOrigin: opportunity.sourceOrigin || "manual",
+      sourceChannel: opportunity.sourceChannel || "",
+      sourceChannelId: opportunity.sourceChannelId || "",
       company: opportunity.accountId?.name || opportunity.company,
       account: opportunity.accountId
         ? {
             id: opportunity.accountId._id.toString(),
             name: opportunity.accountId.name,
             website: opportunity.accountId.website || "",
+            linkedinProfile: opportunity.accountId.linkedinProfile || "",
             industry: opportunity.accountId.industry || "",
+            address: opportunity.accountId.address || "",
+            annualRevenue: opportunity.accountId.annualRevenue ?? null,
+            numberOfEmployees: opportunity.accountId.numberOfEmployees ?? null,
+            labels: opportunity.accountId.labels || [],
             customFields: serializeCustomFields(
               opportunity.accountId.customFields,
             ),
@@ -193,6 +223,12 @@ export class OpportunitiesService {
                 .email,
               phone: (opportunity.primaryContactId || opportunity.contactId)
                 .phone,
+              phones:
+                (opportunity.primaryContactId || opportunity.contactId)
+                  .phones || [],
+              emails:
+                (opportunity.primaryContactId || opportunity.contactId)
+                  .emails || [],
               company: (opportunity.primaryContactId || opportunity.contactId)
                 .company,
             }
@@ -207,6 +243,7 @@ export class OpportunitiesService {
       createdAt: opportunity.createdAt.toISOString(),
       updatedAt: opportunity.updatedAt.toISOString(),
       customFields: serializeCustomFields(opportunity.customFields),
+      archivedAt: opportunity.archivedAt?.toISOString() || null,
     }));
   }
 
@@ -216,6 +253,7 @@ export class OpportunitiesService {
     const position = await Opportunity.countDocuments({
       organizationId: orgId,
       stage: pipelineStage.id,
+      recordType: { $in: ["deal", null] },
     });
     const customFields = input.customFields || {};
     const primaryContactId = input.primaryContactId || input.contactId;
@@ -263,6 +301,11 @@ export class OpportunitiesService {
       primaryContactId: contact?._id || null,
       accountId: account?._id || null,
       title: input.title,
+      recordType: input.recordType || "deal",
+      labels: input.labels || [],
+      sourceOrigin: input.sourceOrigin || "manual",
+      sourceChannel: input.sourceChannel || "",
+      sourceChannelId: input.sourceChannelId || "",
       company: account?.name || input.company || contact?.company,
       value: input.value || 0,
       currency: input.currency || "USD",
@@ -281,7 +324,7 @@ export class OpportunitiesService {
         : null,
     });
 
-    if (contact) {
+    if (contact && (input.recordType || "deal") === "deal") {
       await this.syncContactLifecycle(
         organizationId,
         contact._id.toString(),
@@ -312,6 +355,13 @@ export class OpportunitiesService {
 
     const updates: Record<string, unknown> = {};
     if (input.title !== undefined) updates.title = input.title.trim();
+    if (input.labels !== undefined) updates.labels = input.labels;
+    if (input.sourceOrigin !== undefined)
+      updates.sourceOrigin = input.sourceOrigin.trim();
+    if (input.sourceChannel !== undefined)
+      updates.sourceChannel = input.sourceChannel.trim();
+    if (input.sourceChannelId !== undefined)
+      updates.sourceChannelId = input.sourceChannelId.trim();
     if (input.company !== undefined) updates.company = input.company.trim();
     if (input.accountId !== undefined) {
       if (input.accountId) {
@@ -398,6 +448,81 @@ export class OpportunitiesService {
       );
       await this.syncContactNextFollowUp(organizationId, contactId.toString());
     }
+  }
+
+  async convertToDeal(organizationId: string, opportunityId: string) {
+    const orgId = new Types.ObjectId(organizationId);
+    const lead = await Opportunity.findOne({
+      _id: opportunityId,
+      organizationId: orgId,
+      recordType: "lead",
+      archivedAt: null,
+    });
+    if (!lead) throw new Error("Lead not found");
+
+    const pipelineStage = await this.getStage(organizationId);
+    const position = await Opportunity.countDocuments({
+      organizationId: orgId,
+      stage: pipelineStage.id,
+      recordType: { $in: ["deal", null] },
+      archivedAt: null,
+    });
+    lead.recordType = "deal";
+    lead.stage = pipelineStage.id;
+    lead.position = position;
+    lead.activities.unshift({
+      id: `activity-${Date.now()}`,
+      type: "status",
+      content: "Lead converted to deal",
+      category: "todo",
+      dueAt: null,
+      durationMinutes: 60,
+      completedAt: null,
+      createdAt: new Date(),
+    });
+    await lead.save();
+
+    const contactId = lead.primaryContactId || lead.contactId;
+    if (contactId) {
+      await this.syncContactLifecycle(
+        organizationId,
+        contactId.toString(),
+        pipelineStage,
+        lead._id.toString(),
+      );
+    }
+    return lead;
+  }
+
+  async archiveLead(organizationId: string, opportunityId: string) {
+    const lead = await Opportunity.findOneAndUpdate(
+      {
+        _id: opportunityId,
+        organizationId,
+        recordType: "lead",
+        archivedAt: null,
+      },
+      {
+        $set: { archivedAt: new Date() },
+        $push: {
+          activities: {
+            $each: [
+              {
+                id: `activity-${Date.now()}`,
+                type: "status",
+                content: "Lead archived",
+                category: "todo",
+                createdAt: new Date(),
+              },
+            ],
+            $position: 0,
+          },
+        },
+      },
+      { returnDocument: "after", runValidators: true },
+    );
+    if (!lead) throw new Error("Lead not found");
+    return lead;
   }
 
   async updateStage(
