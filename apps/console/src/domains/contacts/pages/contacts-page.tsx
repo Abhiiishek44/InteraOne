@@ -72,9 +72,9 @@ import {
 } from "@/shared/ui/pagination";
 import { DeleteConfirmDialog } from "@/shared/components/delete-confirm-dialog";
 import {
-  useOpportunities,
+  useCrmRecords,
   useSalesPipeline,
-} from "@/domains/crm/hooks/use-opportunities";
+} from "@/domains/crm/hooks/use-crm-records";
 
 const TAG_OPTIONS = ["VIP", "Enterprise", "Trial", "Billing", "At Risk"];
 const SORT_OPTIONS = [
@@ -442,7 +442,7 @@ export function ContactsPage() {
     sort: sortValue,
   });
   const { data: conflicts = [] } = usePendingConflicts();
-  const { data: opportunities = [] } = useOpportunities();
+  const { data: deals = [] } = useCrmRecords();
   const { data: pipeline } = useSalesPipeline();
 
   const resolveConflictMutation = useResolveConflict();
@@ -527,22 +527,22 @@ export function ContactsPage() {
     );
     const counts = new Map<string, { open: number; closed: number }>();
 
-    opportunities.forEach((opportunity) => {
-      const contactId = opportunity.contact?.id;
+    deals.forEach((deal) => {
+      const contactId = deal.contact?.id;
       if (!contactId) return;
       const current = counts.get(contactId) || { open: 0, closed: 0 };
-      const stageType = stageTypes.get(opportunity.stage);
+      const stageType = stageTypes.get(deal.stage);
       const isClosed =
         stageType === "won" ||
         stageType === "lost" ||
-        /won|lost|closed/i.test(opportunity.stage);
+        /won|lost|closed/i.test(deal.stage);
       if (isClosed) current.closed += 1;
       else current.open += 1;
       counts.set(contactId, current);
     });
 
     return counts;
-  }, [opportunities, pipeline]);
+  }, [deals, pipeline]);
 
   useEffect(() => {
     const timeout = setTimeout(() => setCurrentPage(1), 0);
@@ -735,60 +735,39 @@ export function ContactsPage() {
   return (
     <div className="space-y-5">
       <header
-        className="relative overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-br from-background via-background to-primary/[0.06] p-5 shadow-sm sm:p-6"
+        className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
         data-tour-id="page-contacts-heading"
       >
-        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-                <Users className="h-5 w-5" />
+        <div className="min-w-0">
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl font-semibold tracking-tight">Contacts</h1>
+            {!isLoadingContacts && (
+              <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                {totalItems}
               </span>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-2xl font-bold tracking-tight">
-                    Contacts
-                  </h1>
-                  {!isLoadingContacts && (
-                    <Badge variant="secondary" className="rounded-full">
-                      {totalItems}
-                    </Badge>
-                  )}
-                </div>
-                <p className="mt-0.5 text-sm text-muted-foreground">
-                  Manage people, organizations, and customer relationships.
-                </p>
-              </div>
-            </div>
-            <p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
-              <span
-                className={`h-2 w-2 rounded-full ${
-                  loadError ? "bg-amber-500" : "bg-emerald-500"
-                }`}
-              />
-              {isLoadingContacts
-                ? "Syncing contacts from database..."
-                : loadError
-                  ? `Showing fallback sample data: ${loadError}`
-                  : "Live contact data is synced from your organization database."}
+            )}
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Manage people, organizations, and customer relationships.
+          </p>
+          {loadError && (
+            <p className="mt-1.5 text-xs text-amber-600">
+              Contacts could not be refreshed: {loadError}
             </p>
-          </div>
-          <div data-tour-id="page-contacts-primary-action">
-            <ContactDialog
-              mode="create"
-              onSubmit={handleAddContact}
-              triggerType="custom"
-              customTrigger={
-                <Button
-                  size="lg"
-                  className="w-full cursor-pointer shadow-sm sm:w-auto"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add contact
-                </Button>
-              }
-            />
-          </div>
+          )}
+        </div>
+        <div data-tour-id="page-contacts-primary-action">
+          <ContactDialog
+            mode="create"
+            onSubmit={handleAddContact}
+            triggerType="custom"
+            customTrigger={
+              <Button className="w-full cursor-pointer sm:w-auto">
+                <Plus className="mr-2 h-4 w-4" />
+                Add contact
+              </Button>
+            }
+          />
         </div>
       </header>
 

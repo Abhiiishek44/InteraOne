@@ -250,9 +250,7 @@ function ConnectedSource({
                   {form.status === "active"
                     ? "Importing responses"
                     : "Import paused"}
-                  {form.defaults.createOpportunity
-                    ? " · Creates opportunities"
-                    : ""}
+                  {form.defaults.createOpportunity ? " · Creates deals" : ""}
                 </p>
               </div>
               <div className="flex items-center gap-1.5">
@@ -271,7 +269,7 @@ function ConnectedSource({
                     }
                   >
                     {form.defaults.createOpportunity
-                      ? "Contact + opportunity"
+                      ? "Contact + deal"
                       : "Contact only"}
                   </Button>
                 )}

@@ -6,7 +6,7 @@ import {
   Message,
   ContactConflict,
   Membership,
-  Opportunity,
+  CrmRecord,
   SalesPipeline,
   DEFAULT_PIPELINE_STAGES,
   Account,
@@ -1478,7 +1478,7 @@ export class ContactsService {
     if (!updated) throw new Error("Contact not found");
 
     if (nextFollowUpAt !== undefined) {
-      const opportunities = await Opportunity.find({
+      const opportunities = await CrmRecord.find({
         organizationId: new Types.ObjectId(organizationId),
         contactId: new Types.ObjectId(contactId),
       })
@@ -1507,7 +1507,7 @@ export class ContactsService {
     ) {
       const [pipeline, linkedOpportunities] = await Promise.all([
         SalesPipeline.findOne({ organizationId }).lean(),
-        Opportunity.find({ organizationId, contactId }).select("stage").lean(),
+        CrmRecord.find({ organizationId, contactId }).select("stage").lean(),
       ]);
       if (linkedOpportunities.length > 0) {
         const stages = pipeline?.stages?.length

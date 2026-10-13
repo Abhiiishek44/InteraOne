@@ -256,8 +256,16 @@ function OrganizationActivityComposer({
   const addActivity = useAddAccountActivity();
   const queryClient = useQueryClient();
   const descriptionRef = useRef<HTMLDivElement>(null);
+  const timelineRef = useRef<HTMLDivElement>(null);
+  const dragOffsetRef = useRef(0);
+  const [timelineInteraction, setTimelineInteraction] = useState<
+    "move" | "resize-start" | "resize-end" | null
+  >(null);
   const now = new Date();
   now.setMinutes(Math.ceil(now.getMinutes() / 15) * 15, 0, 0);
+  const initialTimelineHourRef = useRef(
+    activity?.startAt ? new Date(activity.startAt).getHours() : now.getHours(),
+  );
   const later = new Date(now.getTime() + 60 * 60 * 1000);
   const local = (date: Date) =>
     `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}T${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
@@ -321,6 +329,14 @@ function OrganizationActivityComposer({
         activity?.content || "",
       );
   }, [activity?.content]);
+  useEffect(() => {
+    if (timelineRef.current) {
+      timelineRef.current.scrollTop = Math.max(
+        0,
+        (initialTimelineHourRef.current - 2) * 48,
+      );
+    }
+  }, []);
   const formatDescription = (command: string) => {
     descriptionRef.current?.focus();
     document.execCommand(command, false);
@@ -338,6 +354,56 @@ function OrganizationActivityComposer({
     setStartAt(local(nextStart));
     setEndAt(local(nextEnd));
   };
+  const handleTimelinePointerMove = (
+    event: React.PointerEvent<HTMLDivElement>,
+  ) => {
+    if (!timelineInteraction || !timelineRef.current) return;
+    const timelineRect = timelineRef.current.getBoundingClientRect();
+    const pointerY =
+      event.clientY - timelineRect.top + timelineRef.current.scrollTop;
+    const pointerMinutes = Math.round(((pointerY / 48) * 60) / 15) * 15;
+    const startMinutes = start.getHours() * 60 + start.getMinutes();
+    const endMinutes =
+      end.toDateString() === start.toDateString()
+        ? end.getHours() * 60 + end.getMinutes()
+        : 24 * 60;
+
+    if (timelineInteraction === "resize-start") {
+      const nextMinutes = Math.max(0, Math.min(endMinutes - 15, pointerMinutes));
+      const nextStart = new Date(start);
+      nextStart.setHours(0, nextMinutes, 0, 0);
+      setStartAt(local(nextStart));
+      return;
+    }
+    if (timelineInteraction === "resize-end") {
+      const nextMinutes = Math.max(
+        startMinutes + 15,
+        Math.min(24 * 60, pointerMinutes),
+      );
+      const nextEnd = new Date(start);
+      nextEnd.setHours(0, nextMinutes, 0, 0);
+      setEndAt(local(nextEnd));
+      return;
+    }
+
+    const durationMinutes = Math.max(
+      15,
+      Math.round((end.getTime() - start.getTime()) / 60000),
+    );
+    const rawY = pointerY - dragOffsetRef.current;
+    const nextMinutes = Math.max(
+      0,
+      Math.min(
+        24 * 60 - durationMinutes,
+        Math.round(((rawY / 48) * 60) / 15) * 15,
+      ),
+    );
+    const nextStart = new Date(start);
+    nextStart.setHours(0, nextMinutes, 0, 0);
+    const nextEnd = new Date(nextStart.getTime() + durationMinutes * 60000);
+    setStartAt(local(nextStart));
+    setEndAt(local(nextEnd));
+  };
   return (
     <div className="grid overflow-hidden rounded-md border border-border lg:grid-cols-[minmax(0,1fr)_280px]">
       <div className="space-y-4 p-4">
@@ -347,12 +413,12 @@ function OrganizationActivityComposer({
           className="h-11 text-xl"
           placeholder="Activity title"
         />
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-2">
           {activityTypes.map(({ id, label, icon: Icon }) => (
             <Button
               key={id}
               type="button"
-              size="icon-sm"
+              size="icon-lg"
               variant={activityType === id ? "default" : "outline"}
               title={label}
               onClick={() => {
@@ -390,20 +456,20 @@ function OrganizationActivityComposer({
           <option value="medium">Medium priority</option>
           <option value="low">Low priority</option>
         </select>
-        <div className="overflow-hidden rounded-md border border-amber-200 bg-amber-50/80">
+        <div className="overflow-hidden rounded-xl border border-amber-200 bg-amber-50/80 shadow-sm ring-1 ring-amber-100/60 dark:border-amber-900/50 dark:bg-amber-950/20 dark:ring-amber-950/40">
           <div
             ref={descriptionRef}
             contentEditable
             suppressContentEditableWarning
             data-placeholder="Add a description…"
             onInput={(event) => setDescription(event.currentTarget.innerHTML)}
-            className="min-h-28 bg-transparent p-3 text-sm outline-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)] [&_li]:ml-5 [&_ul]:list-disc"
+            className="min-h-32 bg-transparent p-4 text-sm leading-6 outline-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)] [&_li]:ml-5 [&_ul]:list-disc"
           />
-          <div className="flex gap-1 border-t border-amber-200 p-2">
+          <div className="flex gap-1 border-t border-amber-200 bg-background/40 px-3 py-2.5 dark:border-amber-900/50">
             <Button
               type="button"
               variant="ghost"
-              size="icon-xs"
+              size="icon"
               onMouseDown={(event) => {
                 event.preventDefault();
                 formatDescription("bold");
@@ -415,7 +481,7 @@ function OrganizationActivityComposer({
             <Button
               type="button"
               variant="ghost"
-              size="icon-xs"
+              size="icon"
               onMouseDown={(event) => {
                 event.preventDefault();
                 formatDescription("italic");
@@ -427,7 +493,7 @@ function OrganizationActivityComposer({
             <Button
               type="button"
               variant="ghost"
-              size="icon-xs"
+              size="icon"
               onMouseDown={(event) => {
                 event.preventDefault();
                 formatDescription("underline");
@@ -439,7 +505,7 @@ function OrganizationActivityComposer({
             <Button
               type="button"
               variant="ghost"
-              size="icon-xs"
+              size="icon"
               onMouseDown={(event) => {
                 event.preventDefault();
                 formatDescription("insertUnorderedList");
@@ -455,10 +521,10 @@ function OrganizationActivityComposer({
           Organization activity
         </div>
         <div className="flex justify-end gap-2 border-t pt-3">
-          <Button variant="outline" onClick={onClose}>
+          <Button size="lg" variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={() => void save()} disabled={addActivity.isPending}>
+          <Button size="lg" onClick={() => void save()} disabled={addActivity.isPending}>
             {addActivity.isPending && (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             )}
@@ -484,7 +550,13 @@ function OrganizationActivityComposer({
             </Button>
           </span>
         </div>
-        <div className="relative h-[480px] overflow-y-auto">
+        <div
+          ref={timelineRef}
+          className="relative h-[480px] touch-none overflow-y-auto"
+          onPointerMove={handleTimelinePointerMove}
+          onPointerUp={() => setTimelineInteraction(null)}
+          onPointerCancel={() => setTimelineInteraction(null)}
+        >
           <div className="relative h-[1152px]">
             {Array.from({ length: 25 }, (_, hour) => (
               <div
@@ -500,12 +572,47 @@ function OrganizationActivityComposer({
               </div>
             ))}
             <div
-              className="absolute left-16 right-3 rounded-sm bg-blue-600 px-2 py-1 text-xs font-semibold text-white shadow"
+              role="slider"
+              aria-label="Activity time"
+              aria-valuetext={`${start.toLocaleTimeString()} to ${end.toLocaleTimeString()}`}
+              tabIndex={0}
+              onPointerDown={(event) => {
+                const rect = event.currentTarget.getBoundingClientRect();
+                dragOffsetRef.current = event.clientY - rect.top;
+                event.currentTarget.setPointerCapture(event.pointerId);
+                setTimelineInteraction("move");
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+                event.preventDefault();
+                const amount = event.key === "ArrowUp" ? -15 : 15;
+                const nextStart = new Date(start.getTime() + amount * 60000);
+                const nextEnd = new Date(end.getTime() + amount * 60000);
+                if (
+                  nextStart.toDateString() !== start.toDateString() ||
+                  nextEnd.toDateString() !== end.toDateString()
+                )
+                  return;
+                setStartAt(local(nextStart));
+                setEndAt(local(nextEnd));
+              }}
+              className={`absolute left-16 right-3 z-10 select-none overflow-hidden rounded-sm bg-blue-600 px-2 py-1 text-xs font-semibold text-white shadow ${timelineInteraction === "move" ? "cursor-grabbing ring-2 ring-blue-300" : timelineInteraction ? "ring-2 ring-blue-300" : "cursor-grab"}`}
               style={{
                 top: Math.max(0, startHour * 48),
                 height: Math.max(32, duration * 48),
               }}
             >
+              <span
+                aria-hidden="true"
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  setTimelineInteraction("resize-start");
+                }}
+                className="absolute inset-x-0 top-0 z-20 h-2 cursor-ns-resize bg-blue-400/0 hover:bg-blue-300/70"
+              >
+                <span className="absolute left-1/2 top-1 h-0.5 w-8 -translate-x-1/2 rounded-full bg-white/70" />
+              </span>
               <span className="flex items-center gap-1">
                 <CalendarDays className="h-3.5 w-3.5" />
                 {title || "Activity"}
@@ -520,6 +627,17 @@ function OrganizationActivityComposer({
                   hour: "numeric",
                   minute: "2-digit",
                 })}
+              </span>
+              <span
+                aria-hidden="true"
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  setTimelineInteraction("resize-end");
+                }}
+                className="absolute inset-x-0 bottom-0 z-20 h-2 cursor-ns-resize bg-blue-400/0 hover:bg-blue-300/70"
+              >
+                <span className="absolute bottom-1 left-1/2 h-0.5 w-8 -translate-x-1/2 rounded-full bg-white/70" />
               </span>
             </div>
           </div>
@@ -1408,16 +1526,16 @@ export function AccountDetailsPage() {
             flushContent={tab === "activity" && !activityComposerOpen}
           >
             {tab === "notes" ? (
-              <div className="overflow-hidden rounded-md border border-amber-200 bg-amber-50/80">
+              <div className="overflow-hidden rounded-xl border border-amber-200 bg-amber-50/80 shadow-sm ring-1 ring-amber-100/60 dark:border-amber-900/50 dark:bg-amber-950/20 dark:ring-amber-950/40">
                 <div
                   ref={noteEditorRef}
                   contentEditable
                   suppressContentEditableWarning
                   data-placeholder="Write a note…"
                   onInput={(event) => setNote(event.currentTarget.innerHTML)}
-                  className="min-h-28 max-h-80 overflow-y-auto p-4 text-sm outline-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)] [&_a]:text-primary [&_a]:underline [&_img]:max-w-full [&_li]:ml-5 [&_ul]:list-disc"
+                  className="min-h-36 max-h-96 overflow-y-auto p-5 text-[15px] leading-6 outline-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)] [&_a]:text-primary [&_a]:underline [&_img]:max-w-full [&_li]:ml-5 [&_ul]:list-disc"
                 />
-                <div className="relative flex items-center justify-between gap-2 border-t border-amber-200 px-3 py-2">
+                <div className="relative flex flex-wrap items-center justify-between gap-3 border-t border-amber-200 bg-background/40 px-4 py-3 dark:border-amber-900/50">
                   {noteInsertKind && (
                     <div className="absolute bottom-12 left-2 z-50 w-80 rounded-xl border border-border bg-popover p-3 shadow-xl">
                       <p className="mb-2 text-sm font-semibold">
@@ -1450,11 +1568,11 @@ export function AccountDetailsPage() {
                       </div>
                     </div>
                   )}
-                  <div className="flex gap-0.5">
+                  <div className="flex flex-wrap gap-1">
                     <Button
                       type="button"
                       variant="ghost"
-                      size="icon-xs"
+                      size="icon"
                       onMouseDown={(event) => {
                         event.preventDefault();
                         formatNote("bold");
@@ -1466,7 +1584,7 @@ export function AccountDetailsPage() {
                     <Button
                       type="button"
                       variant="ghost"
-                      size="icon-xs"
+                      size="icon"
                       onMouseDown={(event) => {
                         event.preventDefault();
                         formatNote("italic");
@@ -1478,7 +1596,7 @@ export function AccountDetailsPage() {
                     <Button
                       type="button"
                       variant="ghost"
-                      size="icon-xs"
+                      size="icon"
                       onMouseDown={(event) => {
                         event.preventDefault();
                         formatNote("underline");
@@ -1490,7 +1608,7 @@ export function AccountDetailsPage() {
                     <Button
                       type="button"
                       variant="ghost"
-                      size="icon-xs"
+                      size="icon"
                       onMouseDown={(event) => {
                         event.preventDefault();
                         setNoteInsertUrl("");
@@ -1503,7 +1621,7 @@ export function AccountDetailsPage() {
                     <Button
                       type="button"
                       variant="ghost"
-                      size="icon-xs"
+                      size="icon"
                       onMouseDown={(event) => {
                         event.preventDefault();
                         noteEditorRef.current?.focus();
@@ -1516,7 +1634,7 @@ export function AccountDetailsPage() {
                     <Button
                       type="button"
                       variant="ghost"
-                      size="icon-xs"
+                      size="icon"
                       onMouseDown={(event) => {
                         event.preventDefault();
                         setNoteInsertUrl("");
@@ -1529,7 +1647,7 @@ export function AccountDetailsPage() {
                     <Button
                       type="button"
                       variant="ghost"
-                      size="icon-xs"
+                      size="icon"
                       onMouseDown={(event) => {
                         event.preventDefault();
                         formatNote("insertUnorderedList");
@@ -1544,7 +1662,7 @@ export function AccountDetailsPage() {
                       <Button
                         type="button"
                         variant="outline"
-                        size="sm"
+                        size="lg"
                         onClick={() => {
                           setNote("");
                           if (noteEditorRef.current)
@@ -1556,7 +1674,7 @@ export function AccountDetailsPage() {
                     )}
                     <Button
                       type="button"
-                      size="sm"
+                      size="lg"
                       onClick={() => void submitNote()}
                       disabled={!organizationText(note) || addNote.isPending}
                     >

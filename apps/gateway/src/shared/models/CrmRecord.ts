@@ -1,7 +1,7 @@
 import mongoose, { Document, Schema, Types } from "mongoose";
 
-export type OpportunityStage = string;
-export type OpportunityColor =
+export type CrmRecordStage = string;
+export type CrmRecordColor =
   | "slate"
   | "red"
   | "orange"
@@ -13,7 +13,7 @@ export type OpportunityColor =
   | "pink"
   | "emerald";
 
-export interface IOpportunityActivity {
+export interface ICrmRecordActivity {
   id: string;
   type: "note" | "status" | "planned" | "message";
   content: string;
@@ -31,7 +31,7 @@ export interface IOpportunityActivity {
   calendarSyncError?: string | null;
 }
 
-export interface IOpportunity extends Document {
+export interface ICrmRecord extends Document {
   _id: Types.ObjectId;
   organizationId: Types.ObjectId;
   contactId?: Types.ObjectId | null;
@@ -46,14 +46,14 @@ export interface IOpportunity extends Document {
   company?: string;
   value: number;
   currency: "USD" | "INR" | "EUR" | "GBP";
-  stage: OpportunityStage;
-  color: OpportunityColor;
+  stage: CrmRecordStage;
+  color: CrmRecordColor;
   position: number;
   priority: 1 | 2 | 3;
   ownerId?: Types.ObjectId | null;
   expectedCloseAt?: Date | null;
   nextAction?: string;
-  activities: IOpportunityActivity[];
+  activities: ICrmRecordActivity[];
   customFields: Record<string, unknown>;
   sourceSubmissionId?: Types.ObjectId | null;
   archivedAt?: Date | null;
@@ -61,7 +61,7 @@ export interface IOpportunity extends Document {
   updatedAt: Date;
 }
 
-const opportunitySchema = new Schema<IOpportunity>(
+const crmRecordSchema = new Schema<ICrmRecord>(
   {
     organizationId: {
       type: Schema.Types.ObjectId,
@@ -130,7 +130,7 @@ const opportunitySchema = new Schema<IOpportunity>(
     nextAction: { type: String, trim: true, maxlength: 500 },
     activities: {
       type: [
-        new Schema<IOpportunityActivity>(
+        new Schema<ICrmRecordActivity>(
           {
             id: { type: String, required: true },
             type: {
@@ -181,13 +181,13 @@ const opportunitySchema = new Schema<IOpportunity>(
   { timestamps: true },
 );
 
-opportunitySchema.index({ organizationId: 1, stage: 1, updatedAt: -1 });
-opportunitySchema.index({ organizationId: 1, recordType: 1, archivedAt: 1 });
-opportunitySchema.index({ organizationId: 1, contactId: 1 });
-opportunitySchema.index({ organizationId: 1, primaryContactId: 1 });
-opportunitySchema.index({ organizationId: 1, accountId: 1 });
-opportunitySchema.index({ organizationId: 1, ownerId: 1 });
-opportunitySchema.index(
+crmRecordSchema.index({ organizationId: 1, stage: 1, updatedAt: -1 });
+crmRecordSchema.index({ organizationId: 1, recordType: 1, archivedAt: 1 });
+crmRecordSchema.index({ organizationId: 1, contactId: 1 });
+crmRecordSchema.index({ organizationId: 1, primaryContactId: 1 });
+crmRecordSchema.index({ organizationId: 1, accountId: 1 });
+crmRecordSchema.index({ organizationId: 1, ownerId: 1 });
+crmRecordSchema.index(
   { organizationId: 1, sourceSubmissionId: 1 },
   {
     unique: true,
@@ -196,7 +196,10 @@ opportunitySchema.index(
   },
 );
 
-export const Opportunity = mongoose.model<IOpportunity>(
-  "Opportunity",
-  opportunitySchema,
+// Keep the existing collection name so this terminology change does not
+// require a database migration.
+export const CrmRecord = mongoose.model<ICrmRecord>(
+  "CrmRecord",
+  crmRecordSchema,
+  "opportunities",
 );

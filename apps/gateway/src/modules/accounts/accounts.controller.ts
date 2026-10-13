@@ -70,22 +70,6 @@ export class AccountsController {
     }
   }
 
-  static async archive(req: Request, res: Response) {
-    try {
-      await service.archive(
-        auth(req).activeOrganizationId,
-        String(req.params.id),
-      );
-      sendResponse(res, 200, true, "Organization archived");
-    } catch (error: any) {
-      sendError(
-        res,
-        error.message === "Organization not found" ? 404 : 400,
-        error.message,
-      );
-    }
-  }
-
   static async addNote(req: Request, res: Response) {
     try {
       const user = auth(req);

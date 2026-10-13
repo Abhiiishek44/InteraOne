@@ -1,6 +1,6 @@
-export type OpportunityStage = string;
+export type CrmRecordStage = string;
 export type PipelineStageType = "open" | "won" | "lost";
-export type OpportunityColor =
+export type CrmRecordColor =
   | "slate"
   | "red"
   | "orange"
@@ -34,7 +34,7 @@ export interface SalesPipeline {
   isDefault: boolean;
 }
 
-export interface Opportunity {
+export interface CrmRecord {
   id: string;
   title: string;
   recordType: "lead" | "deal";
@@ -57,8 +57,8 @@ export interface Opportunity {
   } | null;
   value: number;
   currency: "USD" | "INR" | "EUR" | "GBP";
-  stage: OpportunityStage;
-  color: OpportunityColor;
+  stage: CrmRecordStage;
+  color: CrmRecordColor;
   position: number;
   priority: 1 | 2 | 3;
   expectedCloseAt: string | null;
@@ -111,7 +111,7 @@ export interface UpdatePipelinePayload {
   stages: PipelineStage[];
 }
 
-export interface CreateOpportunityPayload {
+export interface CreateCrmRecordPayload {
   contactId?: string | null;
   primaryContactId?: string | null;
   accountId?: string | null;
@@ -123,14 +123,14 @@ export interface CreateOpportunityPayload {
   sourceChannelId?: string;
   company?: string;
   value: number;
-  currency: Opportunity["currency"];
-  stage?: OpportunityStage;
+  currency: CrmRecord["currency"];
+  stage?: CrmRecordStage;
   ownerId?: string | null;
   expectedCloseAt?: string | null;
   nextAction?: string;
   customFields?: Record<string, unknown>;
 }
 
-export type UpdateOpportunityPayload = Partial<
-  Omit<CreateOpportunityPayload, "contactId" | "stage">
+export type UpdateCrmRecordPayload = Partial<
+  Omit<CreateCrmRecordPayload, "contactId" | "stage">
 >;

@@ -20,13 +20,10 @@ import {
 } from "@/shared/ui/select";
 import {
   Building2,
-  Check,
-  ChevronDown,
   User,
   Loader2,
   Edit2,
   Plus,
-  Search,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -47,36 +44,12 @@ import type {
   ContactWritePayload,
 } from "../types/types";
 import { InlineCustomFields } from "@/domains/crm/components/inline-custom-fields";
+import { LabelPicker } from "@/shared/components/label-editor";
 
 type ContactFormPayload = ContactWritePayload & {
   name: string;
   tags: string[];
 };
-
-const CONTACT_LABEL_SWATCHES = [
-  { id: "blue", dot: "bg-blue-500", badge: "bg-blue-600 text-white" },
-  {
-    id: "mint",
-    dot: "bg-emerald-300",
-    badge: "bg-emerald-300 text-emerald-950",
-  },
-  {
-    id: "yellow",
-    dot: "bg-yellow-400",
-    badge: "bg-yellow-300 text-yellow-950",
-  },
-  { id: "red", dot: "bg-red-500", badge: "bg-red-500 text-white" },
-  { id: "purple", dot: "bg-fuchsia-600", badge: "bg-fuchsia-600 text-white" },
-  { id: "gray", dot: "bg-gray-300", badge: "bg-gray-300 text-gray-900" },
-  { id: "brown", dot: "bg-amber-700", badge: "bg-amber-700 text-white" },
-  {
-    id: "orange",
-    dot: "bg-orange-400",
-    badge: "bg-orange-400 text-orange-950",
-  },
-  { id: "slate", dot: "bg-slate-500", badge: "bg-slate-500 text-white" },
-  { id: "pink", dot: "bg-pink-400", badge: "bg-pink-400 text-pink-950" },
-] as const;
 
 const toLocalDateTime = (value?: string | null) => {
   if (!value) return "";
@@ -143,22 +116,6 @@ export function ContactForm({
   );
   const createAccount = useCreateAccount();
   const [tags, setTags] = useState<string[]>(initialValues?.tags || []);
-  const [newTag, setNewTag] = useState("");
-  const [labelsOpen, setLabelsOpen] = useState(false);
-  const [labelSearch, setLabelSearch] = useState("");
-  const [newLabelOpen, setNewLabelOpen] = useState(false);
-  const [newLabelName, setNewLabelName] = useState("");
-  const [newLabelColor, setNewLabelColor] =
-    useState<(typeof CONTACT_LABEL_SWATCHES)[number]["id"]>("blue");
-  const [labelColors, setLabelColors] = useState<Record<string, string>>(() => {
-    try {
-      return JSON.parse(
-        window.localStorage.getItem("contact-label-colors") || "{}",
-      );
-    } catch {
-      return {};
-    }
-  });
   const [lifecycleStage, setLifecycleStage] = useState<ContactLifecycleStage>(
     initialValues?.lifecycleStage || "new",
   );
@@ -192,23 +149,6 @@ export function ContactForm({
       account.name.trim().toLocaleLowerCase() ===
       company.trim().toLocaleLowerCase(),
   );
-  const availableLabels = Array.from(
-    new Set([...tagOptions, ...tags, ...Object.keys(labelColors)]),
-  ).filter((label) => label.toLowerCase().includes(labelSearch.toLowerCase()));
-  const labelBadgeClass = (label: string) =>
-    CONTACT_LABEL_SWATCHES.find((swatch) => swatch.id === labelColors[label])
-      ?.badge || "bg-slate-500 text-white";
-  const addCustomLabel = () => {
-    const label = newLabelName.trim();
-    if (!label || tags.length >= 20) return;
-    const colors = { ...labelColors, [label]: newLabelColor };
-    setLabelColors(colors);
-    window.localStorage.setItem("contact-label-colors", JSON.stringify(colors));
-    setTags((current) => Array.from(new Set([...current, label])));
-    setNewLabelName("");
-    setNewLabelOpen(false);
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     let resolvedAccountId = accountId;
@@ -243,9 +183,11 @@ export function ContactForm({
     await onSubmit({
       name: name.trim(),
       email:
-        (mode === "create" ? emailRows[0]?.value : email).trim() || undefined,
+        (mode === "create" ? emailRows[0]?.value || "" : email).trim() ||
+        undefined,
       phone:
-        (mode === "create" ? phoneRows[0]?.value : phone).trim() || undefined,
+        (mode === "create" ? phoneRows[0]?.value || "" : phone).trim() ||
+        undefined,
       emails:
         mode === "create"
           ? emailRows
@@ -515,166 +457,22 @@ export function ContactForm({
             </button>
           </div>
 
-          <div className="relative grid gap-2">
+          <div className="grid gap-2">
             <Label>Labels</Label>
-            <button
-              type="button"
-              onClick={() => {
-                setLabelsOpen((value) => !value);
-                setNewLabelOpen(false);
-              }}
-              className="flex min-h-10 items-center justify-between rounded-md border border-input bg-background px-3 text-left text-sm"
+            <LabelPicker
+              value={tags.join(", ")}
+              options={tagOptions}
+              onChange={(value) =>
+                setTags(
+                  value
+                    .split(",")
+                    .map((tag) => tag.trim())
+                    .filter(Boolean)
+                    .slice(0, 20),
+                )
+              }
               disabled={loading}
-            >
-              <span className="flex min-w-0 flex-wrap gap-1">
-                {tags.length ? (
-                  tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${labelBadgeClass(tag)}`}
-                    >
-                      {tag}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-muted-foreground">Add labels</span>
-                )}
-              </span>
-              <ChevronDown
-                className={`h-4 w-4 shrink-0 transition-transform ${labelsOpen ? "rotate-180" : ""}`}
-              />
-            </button>
-            {labelsOpen && (
-              <div className="z-20 w-full overflow-hidden rounded-xl border border-border bg-popover shadow-lg">
-                {newLabelOpen ? (
-                  <div>
-                    <div className="border-b px-4 py-3 font-semibold">
-                      New label
-                    </div>
-                    <div className="space-y-4 p-4">
-                      <div className="space-y-1.5">
-                        <Label>Label name</Label>
-                        <Input
-                          autoFocus
-                          value={newLabelName}
-                          onChange={(event) =>
-                            setNewLabelName(event.target.value)
-                          }
-                          maxLength={40}
-                          placeholder="Label name"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Label color</Label>
-                        <div className="flex flex-wrap gap-2">
-                          {CONTACT_LABEL_SWATCHES.map((swatch) => (
-                            <button
-                              key={swatch.id}
-                              type="button"
-                              onClick={() => setNewLabelColor(swatch.id)}
-                              className={`flex h-7 w-7 items-center justify-center rounded-full ${swatch.dot} ${newLabelColor === swatch.id ? "ring-2 ring-primary ring-offset-2" : ""}`}
-                              aria-label={`${swatch.id} label color`}
-                            >
-                              {newLabelColor === swatch.id && (
-                                <Check className="h-4 w-4 text-white" />
-                              )}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex justify-end gap-2 border-t p-3">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setNewLabelOpen(false)}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={addCustomLabel}
-                        disabled={!newLabelName.trim()}
-                      >
-                        Save
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <div className="p-2">
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          autoFocus
-                          value={labelSearch}
-                          onChange={(event) =>
-                            setLabelSearch(event.target.value)
-                          }
-                          placeholder="Search for labels"
-                          className="pl-9"
-                        />
-                      </div>
-                    </div>
-                    <div className="max-h-36 space-y-1 overflow-y-auto overscroll-contain border-y p-2">
-                      {availableLabels.map((label) => (
-                        <button
-                          key={label}
-                          type="button"
-                          onClick={() =>
-                            setTags((current) =>
-                              current.includes(label)
-                                ? current.filter((item) => item !== label)
-                                : [...current, label],
-                            )
-                          }
-                          className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left hover:bg-muted"
-                        >
-                          <span
-                            className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${labelBadgeClass(label)}`}
-                          >
-                            {label}
-                          </span>
-                          {tags.includes(label) && (
-                            <Check className="h-4 w-4 text-primary" />
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNewLabelOpen(true);
-                        setNewLabelName("");
-                      }}
-                      className="flex w-full items-center gap-2 border-b px-4 py-3 text-sm font-medium text-primary hover:bg-muted"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Add label
-                    </button>
-                    <div className="flex justify-end gap-2 p-3">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setLabelsOpen(false)}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => setLabelsOpen(false)}
-                      >
-                        Save
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+            />
           </div>
 
           <div className="grid gap-2">
@@ -952,70 +750,26 @@ export function ContactForm({
             tags: (field) => (
               <div className="grid gap-2">
                 <Label>{field.label}</Label>
-                <div className="flex flex-wrap gap-2">
-                  {Array.from(
+                <LabelPicker
+                  value={tags.join(", ")}
+                  options={Array.from(
                     new Set([
                       ...field.options.map((option) => option.label),
                       ...tagOptions,
                       ...tags,
                     ]),
-                  ).map((tag) => (
-                    <button
-                      key={tag}
-                      type="button"
-                      disabled={loading}
-                      onClick={() =>
-                        setTags((previous) =>
-                          previous.includes(tag)
-                            ? previous.filter((item) => item !== tag)
-                            : [...previous, tag],
-                        )
-                      }
-                      className={`rounded-full border px-3 py-1 text-xs ${tags.includes(tag) ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
-                    >
-                      {tag}
-                      {tags.includes(tag) && (
-                        <X className="ml-1 inline h-3 w-3" />
-                      )}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <Input
-                    value={newTag}
-                    maxLength={40}
-                    disabled={loading || tags.length >= 20}
-                    placeholder="Create a tag"
-                    onChange={(event) => setNewTag(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key !== "Enter") return;
-                      event.preventDefault();
-                      const value = newTag.trim();
-                      if (!value || tags.includes(value) || tags.length >= 20)
-                        return;
-                      setTags((previous) => [...previous, value]);
-                      setNewTag("");
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={
-                      loading ||
-                      !newTag.trim() ||
-                      tags.includes(newTag.trim()) ||
-                      tags.length >= 20
-                    }
-                    onClick={() => {
-                      const value = newTag.trim();
-                      if (!value) return;
-                      setTags((previous) => [...previous, value]);
-                      setNewTag("");
-                    }}
-                  >
-                    <Plus className="mr-1 h-4 w-4" /> Add
-                  </Button>
-                </div>
+                  )}
+                  onChange={(value) =>
+                    setTags(
+                      value
+                        .split(",")
+                        .map((tag) => tag.trim())
+                        .filter(Boolean)
+                        .slice(0, 20),
+                    )
+                  }
+                  disabled={loading}
+                />
                 <p className="text-xs text-muted-foreground">
                   Select existing tags or create a new one. Up to 20 tags.
                 </p>

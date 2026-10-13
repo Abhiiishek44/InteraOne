@@ -66,7 +66,7 @@ const leadSubmissionSchema = new Schema<ILeadSubmission>(
     contactId: { type: Schema.Types.ObjectId, ref: "Contact", default: null },
     opportunityId: {
       type: Schema.Types.ObjectId,
-      ref: "Opportunity",
+      ref: "CrmRecord",
       default: null,
     },
     attempts: { type: Number, min: 0, default: 0 },

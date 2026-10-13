@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { connectDatabase, disconnectDatabase } from "@shared/infra/database";
-import { Account, Contact, Opportunity } from "@shared/models";
+import { Account, Contact, CrmRecord } from "@shared/models";
 import { normalizeAccountName } from "@modules/accounts/accounts.service";
 
 const apply = process.argv.includes("--apply");
@@ -10,28 +10,43 @@ async function run() {
   const contactCandidates = await Contact.find({
     company: { $type: "string", $ne: "" },
     $or: [{ accountId: null }, { accountId: { $exists: false } }],
-  }).select("_id organizationId company").lean();
-  const opportunityCandidates = await Opportunity.find({
+  })
+    .select("_id organizationId company")
+    .lean();
+  const opportunityCandidates = await CrmRecord.find({
     company: { $type: "string", $ne: "" },
     $or: [{ accountId: null }, { accountId: { $exists: false } }],
-  }).select("_id organizationId company contactId primaryContactId").lean();
+  })
+    .select("_id organizationId company contactId primaryContactId")
+    .lean();
 
   const keys = new Map<string, { organizationId: string; name: string }>();
   for (const record of [...contactCandidates, ...opportunityCandidates]) {
     const name = record.company?.trim().replace(/\s+/g, " ");
     if (!name) continue;
     const organizationId = String(record.organizationId);
-    keys.set(`${organizationId}:${normalizeAccountName(name)}`, { organizationId, name });
+    keys.set(`${organizationId}:${normalizeAccountName(name)}`, {
+      organizationId,
+      name,
+    });
   }
 
-  console.log(JSON.stringify({
-    mode: apply ? "apply" : "dry-run",
-    companiesToResolve: keys.size,
-    contactsToLink: contactCandidates.length,
-    opportunitiesToLink: opportunityCandidates.length,
-  }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        mode: apply ? "apply" : "dry-run",
+        companiesToResolve: keys.size,
+        contactsToLink: contactCandidates.length,
+        opportunitiesToLink: opportunityCandidates.length,
+      },
+      null,
+      2,
+    ),
+  );
   if (!apply) {
-    console.log("No changes made. Re-run with --apply after reviewing these counts.");
+    console.log(
+      "No changes made. Re-run with --apply after reviewing these counts.",
+    );
     await disconnectDatabase();
     return;
   }
@@ -62,10 +77,15 @@ async function run() {
   for (const contact of contactCandidates) {
     const name = contact.company?.trim().replace(/\s+/g, " ");
     if (!name) continue;
-    const account = accountByKey.get(`${contact.organizationId}:${normalizeAccountName(name)}`);
+    const account = accountByKey.get(
+      `${contact.organizationId}:${normalizeAccountName(name)}`,
+    );
     if (!account) continue;
     const result = await Contact.updateOne(
-      { _id: contact._id, $or: [{ accountId: null }, { accountId: { $exists: false } }] },
+      {
+        _id: contact._id,
+        $or: [{ accountId: null }, { accountId: { $exists: false } }],
+      },
       { $set: { accountId: account._id } },
     );
     contactsLinked += result.modifiedCount;
@@ -74,17 +94,24 @@ async function run() {
   let opportunitiesLinked = 0;
   for (const opportunity of opportunityCandidates) {
     const contactId = opportunity.primaryContactId || opportunity.contactId;
-    const contact = contactId ? await Contact.findById(contactId).select("accountId").lean() : null;
+    const contact = contactId
+      ? await Contact.findById(contactId).select("accountId").lean()
+      : null;
     let accountId = contact?.accountId;
     if (!accountId) {
       const name = opportunity.company?.trim().replace(/\s+/g, " ");
       if (name) {
-        accountId = accountByKey.get(`${opportunity.organizationId}:${normalizeAccountName(name)}`)?._id;
+        accountId = accountByKey.get(
+          `${opportunity.organizationId}:${normalizeAccountName(name)}`,
+        )?._id;
       }
     }
     if (!accountId) continue;
-    const result = await Opportunity.updateOne(
-      { _id: opportunity._id, $or: [{ accountId: null }, { accountId: { $exists: false } }] },
+    const result = await CrmRecord.updateOne(
+      {
+        _id: opportunity._id,
+        $or: [{ accountId: null }, { accountId: { $exists: false } }],
+      },
       {
         $set: {
           accountId,
@@ -95,7 +122,17 @@ async function run() {
     opportunitiesLinked += result.modifiedCount;
   }
 
-  console.log(JSON.stringify({ companiesResolved: accountByKey.size, contactsLinked, opportunitiesLinked }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        companiesResolved: accountByKey.size,
+        contactsLinked,
+        opportunitiesLinked,
+      },
+      null,
+      2,
+    ),
+  );
   await disconnectDatabase();
 }
 

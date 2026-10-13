@@ -61,17 +61,19 @@ export function ActivityWorkspaceComposer({
   tab,
   onTabChange,
   flushContent = false,
+  tabs = ACTIVITY_WORKSPACE_TABS,
   children,
 }: {
   tab: ActivityWorkspaceTab;
   onTabChange: (tab: ActivityWorkspaceTab) => void;
   flushContent?: boolean;
+  tabs?: readonly ActivityWorkspaceTabItem[];
   children: ReactNode;
 }) {
   return (
     <Card className="overflow-hidden">
       <div className="flex overflow-x-auto border-b border-border px-2">
-        {ACTIVITY_WORKSPACE_TABS.map(({ id, label, icon: Icon, iconClass }) => (
+        {tabs.map(({ id, label, icon: Icon, iconClass }) => (
           <button
             key={id}
             type="button"

@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { Types } from "mongoose";
-import { Account, Contact, Membership, Opportunity } from "@shared/models";
+import { Account, Contact, Membership, CrmRecord } from "@shared/models";
 import { serializeCustomFields } from "@shared/utils/custom-fields";
 
 export interface AccountWriteInput {
@@ -97,7 +97,7 @@ export class AccountsService {
         },
         { $group: { _id: "$accountId", count: { $sum: 1 } } },
       ]),
-      Opportunity.aggregate([
+      CrmRecord.aggregate([
         {
           $match: {
             organizationId: new Types.ObjectId(organizationId),
@@ -199,7 +199,7 @@ export class AccountsService {
         .populate("ownerId", "name email")
         .sort({ lastActivityAt: -1 })
         .lean(),
-      Opportunity.find({ organizationId, accountId })
+      CrmRecord.find({ organizationId, accountId })
         .populate("primaryContactId", "name email phone")
         .populate("contactId", "name email phone")
         .populate("ownerId", "name email")
@@ -429,7 +429,7 @@ export class AccountsService {
           },
           { $set: { company: account.name } },
         ),
-        Opportunity.updateMany(
+        CrmRecord.updateMany(
           {
             organizationId: new Types.ObjectId(organizationId),
             accountId: account._id,
@@ -439,15 +439,6 @@ export class AccountsService {
       ]);
     }
     return account;
-  }
-
-  async archive(organizationId: string, accountId: string) {
-    const account = await Account.findOneAndUpdate(
-      { _id: accountId, organizationId },
-      { $set: { archivedAt: new Date() } },
-      { returnDocument: "after" },
-    );
-    if (!account) throw new Error("Organization not found");
   }
 
   async addNote(

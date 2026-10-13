@@ -64,6 +64,5 @@ router.patch(
   AccountsController.updateTimelineItem,
 );
 router.delete("/:id/timeline/:itemId", AccountsController.deleteTimelineItem);
-router.post("/:id/archive", AccountsController.archive);
 
 export default router;

@@ -45,26 +45,26 @@ import {
 } from "@/shared/ui/dialog";
 import { useContactOwners } from "@/domains/contacts/hooks/use-contacts";
 import { authApi } from "@/domains/auth/api/auth.api";
-import { OpportunityDialog } from "../components/opportunity-dialog";
+import { DealDialog } from "../components/deal-dialog";
 import { InlineCustomFields } from "../components/inline-custom-fields";
 import { PipelineSettingsDialog } from "../components/pipeline-settings-dialog";
 import {
-  useOpportunities,
-  useMoveOpportunity,
-  useAddOpportunityActivity,
+  useCrmRecords,
+  useMoveCrmRecord,
+  useAddCrmRecordActivity,
   useSalesPipeline,
-  useUpdateOpportunityColor,
-  useUpdateOpportunityPriority,
+  useUpdateCrmRecordColor,
+  useUpdateCrmRecordPriority,
   useUpdateSalesPipeline,
-} from "../hooks/use-opportunities";
+} from "../hooks/use-crm-records";
 import type {
-  Opportunity,
-  OpportunityColor,
+  CrmRecord,
+  CrmRecordColor,
   PipelineStageType,
 } from "../types/types";
 
-const OPPORTUNITY_COLORS: Record<
-  OpportunityColor,
+const CRM_RECORD_COLORS: Record<
+  CrmRecordColor,
   { swatch: string; border: string }
 > = {
   slate: { swatch: "bg-slate-500", border: "border-l-slate-500" },
@@ -107,7 +107,7 @@ const ACTIVITY_CATEGORY_META = {
   },
 } as const;
 
-const formatMoney = (value: number, currency: Opportunity["currency"]) =>
+const formatMoney = (value: number, currency: CrmRecord["currency"]) =>
   new Intl.NumberFormat(undefined, {
     style: "currency",
     currency,
@@ -133,13 +133,13 @@ export function PipelinePage() {
   const navigate = useNavigate();
   const orgRole = authApi.getOrgRole();
   const canCustomizePipeline = orgRole === "owner" || orgRole === "admin";
-  const { data: opportunities = [], isLoading } = useOpportunities();
+  const { data: deals = [], isLoading } = useCrmRecords();
   const { data: pipeline, isLoading: pipelineLoading } = useSalesPipeline();
   const { data: owners = [] } = useContactOwners();
-  const moveOpportunityMutation = useMoveOpportunity();
-  const addActivity = useAddOpportunityActivity();
-  const updatePriority = useUpdateOpportunityPriority();
-  const updateColor = useUpdateOpportunityColor();
+  const moveDealMutation = useMoveCrmRecord();
+  const addActivity = useAddCrmRecordActivity();
+  const updatePriority = useUpdateCrmRecordPriority();
+  const updateColor = useUpdateCrmRecordColor();
   const updatePipeline = useUpdateSalesPipeline();
   const [createOpen, setCreateOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -160,6 +160,7 @@ export function PipelinePage() {
     "todo" | "email" | "call" | "meeting" | "document"
   >("todo");
   const [view, setView] = useState<PipelineView>(getStoredPipelineView);
+  const [selectedDeals, setSelectedDeals] = useState<string[]>([]);
 
   useEffect(() => {
     try {
@@ -183,15 +184,15 @@ export function PipelinePage() {
   );
   const countsByStage = useMemo(() => {
     const counts = new Map<string, number>();
-    opportunities.forEach((item) =>
+    deals.forEach((item) =>
       counts.set(item.stage, (counts.get(item.stage) || 0) + 1),
     );
     return counts;
-  }, [opportunities]);
+  }, [deals]);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return opportunities.filter((item) => {
+    return deals.filter((item) => {
       const stage = stageMap.get(item.stage);
       const searchMatch =
         !query ||
@@ -206,19 +207,19 @@ export function PipelinePage() {
       const typeMatch = typeFilter === "all" || stage?.type === typeFilter;
       return searchMatch && ownerMatch && typeMatch;
     });
-  }, [opportunities, ownerFilter, search, stageMap, typeFilter]);
+  }, [deals, ownerFilter, search, stageMap, typeFilter]);
 
   const metrics = useMemo(() => {
-    const open = opportunities.filter(
+    const open = deals.filter(
       (item) => stageMap.get(item.stage)?.type === "open",
     );
-    const won = opportunities.filter(
+    const won = deals.filter(
       (item) => stageMap.get(item.stage)?.type === "won",
     ).length;
-    const lost = opportunities.filter(
+    const lost = deals.filter(
       (item) => stageMap.get(item.stage)?.type === "lost",
     ).length;
-    const totals = new Map<Opportunity["currency"], number>();
+    const totals = new Map<CrmRecord["currency"], number>();
     open.forEach((item) =>
       totals.set(item.currency, (totals.get(item.currency) || 0) + item.value),
     );
@@ -236,7 +237,7 @@ export function PipelinePage() {
           new Date(item.expectedCloseAt).getTime() < currentTime,
       ).length,
     };
-  }, [currentTime, opportunities, stageMap]);
+  }, [currentTime, deals, stageMap]);
 
   const openCreate = () => {
     setCreateOpen(true);
@@ -253,31 +254,24 @@ export function PipelinePage() {
     requestAnimationFrame(() => setSettingsOpen(true));
   };
 
-  const moveOpportunity = async (
-    id: string,
-    stage: string,
-    position: number,
-  ) => {
-    const item = opportunities.find((opportunity) => opportunity.id === id);
+  const moveDeal = async (id: string, stage: string, position: number) => {
+    const item = deals.find((deal) => deal.id === id);
     if (!item) return;
     try {
-      await moveOpportunityMutation.mutateAsync({ id, stage, position });
+      await moveDealMutation.mutateAsync({ id, stage, position });
       toast.success(`Moved to ${stageMap.get(stage)?.label || "stage"}`);
     } catch (error: unknown) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to move opportunity",
+        error instanceof Error ? error.message : "Failed to move deal",
       );
     }
   };
 
-  const setOpportunityColor = async (
-    opportunityId: string,
-    color: OpportunityColor,
-  ) => {
+  const setDealColor = async (dealId: string, color: CrmRecordColor) => {
     setColorMenuId(undefined);
     try {
-      await updateColor.mutateAsync({ id: opportunityId, color });
-      toast.success("Opportunity color updated");
+      await updateColor.mutateAsync({ id: dealId, color });
+      toast.success("Deal color updated");
     } catch (error: unknown) {
       toast.error(
         error instanceof Error ? error.message : "Failed to update color",
@@ -323,10 +317,10 @@ export function PipelinePage() {
     setDragOverStage(null);
     setDropTargetId(undefined);
     if (id) {
-      const bottomPosition = opportunities.filter(
+      const bottomPosition = deals.filter(
         (item) => item.stage === stage && item.id !== id,
       ).length;
-      void moveOpportunity(id, stage, position ?? bottomPosition);
+      void moveDeal(id, stage, position ?? bottomPosition);
     }
   };
 
@@ -388,7 +382,7 @@ export function PipelinePage() {
             <Input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search opportunities, contacts, or companies"
+              placeholder="Search deals, contacts, or companies"
               className="pl-9"
             />
           </div>
@@ -634,7 +628,7 @@ export function PipelinePage() {
                             wasDragging.current = false;
                           }, 0);
                         }}
-                        className={`relative min-w-0 max-w-full cursor-grab overflow-visible rounded-md border border-l-4 bg-card p-3 shadow-xs hover:z-20 hover:shadow-md active:cursor-grabbing ${OPPORTUNITY_COLORS[item.color || "slate"].border} ${
+                        className={`relative min-w-0 max-w-full cursor-grab overflow-visible rounded-md border border-l-4 bg-card p-3 shadow-xs hover:z-20 hover:shadow-md active:cursor-grabbing ${CRM_RECORD_COLORS[item.color || "slate"].border} ${
                           dropTargetId?.endsWith(`:${item.id}`) &&
                           draggedId !== item.id
                             ? "ring-2 ring-primary/40"
@@ -658,7 +652,7 @@ export function PipelinePage() {
                                 );
                               }}
                               className="h-7 w-7"
-                              title="Choose opportunity color"
+                              title="Choose deal color"
                             >
                               <MoreVertical className="h-4 w-4" />
                             </Button>
@@ -668,14 +662,14 @@ export function PipelinePage() {
                                 onClick={(event) => event.stopPropagation()}
                               >
                                 <p className="mb-2 text-xs font-medium">
-                                  Opportunity color
+                                  Deal color
                                 </p>
                                 <div className="grid grid-cols-5 gap-2">
                                   {(
-                                    Object.entries(OPPORTUNITY_COLORS) as Array<
+                                    Object.entries(CRM_RECORD_COLORS) as Array<
                                       [
-                                        OpportunityColor,
-                                        (typeof OPPORTUNITY_COLORS)[OpportunityColor],
+                                        CrmRecordColor,
+                                        (typeof CRM_RECORD_COLORS)[CrmRecordColor],
                                       ]
                                     >
                                   ).map(([color, style]) => (
@@ -683,7 +677,7 @@ export function PipelinePage() {
                                       key={color}
                                       type="button"
                                       onClick={() =>
-                                        void setOpportunityColor(item.id, color)
+                                        void setDealColor(item.id, color)
                                       }
                                       className={`h-6 w-6 rounded-full border-2 ${style.swatch} ${
                                         (item.color || "slate") === color
@@ -838,7 +832,7 @@ export function PipelinePage() {
                     ))}
                     {!isLoading && items.length === 0 && (
                       <div className="flex h-24 items-center justify-center rounded-lg border border-dashed p-5 text-center text-xs text-muted-foreground">
-                        No opportunities in this stage
+                        No deals in this stage
                       </div>
                     )}
                     <div
@@ -860,7 +854,7 @@ export function PipelinePage() {
                           items.filter((item) => item.id !== draggedId).length,
                         );
                       }}
-                      aria-label={`Drop opportunity at the bottom of ${stage.label}`}
+                      aria-label={`Drop deal at the bottom of ${stage.label}`}
                       className={`h-16 rounded-md transition-[background-color,box-shadow] duration-150 ${
                         draggedId && !draggedStageId
                           ? "pointer-events-auto"
@@ -903,94 +897,189 @@ export function PipelinePage() {
         </div>
       ) : (
         <Card className="overflow-hidden">
+          <div className="flex items-center justify-between gap-3 border-b border-border/70 px-4 py-3 text-xs text-muted-foreground">
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={
+                  filtered.length > 0 &&
+                  filtered.every((item) => selectedDeals.includes(item.id))
+                }
+                onChange={(event) =>
+                  setSelectedDeals(
+                    event.target.checked ? filtered.map((item) => item.id) : [],
+                  )
+                }
+                className="cursor-pointer accent-primary"
+              />
+              Select page
+            </label>
+            <span>
+              Showing {filtered.length} of {deals.length} deals
+            </span>
+          </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-225 text-sm">
-              <thead className="border-b bg-muted/30 text-left text-xs font-medium text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3">Opportunity</th>
-                  <th className="px-4 py-3">Stage</th>
-                  <th className="px-4 py-3">Value</th>
-                  <th className="px-4 py-3">Owner</th>
-                  <th className="px-4 py-3">Expected close</th>
-                  <th className="px-4 py-3">Next action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {filtered.map((item) => (
-                  <tr
-                    key={item.id}
-                    onClick={() =>
-                      navigate(`/dashboard/crm/pipeline/${item.id}`)
+            <div className="min-w-[1360px] text-sm">
+              <div className="grid grid-cols-[48px_minmax(280px,1.35fr)_220px_160px_220px_190px_minmax(240px,1fr)_48px] items-stretch border-b-2 border-primary/20 bg-slate-100/90 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-700 dark:bg-slate-900/80 dark:text-slate-200">
+                <span className="flex items-center justify-center border-r border-border/60">
+                  <input
+                    type="checkbox"
+                    aria-label="Select all deals"
+                    checked={
+                      filtered.length > 0 &&
+                      filtered.every((item) => selectedDeals.includes(item.id))
                     }
-                    className="cursor-pointer hover:bg-muted/20"
+                    onChange={(event) =>
+                      setSelectedDeals(
+                        event.target.checked
+                          ? filtered.map((item) => item.id)
+                          : [],
+                      )
+                    }
+                    className="cursor-pointer accent-primary"
+                  />
+                </span>
+                {[
+                  { icon: Target, label: "Deal" },
+                  { icon: LayoutGrid, label: "Stage" },
+                  { icon: CircleDollarSign, label: "Value" },
+                  { icon: UserRound, label: "Owner" },
+                  { icon: CalendarDays, label: "Expected close" },
+                  { icon: SquareCheckBig, label: "Next action" },
+                ].map(({ icon: Icon, label }) => (
+                  <span
+                    key={label}
+                    className="flex items-center gap-2 border-r border-border/60 px-3 py-3"
                   >
-                    <td className="px-4 py-3">
-                      <p className="font-medium">{item.title}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {item.contact?.name || "Unknown contact"}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Select
-                        value={item.stage}
-                        onValueChange={(value) =>
-                          void moveOpportunity(
-                            item.id,
-                            value,
-                            opportunities.filter(
-                              (opportunity) =>
-                                opportunity.stage === value &&
-                                opportunity.id !== item.id,
-                            ).length,
-                          )
-                        }
-                      >
-                        <SelectTrigger
-                          className="h-8 min-w-32 text-xs"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          {stages.map((stage) => (
-                            <SelectItem key={stage.id} value={stage.id}>
-                              {stage.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </td>
-                    <td className="px-4 py-3 font-medium">
-                      {formatMoney(item.value, item.currency)}
-                    </td>
-                    <td className="px-4 py-3">
-                      {item.owner?.name || "Unassigned"}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {item.expectedCloseAt
-                        ? new Date(item.expectedCloseAt).toLocaleDateString()
-                        : "—"}
-                    </td>
-                    <td className="max-w-64 truncate px-4 py-3 text-muted-foreground">
-                      {item.nextAction || "—"}
-                    </td>
-                  </tr>
+                    <Icon className="h-3.5 w-3.5 text-primary" />
+                    {label}
+                  </span>
                 ))}
-              </tbody>
-            </table>
+                <span />
+              </div>
+              <div className="flex flex-col">
+                {filtered.map((item) => {
+                  const selected = selectedDeals.includes(item.id);
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() =>
+                        navigate(`/dashboard/crm/pipeline/${item.id}`)
+                      }
+                      className={`grid min-h-[56px] cursor-pointer grid-cols-[48px_minmax(280px,1.35fr)_220px_160px_220px_190px_minmax(240px,1fr)_48px] border-b border-border/70 last:border-b-0 ${selected ? "bg-primary/[0.07] shadow-[inset_3px_0_0_hsl(var(--primary))]" : "hover:bg-muted/30"}`}
+                    >
+                      <span
+                        className="flex items-center justify-center border-r border-border/40"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${item.title}`}
+                          checked={selected}
+                          onChange={() =>
+                            setSelectedDeals((current) =>
+                              selected
+                                ? current.filter((id) => id !== item.id)
+                                : [...current, item.id],
+                            )
+                          }
+                          className="cursor-pointer accent-primary"
+                        />
+                      </span>
+                      <span className="min-w-0 border-r border-border/40 px-4 py-2.5">
+                        <span className="block truncate font-semibold text-primary">
+                          {item.title}
+                        </span>
+                        <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                          {item.contact?.name || item.company || "No contact"}
+                        </span>
+                      </span>
+                      <span
+                        className="flex min-w-0 items-center border-r border-border/40 px-3 py-2"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <Select
+                          value={item.stage}
+                          onValueChange={(value) =>
+                            void moveDeal(
+                              item.id,
+                              value,
+                              deals.filter(
+                                (deal) =>
+                                  deal.stage === value && deal.id !== item.id,
+                              ).length,
+                            )
+                          }
+                        >
+                          <SelectTrigger className="h-8 w-full text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {stages.map((stage) => (
+                              <SelectItem key={stage.id} value={stage.id}>
+                                {stage.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </span>
+                      <span className="flex items-center border-r border-border/40 px-4 py-2 font-semibold tabular-nums">
+                        {formatMoney(item.value, item.currency)}
+                      </span>
+                      <span className="flex min-w-0 items-center gap-2 border-r border-border/40 px-4 py-2">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold">
+                          {item.owner?.name
+                            ?.split(" ")
+                            .map((part) => part[0])
+                            .join("")
+                            .slice(0, 2)
+                            .toUpperCase() || "—"}
+                        </span>
+                        <span className="truncate">
+                          {item.owner?.name || "Unassigned"}
+                        </span>
+                      </span>
+                      <span className="flex items-center border-r border-border/40 px-4 py-2 text-muted-foreground">
+                        {item.expectedCloseAt
+                          ? new Date(item.expectedCloseAt).toLocaleDateString()
+                          : "—"}
+                      </span>
+                      <span className="flex min-w-0 items-center border-r border-border/40 px-4 py-2 text-muted-foreground">
+                        <span className="truncate">
+                          {item.nextAction || "—"}
+                        </span>
+                      </span>
+                      <span className="flex items-center justify-center">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          aria-label={`Open ${item.title}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            navigate(`/dashboard/crm/pipeline/${item.id}`);
+                          }}
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
           {!isLoading && filtered.length === 0 && (
             <div className="p-10 text-center text-sm text-muted-foreground">
-              No opportunities match the current filters.
+              No deals match the current filters.
             </div>
           )}
         </Card>
       )}
 
       {createOpen && (
-        <OpportunityDialog
+        <DealDialog
           open={createOpen}
           onOpenChange={setCreateOpen}
           stages={stages}

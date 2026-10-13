@@ -12,6 +12,7 @@ import {
 } from "@/shared/ui/dialog";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
+import { LabelPicker } from "@/shared/components/label-editor";
 import {
   Select,
   SelectContent,
@@ -29,7 +30,7 @@ import {
   useCreateContact,
 } from "@/domains/contacts/hooks/use-contacts";
 import type { ContactMethod } from "@/domains/contacts/types/types";
-import { useCreateOpportunity } from "../hooks/use-opportunities";
+import { useCreateCrmRecord } from "../hooks/use-crm-records";
 
 const LEAD_LABELS = ["HOT LEAD", "WARM LEAD", "COLD LEAD"];
 const SOURCE_CHANNELS = [
@@ -55,7 +56,7 @@ export function LeadDialog({ open, onOpenChange, onCreated }: LeadDialogProps) {
   const { data: owners = [] } = useContactOwners();
   const createContact = useCreateContact();
   const createAccount = useCreateAccount();
-  const createLead = useCreateOpportunity();
+  const createLead = useCreateCrmRecord();
   const [personQuery, setPersonQuery] = useState("");
   const [organizationQuery, setOrganizationQuery] = useState("");
   const [contactId, setContactId] = useState<string | null>(null);
@@ -63,6 +64,7 @@ export function LeadDialog({ open, onOpenChange, onCreated }: LeadDialogProps) {
   const [personOpen, setPersonOpen] = useState(false);
   const [organizationOpen, setOrganizationOpen] = useState(false);
   const [title, setTitle] = useState("");
+  const [titleCustomized, setTitleCustomized] = useState(false);
   const [value, setValue] = useState("");
   const [currency, setCurrency] = useState<"USD" | "INR" | "EUR" | "GBP">(
     "INR",
@@ -100,6 +102,7 @@ export function LeadDialog({ open, onOpenChange, onCreated }: LeadDialogProps) {
     setContactId(null);
     setAccountId(null);
     setTitle("");
+    setTitleCustomized(false);
     setValue("");
     setCurrency("INR");
     setLabels([]);
@@ -127,8 +130,10 @@ export function LeadDialog({ open, onOpenChange, onCreated }: LeadDialogProps) {
     if (contact.account) {
       setAccountId(contact.account.id);
       setOrganizationQuery(contact.account.name);
+      if (!titleCustomized) setTitle(contact.account.name);
     } else if (contact.company) {
       setOrganizationQuery(contact.company);
+      if (!titleCustomized) setTitle(contact.company);
     }
     setPersonOpen(false);
   };
@@ -272,6 +277,7 @@ export function LeadDialog({ open, onOpenChange, onCreated }: LeadDialogProps) {
                 value={organizationQuery}
                 onChange={(nextValue) => {
                   setOrganizationQuery(nextValue);
+                  if (!titleCustomized) setTitle(nextValue);
                   setAccountId(null);
                   setOrganizationOpen(true);
                 }}
@@ -286,6 +292,7 @@ export function LeadDialog({ open, onOpenChange, onCreated }: LeadDialogProps) {
                         onClick={() => {
                           setAccountId(account.id);
                           setOrganizationQuery(account.name);
+                          if (!titleCustomized) setTitle(account.name);
                           setOrganizationOpen(false);
                         }}
                         className="block w-full px-4 py-3 text-left text-sm font-medium hover:bg-muted"
@@ -317,7 +324,11 @@ export function LeadDialog({ open, onOpenChange, onCreated }: LeadDialogProps) {
                   id="lead-title"
                   required
                   value={title}
-                  onChange={(event) => setTitle(event.target.value)}
+                  onChange={(event) => {
+                    setTitle(event.target.value);
+                    setTitleCustomized(true);
+                  }}
+                  placeholder="Lead title"
                 />
               </div>
               <div className="grid grid-cols-[1fr_150px] gap-3">
@@ -354,24 +365,19 @@ export function LeadDialog({ open, onOpenChange, onCreated }: LeadDialogProps) {
               </div>
               <div className="grid gap-2">
                 <Label>Labels</Label>
-                <div className="flex flex-wrap gap-2 rounded-lg border p-3">
-                  {LEAD_LABELS.map((label) => (
-                    <button
-                      key={label}
-                      type="button"
-                      onClick={() =>
-                        setLabels((current) =>
-                          current.includes(label)
-                            ? current.filter((item) => item !== label)
-                            : [...current, label],
-                        )
-                      }
-                      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${labels.includes(label) ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"}`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
+                <LabelPicker
+                  value={labels.join(", ")}
+                  options={LEAD_LABELS}
+                  onChange={(nextValue) =>
+                    setLabels(
+                      nextValue
+                        .split(",")
+                        .map((label) => label.trim())
+                        .filter(Boolean),
+                    )
+                  }
+                  disabled={pending}
+                />
               </div>
               <div className="grid gap-2">
                 <Label>Owner</Label>

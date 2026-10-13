@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { opportunitiesSchema } from "../../../src/modules/opportunities/opportunities.schema";
+import { crmRecordsSchema } from "../../../src/modules/crm-records/crm-records.schema";
+import { dealsSchema } from "../../../src/modules/deals/deals.schema";
+import { leadsSchema } from "../../../src/modules/leads/leads.schema";
 
-describe("opportunitiesSchema", () => {
-  it("accepts a complete opportunity", () => {
-    const { error } = opportunitiesSchema.create.validate({
+describe("CRM record schemas", () => {
+  it("accepts a complete CRM record", () => {
+    const { error } = crmRecordsSchema.create.validate({
       contactId: "507f1f77bcf86cd799439011",
       title: "Enterprise expansion",
       value: 50000,
@@ -18,29 +20,29 @@ describe("opportunitiesSchema", () => {
 
   it("accepts custom stage identifiers and rejects malformed stages", () => {
     expect(
-      opportunitiesSchema.create.validate({
+      crmRecordsSchema.create.validate({
         contactId: "507f1f77bcf86cd799439011",
         title: "Invalid deal",
         value: -1,
       }).error,
     ).toBeDefined();
     expect(
-      opportunitiesSchema.updateStage.validate({ stage: "Not a valid stage!" })
+      crmRecordsSchema.updateStage.validate({ stage: "Not a valid stage!" })
         .error,
     ).toBeDefined();
     expect(
-      opportunitiesSchema.updateStage.validate({ stage: "legal-review" }).error,
+      crmRecordsSchema.updateStage.validate({ stage: "legal-review" }).error,
     ).toBeUndefined();
     expect(
-      opportunitiesSchema.updateColor.validate({ color: "pink" }).error,
+      crmRecordsSchema.updateColor.validate({ color: "pink" }).error,
     ).toBeUndefined();
     expect(
-      opportunitiesSchema.updateColor.validate({ color: "transparent" }).error,
+      crmRecordsSchema.updateColor.validate({ color: "transparent" }).error,
     ).toBeDefined();
   });
 
   it("validates customizable pipeline stages", () => {
-    const valid = opportunitiesSchema.updatePipeline.validate({
+    const valid = crmRecordsSchema.updatePipeline.validate({
       name: "Enterprise sales",
       stages: [
         { id: "lead", label: "Lead", color: "blue", type: "open", order: 0 },
@@ -62,7 +64,7 @@ describe("opportunitiesSchema", () => {
     });
     expect(valid.error).toBeUndefined();
 
-    const missingOutcome = opportunitiesSchema.updatePipeline.validate({
+    const missingOutcome = crmRecordsSchema.updatePipeline.validate({
       name: "Broken pipeline",
       stages: [
         { id: "lead", label: "Lead", color: "blue", type: "open", order: 0 },
@@ -83,5 +85,21 @@ describe("opportunitiesSchema", () => {
       ],
     });
     expect(missingOutcome.error).toBeDefined();
+  });
+
+  it("keeps lead and deal creation scoped to their route", () => {
+    const payload = {
+      accountId: "507f1f77bcf86cd799439011",
+      title: "New CRM record",
+    };
+
+    expect(dealsSchema.create.validate(payload).error).toBeUndefined();
+    expect(leadsSchema.create.validate(payload).error).toBeUndefined();
+    expect(
+      dealsSchema.create.validate({ ...payload, recordType: "lead" }).error,
+    ).toBeDefined();
+    expect(
+      leadsSchema.create.validate({ ...payload, recordType: "deal" }).error,
+    ).toBeDefined();
   });
 });
