@@ -61,11 +61,12 @@ export {
 export { UnansweredQuestion, IUnansweredQuestion } from "./UnansweredQuestion";
 export { Template, ITemplate } from "./Template";
 export {
-  Opportunity,
-  IOpportunity,
-  OpportunityStage,
-  OpportunityColor,
-} from "./Opportunity";
+  CrmRecord,
+  ICrmRecord,
+  ICrmRecordActivity,
+  CrmRecordStage,
+  CrmRecordColor,
+} from "./CrmRecord";
 export {
   SalesPipeline,
   ISalesPipeline,

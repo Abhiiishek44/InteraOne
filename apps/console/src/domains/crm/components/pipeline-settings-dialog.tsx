@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/shared/ui/select";
-import { useUpdateSalesPipeline } from "../hooks/use-opportunities";
+import { useUpdateSalesPipeline } from "../hooks/use-crm-records";
 import type {
   PipelineStage,
   PipelineStageType,
@@ -106,7 +106,7 @@ export function PipelineSettingsDialog({
       return;
     }
     if (count > 0 && existingStage && draft.type !== existingStage.type) {
-      toast.error("Move opportunities out before changing the stage type");
+      toast.error("Move deals out before changing the stage type");
       return;
     }
 
@@ -221,7 +221,7 @@ export function PipelineSettingsDialog({
                 <p className="text-sm font-medium">Delete this stage</p>
                 <p className="text-xs text-muted-foreground">
                   {count > 0
-                    ? `${count} opportunities must be moved first.`
+                    ? `${count} deals must be moved first.`
                     : sameTypeCount <= 1
                       ? "This is the only stage of its type."
                       : "This action removes the empty stage."}

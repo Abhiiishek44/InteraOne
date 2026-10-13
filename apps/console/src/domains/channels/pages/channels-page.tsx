@@ -1360,7 +1360,7 @@ export function ChannelsPage() {
                                 ? "New responses create CRM contacts"
                                 : "Lead imports are paused"}
                               {form.defaults.createOpportunity
-                                ? " and opportunities"
+                                ? " and deals"
                                 : ""}
                             </p>
                           </div>
@@ -1382,7 +1382,7 @@ export function ChannelsPage() {
                               }
                             >
                               {form.defaults.createOpportunity
-                                ? "Contact + opportunity"
+                                ? "Contact + deal"
                                 : "Contact only"}
                             </Button>
                             <Button

@@ -40,9 +40,6 @@ export const accountsApi = {
   async update(id: string, payload: Partial<AccountWritePayload>) {
     await apiClient.patch(`/crm/organizations/${id}`, payload);
   },
-  async archive(id: string) {
-    await apiClient.post(`/crm/organizations/${id}/archive`);
-  },
   async addNote(id: string, content: string) {
     await apiClient.post(`/crm/organizations/${id}/notes`, { content });
   },

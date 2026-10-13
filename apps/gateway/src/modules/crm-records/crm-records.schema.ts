@@ -16,7 +16,7 @@ const pipelineStage = Joi.object({
   order: Joi.number().integer().min(0).required(),
 });
 
-export const opportunitiesSchema = {
+export const crmRecordsSchema = {
   create: Joi.object({
     contactId: Joi.string().hex().length(24).allow(null, ""),
     primaryContactId: Joi.string().hex().length(24).allow(null, ""),
@@ -89,9 +89,19 @@ export const opportunitiesSchema = {
       .default("todo"),
     customFields: Joi.object().max(100),
   }),
-  updateNote: Joi.object({
-    content: Joi.string().trim().max(2000).required(),
-  }),
+  updateActivity: Joi.object({
+    content: Joi.string().trim().max(2000),
+    dueAt: Joi.date().iso().allow(null, ""),
+    durationMinutes: Joi.number().integer().min(5).max(1440),
+    category: Joi.string().valid(
+      "todo",
+      "email",
+      "call",
+      "meeting",
+      "document",
+    ),
+    customFields: Joi.object().max(100),
+  }).min(1),
   updatePriority: Joi.object({
     priority: Joi.number().integer().valid(1, 2, 3).required(),
   }),

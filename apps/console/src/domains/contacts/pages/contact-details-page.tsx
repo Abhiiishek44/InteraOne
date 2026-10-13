@@ -80,6 +80,7 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { WhatsAppIcon } from "@/shared/ui/channel-icon";
 import { storageApi } from "@/shared/lib/storage.api";
+import { sanitizeNoteHtml } from "@/shared/lib/note-html";
 import { contactsApi } from "../api/contacts.api";
 import { useContacts, useUpdateContact } from "../hooks/use-contacts";
 import { toContactViewModel } from "../types/types";
@@ -157,98 +158,6 @@ interface HistoryItem {
   priority?: string;
   status?: string;
   endAt?: string;
-}
-
-const allowedNoteTags = new Set([
-  "B",
-  "STRONG",
-  "I",
-  "EM",
-  "U",
-  "S",
-  "STRIKE",
-  "A",
-  "UL",
-  "OL",
-  "LI",
-  "BR",
-  "P",
-  "DIV",
-  "IMG",
-  "FONT",
-]);
-
-function sanitizeNoteHtml(value: string) {
-  if (typeof document === "undefined") return value;
-  const wrapper = document.createElement("div");
-  const containsRichHtml =
-    /<\/?(?:b|strong|i|em|u|s|strike|a|ul|ol|li|br|p|div|img|font)(?:\s|>|\/)/i.test(
-      value,
-    );
-  if (!containsRichHtml) {
-    wrapper.textContent = value;
-    return wrapper.innerHTML.replace(/\r?\n/g, "<br>");
-  }
-  wrapper.innerHTML = value;
-  wrapper.querySelectorAll("*").forEach((element) => {
-    if (!allowedNoteTags.has(element.tagName)) {
-      element.replaceWith(document.createTextNode(element.textContent || ""));
-      return;
-    }
-    const sourceHref =
-      element instanceof HTMLAnchorElement
-        ? element.getAttribute("href")?.trim() || ""
-        : "";
-    const sourceSrc =
-      element instanceof HTMLImageElement
-        ? element.getAttribute("src")?.trim() || ""
-        : "";
-    const textAlign =
-      element instanceof HTMLElement ? element.style.textAlign : "";
-    const fontFace =
-      element.tagName === "FONT"
-        ? element.getAttribute("face")?.trim() || ""
-        : "";
-    const fontSize =
-      element.tagName === "FONT"
-        ? element.getAttribute("size")?.trim() || ""
-        : "";
-    const fontColor =
-      element.tagName === "FONT"
-        ? element.getAttribute("color")?.trim() || ""
-        : "";
-    [...element.attributes].forEach((attribute) =>
-      element.removeAttribute(attribute.name),
-    );
-    if (
-      element instanceof HTMLElement &&
-      ["left", "center", "right", "justify"].includes(textAlign)
-    )
-      element.style.textAlign = textAlign;
-    if (element.tagName === "FONT") {
-      if (/^[a-zA-Z0-9 ,'-]{1,60}$/.test(fontFace))
-        element.setAttribute("face", fontFace);
-      if (/^[1-7]$/.test(fontSize)) element.setAttribute("size", fontSize);
-      if (/^(#[0-9a-f]{3,8}|rgb\([0-9 ,.]+\))$/i.test(fontColor))
-        element.setAttribute("color", fontColor);
-    }
-    if (element instanceof HTMLAnchorElement) {
-      if (/^https?:\/\//i.test(sourceHref) || /^mailto:/i.test(sourceHref)) {
-        element.href = sourceHref;
-        element.target = "_blank";
-        element.rel = "noreferrer noopener";
-      }
-    }
-    if (element instanceof HTMLImageElement) {
-      if (/^https?:\/\//i.test(sourceSrc)) {
-        element.src = sourceSrc;
-        element.alt = "Note attachment";
-      } else {
-        element.remove();
-      }
-    }
-  });
-  return wrapper.innerHTML;
 }
 
 function notePlainText(value: string) {
@@ -1422,7 +1331,9 @@ function ActivityComposer({
   const descriptionRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const dragOffsetRef = useRef(0);
-  const [draggingActivity, setDraggingActivity] = useState(false);
+  const [timelineInteraction, setTimelineInteraction] = useState<
+    "move" | "resize-start" | "resize-end" | null
+  >(null);
   const initialStart = useMemo(() => {
     if (activity?.startAt) return new Date(activity.startAt);
     const date = new Date();
@@ -1567,13 +1478,37 @@ function ActivityComposer({
   const handleTimelinePointerMove = (
     event: React.PointerEvent<HTMLDivElement>,
   ) => {
-    if (!draggingActivity || !timelineRef.current) return;
+    if (!timelineInteraction || !timelineRef.current) return;
     const timelineRect = timelineRef.current.getBoundingClientRect();
-    const rawY =
+    const pointerY =
       event.clientY -
       timelineRect.top +
-      timelineRef.current.scrollTop -
-      dragOffsetRef.current;
+      timelineRef.current.scrollTop;
+    const pointerMinutes = Math.round(((pointerY / 48) * 60) / 15) * 15;
+    if (timelineInteraction === "resize-start") {
+      const endMinutes =
+        endAt.toDateString() === startAt.toDateString()
+          ? endAt.getHours() * 60 + endAt.getMinutes()
+          : 24 * 60;
+      const nextMinutes = Math.max(0, Math.min(endMinutes - 15, pointerMinutes));
+      const nextStart = new Date(`${startDate}T00:00`);
+      nextStart.setMinutes(nextMinutes);
+      setStartTime(localTime(nextStart));
+      return;
+    }
+    if (timelineInteraction === "resize-end") {
+      const startMinutes = startAt.getHours() * 60 + startAt.getMinutes();
+      const nextMinutes = Math.max(
+        startMinutes + 15,
+        Math.min(24 * 60, pointerMinutes),
+      );
+      const nextEnd = new Date(`${startDate}T00:00`);
+      nextEnd.setMinutes(nextMinutes);
+      setEndDate(localDate(nextEnd));
+      setEndTime(localTime(nextEnd));
+      return;
+    }
+    const rawY = pointerY - dragOffsetRef.current;
     const snappedMinutes = Math.round(((rawY / 48) * 60) / 15) * 15;
     const nextMinutes = Math.max(
       0,
@@ -1602,13 +1537,13 @@ function ActivityComposer({
           className="h-11 text-xl"
           placeholder="Activity title"
         />
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-2">
           {activityTypes.map(({ id, label, icon: Icon }) => (
             <Button
               key={id}
               type="button"
               variant={activityType === id ? "default" : "outline"}
-              size="icon-sm"
+              size="icon-lg"
               onClick={() => {
                 const hasDefaultTitle =
                   activityTypes.some((type) => type.label === title) ||
@@ -1726,16 +1661,16 @@ function ActivityComposer({
             />
           </div>
         )}
-        <div className="overflow-hidden rounded-md border border-amber-200 bg-amber-50/80 dark:border-amber-900/50 dark:bg-amber-950/20">
+        <div className="overflow-hidden rounded-xl border border-amber-200 bg-amber-50/80 shadow-sm ring-1 ring-amber-100/60 dark:border-amber-900/50 dark:bg-amber-950/20 dark:ring-amber-950/40">
           <div
             ref={descriptionRef}
             contentEditable
             suppressContentEditableWarning
             data-placeholder="Add a description…"
             onInput={(event) => setDescription(event.currentTarget.innerHTML)}
-            className="min-h-24 p-3 text-sm outline-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)]"
+            className="min-h-32 p-4 text-sm leading-6 outline-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)]"
           />
-          <div className="flex gap-0.5 border-t border-amber-200 p-2 dark:border-amber-900/50">
+          <div className="flex gap-1 border-t border-amber-200 bg-background/40 px-3 py-2.5 dark:border-amber-900/50">
             {(
               [
                 { label: "Bold", icon: Bold, command: "bold" },
@@ -1748,7 +1683,7 @@ function ActivityComposer({
                 key={label}
                 type="button"
                 variant="ghost"
-                size="icon-xs"
+                size="icon"
                 onMouseDown={(event) => {
                   event.preventDefault();
                   formatDescription(command);
@@ -1788,6 +1723,7 @@ function ActivityComposer({
           <Button
             type="button"
             variant="outline"
+            size="lg"
             onClick={() => {
               reset();
               onClose();
@@ -1798,6 +1734,7 @@ function ActivityComposer({
           </Button>
           <Button
             type="button"
+            size="lg"
             onClick={() => void saveActivity()}
             disabled={saving}
           >
@@ -1839,8 +1776,8 @@ function ActivityComposer({
           ref={timelineRef}
           className="relative h-[480px] touch-none overflow-y-auto"
           onPointerMove={handleTimelinePointerMove}
-          onPointerUp={() => setDraggingActivity(false)}
-          onPointerCancel={() => setDraggingActivity(false)}
+          onPointerUp={() => setTimelineInteraction(null)}
+          onPointerCancel={() => setTimelineInteraction(null)}
         >
           <div className="relative h-[1152px]">
             {Array.from({ length: 25 }, (_, index) => (
@@ -1889,7 +1826,7 @@ function ActivityComposer({
                 const rect = event.currentTarget.getBoundingClientRect();
                 dragOffsetRef.current = event.clientY - rect.top;
                 event.currentTarget.setPointerCapture(event.pointerId);
-                setDraggingActivity(true);
+                setTimelineInteraction("move");
               }}
               onKeyDown={(event) => {
                 if (event.key !== "ArrowUp" && event.key !== "ArrowDown")
@@ -1906,9 +1843,20 @@ function ActivityComposer({
                 setStartTime(localTime(nextStart));
                 setEndTime(localTime(nextEnd));
               }}
-              className={`absolute left-16 right-3 z-10 select-none overflow-hidden rounded-sm bg-blue-600 px-2 py-1 text-xs font-semibold text-white shadow-sm ${draggingActivity ? "cursor-grabbing ring-2 ring-blue-300" : "cursor-grab"}`}
+              className={`absolute left-16 right-3 z-10 select-none overflow-hidden rounded-sm bg-blue-600 px-2 py-1 text-xs font-semibold text-white shadow-sm ${timelineInteraction === "move" ? "cursor-grabbing ring-2 ring-blue-300" : timelineInteraction ? "ring-2 ring-blue-300" : "cursor-grab"}`}
               style={{ top: previewTop, height: previewHeight }}
             >
+              <span
+                aria-hidden="true"
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  setTimelineInteraction("resize-start");
+                }}
+                className="absolute inset-x-0 top-0 z-20 h-2 cursor-ns-resize bg-blue-400/0 hover:bg-blue-300/70"
+              >
+                <span className="absolute left-1/2 top-1 h-0.5 w-8 -translate-x-1/2 rounded-full bg-white/70" />
+              </span>
               <span className="flex items-center gap-1">
                 <Users className="h-3.5 w-3.5" />
                 {title || "Activity"}
@@ -1923,6 +1871,17 @@ function ActivityComposer({
                   hour: "numeric",
                   minute: "2-digit",
                 })}
+              </span>
+              <span
+                aria-hidden="true"
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  setTimelineInteraction("resize-end");
+                }}
+                className="absolute inset-x-0 bottom-0 z-20 h-2 cursor-ns-resize bg-blue-400/0 hover:bg-blue-300/70"
+              >
+                <span className="absolute bottom-1 left-1/2 h-0.5 w-8 -translate-x-1/2 rounded-full bg-white/70" />
               </span>
             </div>
           </div>
@@ -2061,7 +2020,7 @@ function NotesComposer({ contact }: { contact: Contact }) {
 
   return (
     <div>
-      <div className="overflow-hidden rounded-md border border-amber-200 bg-amber-50/80 dark:border-amber-900/60 dark:bg-amber-950/20">
+      <div className="overflow-hidden rounded-xl border border-amber-200 bg-amber-50/80 shadow-sm ring-1 ring-amber-100/60 dark:border-amber-900/60 dark:bg-amber-950/20 dark:ring-amber-950/40">
         <div
           ref={editorRef}
           contentEditable
@@ -2078,9 +2037,9 @@ function NotesComposer({ contact }: { contact: Contact }) {
               void saveNote();
             }
           }}
-          className="min-h-28 max-h-80 overflow-y-auto p-4 text-sm outline-none empty:before:pointer-events-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)] [&_a]:text-primary [&_a]:underline [&_img]:my-2 [&_img]:max-h-64 [&_img]:max-w-full [&_img]:rounded-md [&_li]:ml-5 [&_ul]:list-disc"
+          className="min-h-36 max-h-96 overflow-y-auto p-5 text-[15px] leading-6 outline-none empty:before:pointer-events-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)] [&_a]:text-primary [&_a]:underline [&_img]:my-2 [&_img]:max-h-64 [&_img]:max-w-full [&_img]:rounded-md [&_li]:ml-5 [&_ul]:list-disc"
         />
-        <div className="relative flex flex-wrap items-center justify-between gap-2 border-t border-amber-200/80 px-3 py-2 dark:border-amber-900/60">
+        <div className="relative flex flex-wrap items-center justify-between gap-3 border-t border-amber-200/80 bg-background/40 px-4 py-3 dark:border-amber-900/60">
           {insertKind && (
             <InsertUrlPopover
               kind={insertKind}
@@ -2093,13 +2052,13 @@ function NotesComposer({ contact }: { contact: Contact }) {
               onInsert={insertUrlContent}
             />
           )}
-          <div className="flex flex-wrap items-center gap-0.5">
+          <div className="flex flex-wrap items-center gap-1">
             {tools.map(({ label, icon: Icon, command, action }) => (
               <Button
                 key={label}
                 type="button"
                 variant="ghost"
-                size="icon-xs"
+                size="icon"
                 onMouseDown={(event) => {
                   event.preventDefault();
                   action();
@@ -2122,7 +2081,7 @@ function NotesComposer({ contact }: { contact: Contact }) {
             {draft && (
               <Button
                 type="button"
-                size="sm"
+                size="lg"
                 variant="outline"
                 onClick={cancel}
                 disabled={saving}
@@ -2132,7 +2091,7 @@ function NotesComposer({ contact }: { contact: Contact }) {
             )}
             <Button
               type="button"
-              size="sm"
+              size="lg"
               onClick={() => void saveNote()}
               disabled={
                 (!notePlainText(draft) && !draft.includes("<img")) || saving
@@ -2152,7 +2111,7 @@ function NotesComposer({ contact }: { contact: Contact }) {
   );
 }
 
-function EmailComposer({ contact }: { contact: Contact }) {
+export function EmailComposer({ contact }: { contact: Contact }) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -2519,7 +2478,7 @@ function EmailComposer({ contact }: { contact: Contact }) {
   );
 }
 
-function ContactFileWorkspace({
+export function ContactFileWorkspace({
   contact,
   documentMode = false,
 }: {

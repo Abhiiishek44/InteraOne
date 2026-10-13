@@ -5,10 +5,15 @@ import type {
   AccountWritePayload,
 } from "../types/types";
 
-export function useAccounts(search = "", limit = 100) {
+export function useAccounts(
+  search = "",
+  limit = 100,
+  options?: { enabled?: boolean },
+) {
   return useQuery({
     queryKey: ["accounts", search, limit],
     queryFn: () => accountsApi.list(search, limit),
+    enabled: options?.enabled ?? true,
   });
 }
 
@@ -43,7 +48,7 @@ export function useUpdateAccount() {
       client.invalidateQueries({
         queryKey: ["accounts", "detail", variables.id],
       });
-      client.invalidateQueries({ queryKey: ["opportunities"] });
+      client.invalidateQueries({ queryKey: ["crm-records"] });
     },
   });
 }

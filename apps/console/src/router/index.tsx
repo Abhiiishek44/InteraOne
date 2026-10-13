@@ -35,7 +35,7 @@ import { WhatsAppChannelSetupPage } from "@/domains/channels/pages/whatsapp-chan
 import { TelegramChannelSetupPage } from "@/domains/channels/pages/telegram-channel-setup";
 import { AcceptInvitePage } from "@/domains/auth/pages/accept-invite/page";
 import { PipelinePage } from "@/domains/crm/pages/pipeline-page";
-import { OpportunityDetailsPage } from "@/domains/crm/pages/opportunity-details-page";
+import { DealDetailsPage } from "@/domains/crm/pages/deal-details-page";
 import { LeadsPage } from "@/domains/crm/pages/leads-page";
 import { LeadDetailsPage } from "@/domains/crm/pages/lead-details-page";
 import { AccountsPage } from "@/domains/accounts/pages/accounts-page";
@@ -252,11 +252,11 @@ const router = createBrowserRouter([
     ),
   },
   {
-    path: "/dashboard/crm/pipeline/:opportunityId",
+    path: "/dashboard/crm/pipeline/:dealId",
     element: (
       <ProtectedRoute requiredRole="agent">
         <DashboardLayout>
-          <OpportunityDetailsPage />
+          <DealDetailsPage />
         </DashboardLayout>
       </ProtectedRoute>
     ),

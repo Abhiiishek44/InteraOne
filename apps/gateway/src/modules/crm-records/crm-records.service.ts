@@ -2,8 +2,8 @@ import { Types } from "mongoose";
 import {
   Contact,
   Membership,
-  Opportunity,
-  OpportunityStage,
+  CrmRecord,
+  CrmRecordStage,
   SalesPipeline,
   DEFAULT_PIPELINE_STAGES,
   IPipelineStage,
@@ -21,7 +21,7 @@ import {
   type GoogleCalendarSummary,
 } from "@modules/lead-sources/google-calendar.adapter";
 
-interface CreateOpportunityInput {
+export interface CreateCrmRecordInput {
   contactId?: string | null;
   primaryContactId?: string | null;
   accountId?: string | null;
@@ -34,7 +34,7 @@ interface CreateOpportunityInput {
   company?: string;
   value?: number;
   currency?: "USD" | "INR" | "EUR" | "GBP";
-  stage?: OpportunityStage;
+  stage?: CrmRecordStage;
   ownerId?: string | null;
   expectedCloseAt?: string | null;
   nextAction?: string;
@@ -42,11 +42,11 @@ interface CreateOpportunityInput {
   sourceSubmissionId?: string;
 }
 
-type UpdateOpportunityInput = Partial<
-  Omit<CreateOpportunityInput, "contactId" | "stage">
+export type UpdateCrmRecordInput = Partial<
+  Omit<CreateCrmRecordInput, "contactId" | "stage">
 >;
 
-export class OpportunitiesService {
+export class CrmRecordsService {
   async getPipeline(organizationId: string) {
     const pipeline = await SalesPipeline.findOne({ organizationId }).lean();
     const stages = pipeline?.stages?.length
@@ -80,7 +80,7 @@ export class OpportunitiesService {
     ];
 
     if (protectedStageIds.length > 0) {
-      const usedStage = await Opportunity.findOne({
+      const usedStage = await CrmRecord.findOne({
         organizationId,
         stage: { $in: protectedStageIds },
         recordType: { $in: ["deal", null] },
@@ -96,7 +96,7 @@ export class OpportunitiesService {
           ? "deleting it"
           : "changing its stage type";
         throw new Error(
-          `Move all opportunities out of ${removed?.label || "this stage"} before ${action}`,
+          `Move all records out of ${removed?.label || "this stage"} before ${action}`,
         );
       }
     }
@@ -138,7 +138,7 @@ export class OpportunitiesService {
   }
 
   async list(organizationId: string, recordType: "lead" | "deal" = "deal") {
-    const opportunities = await Opportunity.find({
+    const records = await CrmRecord.find({
       organizationId,
       archivedAt: null,
       recordType: recordType === "deal" ? { $in: ["deal", null] } : "lead",
@@ -159,40 +159,38 @@ export class OpportunitiesService {
       .sort({ stage: 1, position: 1, updatedAt: -1 })
       .lean();
 
-    return opportunities.map((opportunity: any) => ({
-      id: opportunity._id.toString(),
-      title: opportunity.title,
-      recordType: opportunity.recordType || "deal",
-      labels: opportunity.labels || [],
-      sourceOrigin: opportunity.sourceOrigin || "manual",
-      sourceChannel: opportunity.sourceChannel || "",
-      sourceChannelId: opportunity.sourceChannelId || "",
-      company: opportunity.accountId?.name || opportunity.company,
-      account: opportunity.accountId
+    return records.map((record: any) => ({
+      id: record._id.toString(),
+      title: record.title,
+      recordType: record.recordType || "deal",
+      labels: record.labels || [],
+      sourceOrigin: record.sourceOrigin || "manual",
+      sourceChannel: record.sourceChannel || "",
+      sourceChannelId: record.sourceChannelId || "",
+      company: record.accountId?.name || record.company,
+      account: record.accountId
         ? {
-            id: opportunity.accountId._id.toString(),
-            name: opportunity.accountId.name,
-            website: opportunity.accountId.website || "",
-            linkedinProfile: opportunity.accountId.linkedinProfile || "",
-            industry: opportunity.accountId.industry || "",
-            address: opportunity.accountId.address || "",
-            annualRevenue: opportunity.accountId.annualRevenue ?? null,
-            numberOfEmployees: opportunity.accountId.numberOfEmployees ?? null,
-            labels: opportunity.accountId.labels || [],
-            customFields: serializeCustomFields(
-              opportunity.accountId.customFields,
-            ),
+            id: record.accountId._id.toString(),
+            name: record.accountId.name,
+            website: record.accountId.website || "",
+            linkedinProfile: record.accountId.linkedinProfile || "",
+            industry: record.accountId.industry || "",
+            address: record.accountId.address || "",
+            annualRevenue: record.accountId.annualRevenue ?? null,
+            numberOfEmployees: record.accountId.numberOfEmployees ?? null,
+            labels: record.accountId.labels || [],
+            customFields: serializeCustomFields(record.accountId.customFields),
           }
         : null,
-      value: opportunity.value,
-      currency: opportunity.currency,
-      stage: opportunity.stage,
-      color: opportunity.color || "slate",
-      position: opportunity.position || 0,
-      priority: opportunity.priority || 1,
-      expectedCloseAt: opportunity.expectedCloseAt?.toISOString() || null,
-      nextAction: opportunity.nextAction || "",
-      activities: (opportunity.activities || []).map((activity: any) => ({
+      value: record.value,
+      currency: record.currency,
+      stage: record.stage,
+      color: record.color || "slate",
+      position: record.position || 0,
+      priority: record.priority || 1,
+      expectedCloseAt: record.expectedCloseAt?.toISOString() || null,
+      nextAction: record.nextAction || "",
+      activities: (record.activities || []).map((activity: any) => ({
         id: activity.id,
         type: activity.type || "note",
         content: activity.content,
@@ -212,48 +210,41 @@ export class OpportunitiesService {
         calendarSyncError: activity.calendarSyncError || null,
       })),
       contact:
-        opportunity.primaryContactId || opportunity.contactId
+        record.primaryContactId || record.contactId
           ? {
-              id: (
-                opportunity.primaryContactId || opportunity.contactId
-              )._id.toString(),
-              name: (opportunity.primaryContactId || opportunity.contactId)
-                .name,
-              email: (opportunity.primaryContactId || opportunity.contactId)
-                .email,
-              phone: (opportunity.primaryContactId || opportunity.contactId)
-                .phone,
+              id: (record.primaryContactId || record.contactId)._id.toString(),
+              name: (record.primaryContactId || record.contactId).name,
+              email: (record.primaryContactId || record.contactId).email,
+              phone: (record.primaryContactId || record.contactId).phone,
               phones:
-                (opportunity.primaryContactId || opportunity.contactId)
-                  .phones || [],
+                (record.primaryContactId || record.contactId).phones || [],
               emails:
-                (opportunity.primaryContactId || opportunity.contactId)
-                  .emails || [],
-              company: (opportunity.primaryContactId || opportunity.contactId)
-                .company,
+                (record.primaryContactId || record.contactId).emails || [],
+              company: (record.primaryContactId || record.contactId).company,
             }
           : null,
-      owner: opportunity.ownerId
+      owner: record.ownerId
         ? {
-            id: opportunity.ownerId._id.toString(),
-            name: opportunity.ownerId.name,
-            email: opportunity.ownerId.email,
+            id: record.ownerId._id.toString(),
+            name: record.ownerId.name,
+            email: record.ownerId.email,
           }
         : null,
-      createdAt: opportunity.createdAt.toISOString(),
-      updatedAt: opportunity.updatedAt.toISOString(),
-      customFields: serializeCustomFields(opportunity.customFields),
-      archivedAt: opportunity.archivedAt?.toISOString() || null,
+      createdAt: record.createdAt.toISOString(),
+      updatedAt: record.updatedAt.toISOString(),
+      customFields: serializeCustomFields(record.customFields),
+      archivedAt: record.archivedAt?.toISOString() || null,
     }));
   }
 
-  async create(organizationId: string, input: CreateOpportunityInput) {
+  async create(organizationId: string, input: CreateCrmRecordInput) {
     const orgId = new Types.ObjectId(organizationId);
     const pipelineStage = await this.getStage(organizationId, input.stage);
-    const position = await Opportunity.countDocuments({
+    const recordType = input.recordType || "deal";
+    const position = await CrmRecord.countDocuments({
       organizationId: orgId,
       stage: pipelineStage.id,
-      recordType: { $in: ["deal", null] },
+      recordType: recordType === "deal" ? { $in: ["deal", null] } : "lead",
     });
     const customFields = input.customFields || {};
     const primaryContactId = input.primaryContactId || input.contactId;
@@ -291,17 +282,17 @@ export class OpportunitiesService {
       });
       if (!membership)
         throw new Error(
-          "Opportunity owner must be an active organization member",
+          "CRM record owner must be an active organization member",
         );
     }
 
-    const opportunity = await Opportunity.create({
+    const record = await CrmRecord.create({
       organizationId: orgId,
       contactId: contact?._id || null,
       primaryContactId: contact?._id || null,
       accountId: account?._id || null,
       title: input.title,
-      recordType: input.recordType || "deal",
+      recordType,
       labels: input.labels || [],
       sourceOrigin: input.sourceOrigin || "manual",
       sourceChannel: input.sourceChannel || "",
@@ -331,13 +322,13 @@ export class OpportunitiesService {
         pipelineStage,
       );
     }
-    return opportunity;
+    return record;
   }
 
   async update(
     organizationId: string,
-    opportunityId: string,
-    input: UpdateOpportunityInput,
+    recordId: string,
+    input: UpdateCrmRecordInput,
   ) {
     const orgId = new Types.ObjectId(organizationId);
     if (input.ownerId) {
@@ -348,7 +339,7 @@ export class OpportunitiesService {
       });
       if (!membership) {
         throw new Error(
-          "Opportunity owner must be an active organization member",
+          "CRM record owner must be an active organization member",
         );
       }
     }
@@ -409,8 +400,8 @@ export class OpportunitiesService {
     if (input.customFields !== undefined)
       updates.customFields = input.customFields;
 
-    const opportunity = await Opportunity.findOneAndUpdate(
-      { _id: opportunityId, organizationId: orgId },
+    const record = await CrmRecord.findOneAndUpdate(
+      { _id: recordId, organizationId: orgId },
       {
         $set: updates,
         $push: {
@@ -419,7 +410,7 @@ export class OpportunitiesService {
               {
                 id: `activity-${Date.now()}`,
                 type: "status",
-                content: "Opportunity details updated",
+                content: "CRM record details updated",
                 createdAt: new Date(),
               },
             ],
@@ -429,31 +420,28 @@ export class OpportunitiesService {
       },
       { returnDocument: "after", runValidators: true },
     );
-    if (!opportunity) throw new Error("Opportunity not found");
-    return opportunity;
+    if (!record) throw new Error("CRM record not found");
+    return record;
   }
 
-  async remove(organizationId: string, opportunityId: string) {
-    const opportunity = await Opportunity.findOneAndDelete({
-      _id: opportunityId,
+  async remove(organizationId: string, recordId: string) {
+    const record = await CrmRecord.findOneAndDelete({
+      _id: recordId,
       organizationId,
     });
-    if (!opportunity) throw new Error("Opportunity not found");
+    if (!record) throw new Error("CRM record not found");
 
-    const contactId = opportunity.primaryContactId || opportunity.contactId;
+    const contactId = record.primaryContactId || record.contactId;
     if (contactId) {
-      await this.syncContactFromOpportunities(
-        organizationId,
-        contactId.toString(),
-      );
+      await this.syncContactFromRecords(organizationId, contactId.toString());
       await this.syncContactNextFollowUp(organizationId, contactId.toString());
     }
   }
 
-  async convertToDeal(organizationId: string, opportunityId: string) {
+  async convertToDeal(organizationId: string, recordId: string) {
     const orgId = new Types.ObjectId(organizationId);
-    const lead = await Opportunity.findOne({
-      _id: opportunityId,
+    const lead = await CrmRecord.findOne({
+      _id: recordId,
       organizationId: orgId,
       recordType: "lead",
       archivedAt: null,
@@ -461,7 +449,7 @@ export class OpportunitiesService {
     if (!lead) throw new Error("Lead not found");
 
     const pipelineStage = await this.getStage(organizationId);
-    const position = await Opportunity.countDocuments({
+    const position = await CrmRecord.countDocuments({
       organizationId: orgId,
       stage: pipelineStage.id,
       recordType: { $in: ["deal", null] },
@@ -494,51 +482,21 @@ export class OpportunitiesService {
     return lead;
   }
 
-  async archiveLead(organizationId: string, opportunityId: string) {
-    const lead = await Opportunity.findOneAndUpdate(
-      {
-        _id: opportunityId,
-        organizationId,
-        recordType: "lead",
-        archivedAt: null,
-      },
-      {
-        $set: { archivedAt: new Date() },
-        $push: {
-          activities: {
-            $each: [
-              {
-                id: `activity-${Date.now()}`,
-                type: "status",
-                content: "Lead archived",
-                category: "todo",
-                createdAt: new Date(),
-              },
-            ],
-            $position: 0,
-          },
-        },
-      },
-      { returnDocument: "after", runValidators: true },
-    );
-    if (!lead) throw new Error("Lead not found");
-    return lead;
-  }
-
   async updateStage(
     organizationId: string,
-    opportunityId: string,
-    stage: OpportunityStage,
+    recordId: string,
+    stage: CrmRecordStage,
+    recordType: "lead" | "deal" = "deal",
   ) {
     const pipelineStage = await this.getStage(organizationId, stage);
-    const existing = await Opportunity.findOne({
-      _id: opportunityId,
+    const existing = await CrmRecord.findOne({
+      _id: recordId,
       organizationId,
     });
-    if (!existing) throw new Error("Opportunity not found");
+    if (!existing) throw new Error("CRM record not found");
     const previousStage = existing.stage;
-    const opportunity = await Opportunity.findOneAndUpdate(
-      { _id: opportunityId, organizationId },
+    const record = await CrmRecord.findOneAndUpdate(
+      { _id: recordId, organizationId },
       {
         $set: { stage: pipelineStage.id },
         $push: {
@@ -557,51 +515,47 @@ export class OpportunitiesService {
       },
       { returnDocument: "after", runValidators: true },
     );
-    if (!opportunity) throw new Error("Opportunity not found");
+    if (!record) throw new Error("CRM record not found");
 
-    const contactId = opportunity.primaryContactId || opportunity.contactId;
-    if (contactId) {
+    const contactId = record.primaryContactId || record.contactId;
+    if (contactId && recordType === "deal") {
       await this.syncContactLifecycle(
         organizationId,
         contactId.toString(),
         pipelineStage,
-        opportunity._id.toString(),
+        record._id.toString(),
       );
     }
-    return opportunity;
+    return record;
   }
 
-  async updateColor(
-    organizationId: string,
-    opportunityId: string,
-    color: string,
-  ) {
-    const opportunity = await Opportunity.findOneAndUpdate(
-      { _id: opportunityId, organizationId },
+  async updateColor(organizationId: string, recordId: string, color: string) {
+    const record = await CrmRecord.findOneAndUpdate(
+      { _id: recordId, organizationId },
       { $set: { color } },
       { returnDocument: "after", runValidators: true },
     );
-    if (!opportunity) throw new Error("Opportunity not found");
-    return opportunity;
+    if (!record) throw new Error("CRM record not found");
+    return record;
   }
 
   async updateNextAction(
     organizationId: string,
-    opportunityId: string,
+    recordId: string,
     nextAction: string,
   ) {
-    const opportunity = await Opportunity.findOneAndUpdate(
-      { _id: opportunityId, organizationId },
+    const record = await CrmRecord.findOneAndUpdate(
+      { _id: recordId, organizationId },
       { $set: { nextAction: nextAction.trim() } },
       { returnDocument: "after", runValidators: true },
     );
-    if (!opportunity) throw new Error("Opportunity not found");
-    return opportunity;
+    if (!record) throw new Error("CRM record not found");
+    return record;
   }
 
   async addActivity(
     organizationId: string,
-    opportunityId: string,
+    recordId: string,
     content: string,
     dueAt?: string | null,
     category?: "todo" | "email" | "call" | "meeting" | "document",
@@ -620,21 +574,21 @@ export class OpportunitiesService {
       createdAt: new Date(),
       customFields,
     };
-    const opportunity = await Opportunity.findOneAndUpdate(
-      { _id: opportunityId, organizationId },
+    const record = await CrmRecord.findOneAndUpdate(
+      { _id: recordId, organizationId },
       { $push: { activities: { $each: [activity], $position: 0 } } },
       { returnDocument: "after", runValidators: true },
     );
-    if (!opportunity) throw new Error("Opportunity not found");
+    if (!record) throw new Error("CRM record not found");
     if (activity.dueAt) {
       const sync = await this.createGoogleCalendarActivity(
         organizationId,
-        opportunity,
+        record,
         { ...activity, dueAt: activity.dueAt },
       );
       if (sync) Object.assign(activity, sync);
     }
-    const contactId = opportunity.primaryContactId || opportunity.contactId;
+    const contactId = record.primaryContactId || record.contactId;
     if (activity.dueAt && contactId) {
       await this.syncContactNextFollowUp(organizationId, contactId.toString());
     }
@@ -645,7 +599,7 @@ export class OpportunitiesService {
   // Calendar failures are recorded without losing the CRM activity.
   private async createGoogleCalendarActivity(
     organizationId: string,
-    opportunity: any,
+    record: any,
     activity: {
       id: string;
       content: string;
@@ -688,7 +642,7 @@ export class OpportunitiesService {
         );
         await connection.save();
       }
-      const contactId = opportunity.primaryContactId || opportunity.contactId;
+      const contactId = record.primaryContactId || record.contactId;
       const contact = contactId
         ? await Contact.findOne({ _id: contactId, organizationId })
             .select("email")
@@ -703,7 +657,7 @@ export class OpportunitiesService {
           summary: summary.trim(),
           description: [
             notes,
-            `CRM opportunity: ${opportunity.title}`,
+            `CRM record: ${record.title}`,
             `Activity type: ${activity.category}`,
           ]
             .filter(Boolean)
@@ -726,8 +680,8 @@ export class OpportunitiesService {
         calendarSyncStatus: "synced" as const,
         calendarSyncError: null,
       };
-      await Opportunity.updateOne(
-        { _id: opportunity._id, "activities.id": activity.id },
+      await CrmRecord.updateOne(
+        { _id: record._id, "activities.id": activity.id },
         {
           $set: Object.fromEntries(
             Object.entries(fields).map(([key, value]) => [
@@ -741,8 +695,8 @@ export class OpportunitiesService {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Calendar sync failed";
-      await Opportunity.updateOne(
-        { _id: opportunity._id, "activities.id": activity.id },
+      await CrmRecord.updateOne(
+        { _id: record._id, "activities.id": activity.id },
         {
           $set: {
             "activities.$.calendarSyncStatus": "failed",
@@ -759,98 +713,115 @@ export class OpportunitiesService {
 
   async updatePriority(
     organizationId: string,
-    opportunityId: string,
+    recordId: string,
     priority: 1 | 2 | 3,
   ) {
-    const opportunity = await Opportunity.findOneAndUpdate(
-      { _id: opportunityId, organizationId },
+    const record = await CrmRecord.findOneAndUpdate(
+      { _id: recordId, organizationId },
       { $set: { priority } },
       { returnDocument: "after", runValidators: true },
     );
-    if (!opportunity) throw new Error("Opportunity not found");
-    return opportunity;
+    if (!record) throw new Error("CRM record not found");
+    return record;
   }
 
   async completeActivity(
     organizationId: string,
-    opportunityId: string,
+    recordId: string,
     activityId: string,
   ) {
-    const opportunity = await Opportunity.findOneAndUpdate(
-      { _id: opportunityId, organizationId, "activities.id": activityId },
+    const record = await CrmRecord.findOneAndUpdate(
+      { _id: recordId, organizationId, "activities.id": activityId },
       { $set: { "activities.$.completedAt": new Date() } },
       { returnDocument: "after" },
     );
-    if (!opportunity) throw new Error("Activity not found");
-    const contactId = opportunity.primaryContactId || opportunity.contactId;
+    if (!record) throw new Error("Activity not found");
+    const contactId = record.primaryContactId || record.contactId;
     if (contactId) {
       await this.syncContactNextFollowUp(organizationId, contactId.toString());
     }
-    return opportunity;
+    return record;
   }
 
-  async updateNote(
+  async updateActivity(
     organizationId: string,
-    opportunityId: string,
+    recordId: string,
     activityId: string,
-    content: string,
+    updates: {
+      content?: string;
+      dueAt?: string | null;
+      durationMinutes?: number;
+      category?: "todo" | "email" | "call" | "meeting" | "document";
+      customFields?: Record<string, unknown>;
+    },
   ) {
-    const opportunity = await Opportunity.findOne({
-      _id: opportunityId,
+    const record = await CrmRecord.findOne({
+      _id: recordId,
       organizationId,
     });
-    const activity = opportunity?.activities.find(
-      (item) => item.id === activityId && item.type === "note",
-    );
-    if (!opportunity || !activity)
-      throw new Error("Opportunity note not found");
-    activity.content = content.trim();
-    await opportunity.save();
+    const activity = record?.activities.find((item) => item.id === activityId);
+    if (!record || !activity) throw new Error("Activity not found");
+    if (updates.content !== undefined)
+      activity.content = updates.content.trim();
+    if (updates.dueAt !== undefined)
+      activity.dueAt = updates.dueAt ? new Date(updates.dueAt) : null;
+    if (updates.durationMinutes !== undefined)
+      activity.durationMinutes = updates.durationMinutes;
+    if (updates.category !== undefined) activity.category = updates.category;
+    if (updates.customFields !== undefined)
+      activity.customFields = updates.customFields;
+    await record.save();
+    const contactId = record.primaryContactId || record.contactId;
+    if (contactId) {
+      await this.syncContactNextFollowUp(organizationId, contactId.toString());
+    }
     return activity;
   }
 
-  async deleteNote(
+  async deleteActivity(
     organizationId: string,
-    opportunityId: string,
+    recordId: string,
     activityId: string,
   ) {
-    const result = await Opportunity.updateOne(
+    const result = await CrmRecord.updateOne(
       {
-        _id: opportunityId,
+        _id: recordId,
         organizationId,
-        activities: { $elemMatch: { id: activityId, type: "note" } },
+        "activities.id": activityId,
       },
-      { $pull: { activities: { id: activityId, type: "note" } } },
+      { $pull: { activities: { id: activityId } } },
     );
     if (result.modifiedCount === 0) {
-      throw new Error("Opportunity note not found");
+      throw new Error("Activity not found");
     }
   }
 
   async move(
     organizationId: string,
-    opportunityId: string,
-    stage: OpportunityStage,
+    recordId: string,
+    stage: CrmRecordStage,
     position: number,
+    recordType: "lead" | "deal" = "deal",
   ) {
     const pipelineStage = await this.getStage(organizationId, stage);
-    const opportunity = await Opportunity.findOne({
-      _id: opportunityId,
+    const record = await CrmRecord.findOne({
+      _id: recordId,
       organizationId,
     });
-    if (!opportunity) throw new Error("Opportunity not found");
+    if (!record) throw new Error("CRM record not found");
 
-    const targetItems = await Opportunity.find({
+    const targetItems = await CrmRecord.find({
       organizationId,
       stage: pipelineStage.id,
-      _id: { $ne: opportunity._id },
+      _id: { $ne: record._id },
+      recordType: recordType === "deal" ? { $in: ["deal", null] } : "lead",
     }).sort({ position: 1, updatedAt: -1 });
     const targetPosition = Math.min(Math.max(position, 0), targetItems.length);
-    targetItems.splice(targetPosition, 0, opportunity);
+    targetItems.splice(targetPosition, 0, record);
 
-    const previousStage = opportunity.stage;
-    opportunity.stage = pipelineStage.id;
-    await Opportunity.bulkWrite(
+    const previousStage = record.stage;
+    record.stage = pipelineStage.id;
+    await CrmRecord.bulkWrite(
       targetItems.map((item, index) => ({
         updateOne: {
           filter: { _id: item._id, organizationId },
@@ -860,8 +831,8 @@ export class OpportunitiesService {
     );
 
     if (previousStage !== pipelineStage.id) {
-      await Opportunity.updateOne(
-        { _id: opportunity._id, organizationId },
+      await CrmRecord.updateOne(
+        { _id: record._id, organizationId },
         {
           $push: {
             activities: {
@@ -880,23 +851,23 @@ export class OpportunitiesService {
       );
     }
 
-    const contactId = opportunity.primaryContactId || opportunity.contactId;
-    if (contactId) {
+    const contactId = record.primaryContactId || record.contactId;
+    if (contactId && recordType === "deal") {
       await this.syncContactLifecycle(
         organizationId,
         contactId.toString(),
         pipelineStage,
-        opportunity._id.toString(),
+        record._id.toString(),
       );
     }
-    return opportunity;
+    return record;
   }
 
   private async syncContactLifecycle(
     organizationId: string,
     contactId: string,
     stage: IPipelineStage,
-    currentOpportunityId?: string,
+    currentRecordId?: string,
   ) {
     if (stage.type === "won") {
       await Contact.updateOne(
@@ -911,11 +882,11 @@ export class OpportunitiesService {
       const closedStageIds = pipeline.stages
         .filter((item) => item.type !== "open")
         .map((item) => item.id);
-      const otherActive = await Opportunity.exists({
+      const otherActive = await CrmRecord.exists({
         organizationId,
         $or: [{ contactId }, { primaryContactId: contactId }],
         stage: { $nin: closedStageIds },
-        ...(currentOpportunityId ? { _id: { $ne: currentOpportunityId } } : {}),
+        ...(currentRecordId ? { _id: { $ne: currentRecordId } } : {}),
       });
       if (!otherActive) {
         await Contact.updateOne(
@@ -937,7 +908,7 @@ export class OpportunitiesService {
 
     await Contact.updateOne(
       { _id: contactId, organizationId, lifecycleStage: { $ne: "customer" } },
-      { $set: { lifecycleStage: "opportunity", leadStatus: "follow_up" } },
+      { $set: { lifecycleStage: "record", leadStatus: "follow_up" } },
     );
   }
 
@@ -945,7 +916,7 @@ export class OpportunitiesService {
     organizationId: string,
     contactId: string,
   ) {
-    const opportunities = await Opportunity.find({
+    const records = await CrmRecord.find({
       organizationId,
       $or: [{ contactId }, { primaryContactId: contactId }],
       activities: {
@@ -958,7 +929,7 @@ export class OpportunitiesService {
     })
       .select("activities")
       .lean();
-    const pendingDates = opportunities.flatMap((item) =>
+    const pendingDates = records.flatMap((item) =>
       (item.activities || [])
         .filter(
           (activity) =>
@@ -990,18 +961,18 @@ export class OpportunitiesService {
     );
   }
 
-  private async syncContactFromOpportunities(
+  private async syncContactFromRecords(
     organizationId: string,
     contactId: string,
   ) {
     const pipeline = await this.getPipeline(organizationId);
-    const opportunities = await Opportunity.find({
+    const records = await CrmRecord.find({
       organizationId,
       $or: [{ contactId }, { primaryContactId: contactId }],
     })
       .select("stage")
       .lean();
-    const stageTypes = opportunities.map(
+    const stageTypes = records.map(
       (item) =>
         pipeline.stages.find((stage) => stage.id === item.stage)?.type ||
         "open",
@@ -1017,7 +988,7 @@ export class OpportunitiesService {
     if (stageTypes.includes("open")) {
       await Contact.updateOne(
         { _id: contactId, organizationId, lifecycleStage: { $ne: "customer" } },
-        { $set: { lifecycleStage: "opportunity", leadStatus: "follow_up" } },
+        { $set: { lifecycleStage: "record", leadStatus: "follow_up" } },
       );
       return;
     }
@@ -1029,7 +1000,7 @@ export class OpportunitiesService {
       return;
     }
     await Contact.updateOne(
-      { _id: contactId, organizationId, lifecycleStage: "opportunity" },
+      { _id: contactId, organizationId, lifecycleStage: "record" },
       { $set: { lifecycleStage: "qualified", leadStatus: "follow_up" } },
     );
   }

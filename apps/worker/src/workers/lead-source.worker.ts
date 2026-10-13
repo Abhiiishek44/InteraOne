@@ -90,10 +90,7 @@ function errorDetails(error: unknown): string {
   return cause ? `${error.message}: ${errorDetails(cause)}` : error.message;
 }
 
-async function fetchGoogle(
-  url: string,
-  init?: RequestInit,
-): Promise<Response> {
+async function fetchGoogle(url: string, init?: RequestInit): Promise<Response> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= GOOGLE_REQUEST_ATTEMPTS; attempt += 1) {
     try {
@@ -116,11 +113,12 @@ async function fetchGoogle(
 const DEFAULT_OPPORTUNITY_STAGE = "qualified";
 
 function getModels() {
-  const model = (name: string, definition: any) =>
+  const model = (name: string, definition: any, collection?: string) =>
     mongoose.models[name] ||
     mongoose.model(
       name,
       new Schema(definition, { timestamps: true, strict: false }),
+      collection,
     );
 
   const LeadSourceConnection = model("LeadSourceConnection", {
@@ -182,20 +180,25 @@ function getModels() {
     metadata: { type: Schema.Types.Mixed, default: {} },
     customFields: { type: Map, of: Schema.Types.Mixed, default: {} },
   });
-  const Opportunity = model("Opportunity", {
-    organizationId: { type: Schema.Types.ObjectId, required: true },
-    contactId: { type: Schema.Types.ObjectId, default: null },
-    primaryContactId: { type: Schema.Types.ObjectId, default: null },
-    title: String,
-    company: String,
-    value: { type: Number, default: 0 },
-    currency: { type: String, default: "USD" },
-    stage: String,
-    position: { type: Number, default: 0 },
-    ownerId: { type: Schema.Types.ObjectId, default: null },
-    customFields: { type: Map, of: Schema.Types.Mixed, default: {} },
-    sourceSubmissionId: { type: Schema.Types.ObjectId, default: null },
-  });
+  const CrmRecord = model(
+    "CrmRecord",
+    {
+      organizationId: { type: Schema.Types.ObjectId, required: true },
+      contactId: { type: Schema.Types.ObjectId, default: null },
+      primaryContactId: { type: Schema.Types.ObjectId, default: null },
+      title: String,
+      company: String,
+      value: { type: Number, default: 0 },
+      currency: { type: String, default: "USD" },
+      stage: String,
+      position: { type: Number, default: 0 },
+      ownerId: { type: Schema.Types.ObjectId, default: null },
+      customFields: { type: Map, of: Schema.Types.Mixed, default: {} },
+      sourceSubmissionId: { type: Schema.Types.ObjectId, default: null },
+      recordType: { type: String, enum: ["lead", "deal"], default: "deal" },
+    },
+    "opportunities",
+  );
   const CrmFieldDefinition = model("CrmFieldDefinition", {
     organizationId: { type: Schema.Types.ObjectId, required: true },
     entityType: String,
@@ -218,7 +221,7 @@ function getModels() {
     LeadSourceForm,
     LeadSubmission,
     Contact,
-    Opportunity,
+    CrmRecord,
     CrmFieldDefinition,
     SalesPipeline,
   };
@@ -346,9 +349,12 @@ async function refreshGoogleCredentials(
 }
 
 async function googleApi<T>(path: string, accessToken: string): Promise<T> {
-  const response = await fetchGoogle(`https://forms.googleapis.com/v1/${path}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  const response = await fetchGoogle(
+    `https://forms.googleapis.com/v1/${path}`,
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+  );
   const payload = (await response.json().catch(() => ({}))) as T & {
     error?: { message?: string };
   };
@@ -649,8 +655,8 @@ async function createOpportunity(
   lead: NormalizedLead,
   submissionId: Types.ObjectId,
 ) {
-  const { Opportunity, SalesPipeline } = getModels();
-  const existing = await Opportunity.findOne({
+  const { CrmRecord, SalesPipeline } = getModels();
+  const existing = await CrmRecord.findOne({
     organizationId,
     sourceSubmissionId: submissionId,
   });
@@ -665,8 +671,8 @@ async function createOpportunity(
       DEFAULT_OPPORTUNITY_STAGE;
   if (requestedStage && !stage)
     throw new Error("Pipeline stage does not exist");
-  const position = await Opportunity.countDocuments({ organizationId, stage });
-  return Opportunity.create({
+  const position = await CrmRecord.countDocuments({ organizationId, stage });
+  return CrmRecord.create({
     organizationId,
     contactId: contact._id,
     primaryContactId: contact._id,

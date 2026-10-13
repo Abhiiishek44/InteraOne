@@ -99,7 +99,7 @@ export function useUpdateContact() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["contacts"] });
       queryClient.invalidateQueries({ queryKey: ["conversation"] });
-      queryClient.invalidateQueries({ queryKey: ["opportunities"] });
+      queryClient.invalidateQueries({ queryKey: ["crm-records"] });
     },
   });
 }
