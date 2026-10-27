@@ -5,9 +5,13 @@ import {
   CalendarDays,
   Check,
   CircleDollarSign,
+  Download,
+  FileText,
+  Loader2,
   Mail,
   MoreHorizontal,
   Pencil,
+  Pin,
   Phone,
   StickyNote,
   Trash2,
@@ -18,6 +22,12 @@ import { toast } from "sonner";
 import { Button } from "@/shared/ui/button";
 import { Card, CardContent } from "@/shared/ui/card";
 import { Textarea } from "@/shared/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/shared/ui/dialog";
 import { DeleteConfirmDialog } from "@/shared/components/delete-confirm-dialog";
 import { LabelBadge } from "@/shared/components/label-editor";
 import { WhatsAppIcon } from "@/shared/ui/channel-icon";
@@ -26,10 +36,8 @@ import {
   useContacts,
 } from "@/domains/contacts/hooks/use-contacts";
 import { toContactViewModel } from "@/domains/contacts/types/types";
-import {
-  ContactFileWorkspace,
-  EmailComposer,
-} from "@/domains/contacts/pages/contact-details-page";
+import { EmailComposer } from "@/domains/contacts/pages/contact-details-page";
+import { storageApi } from "@/shared/lib/storage.api";
 import {
   ActivityWorkspaceComposer,
   ActivityWorkspaceEmpty,
@@ -37,6 +45,7 @@ import {
   ActivityWorkspaceSectionHeader,
   type ActivityWorkspaceTab,
 } from "../components/activity-workspace-ui";
+import { DealFileWorkspace } from "../components/deal-file-workspace";
 import { DealDialog } from "../components/deal-dialog";
 import {
   LeadActivityComposer,
@@ -49,13 +58,24 @@ import {
   useDeleteCrmRecordActivity,
   useCrmRecords,
   useSalesPipeline,
+  useUpdateCrmRecordActivity,
   useUpdateCrmRecordNote,
   useUpdateCrmRecordStage,
 } from "../hooks/use-crm-records";
 import type { CrmRecord } from "../types/types";
 
 type DealActivity = CrmRecord["activities"][number];
-type HistoryFilter = "all" | "activities" | "notes";
+type HistoryFilter = "all" | "activities" | "notes" | "files" | "documents";
+
+const attachmentKind = (activity: DealActivity) => {
+  const value = activity.customFields?.attachmentKind;
+  return value === "file" || value === "document" ? value : null;
+};
+
+const attachmentValue = (activity: DealActivity, key: string) => {
+  const value = activity.customFields?.[key];
+  return typeof value === "string" ? value : "";
+};
 
 const money = (value: number, currency: CrmRecord["currency"]) =>
   new Intl.NumberFormat(undefined, {
@@ -74,6 +94,7 @@ const formatDate = (value?: string | null) =>
     : "Not set";
 
 const activityIcon = (activity: DealActivity) => {
+  if (attachmentKind(activity)) return FileText;
   const kind = String(
     activity.customFields?.activityType || activity.category || "task",
   );
@@ -94,6 +115,7 @@ export function DealDetailsPage() {
   const updateStage = useUpdateCrmRecordStage();
   const addActivity = useAddCrmRecordActivity();
   const completeActivity = useCompleteCrmRecordActivity();
+  const updateActivity = useUpdateCrmRecordActivity();
   const deleteActivity = useDeleteCrmRecordActivity();
   const updateNote = useUpdateCrmRecordNote();
   const deleteDeal = useDeleteCrmRecord();
@@ -108,7 +130,14 @@ export function DealDetailsPage() {
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all");
   const [deleteActivityTarget, setDeleteActivityTarget] =
     useState<DealActivity | null>(null);
+  const [editingActivity, setEditingActivity] = useState<DealActivity | null>(
+    null,
+  );
+  const [fileDescriptionTarget, setFileDescriptionTarget] =
+    useState<DealActivity | null>(null);
+  const [fileDescription, setFileDescription] = useState("");
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [openFocusMenuId, setOpenFocusMenuId] = useState<string | null>(null);
   const [currentTime] = useState(() => Date.now());
 
   const deal = deals.find((item) => item.id === dealId);
@@ -138,18 +167,43 @@ export function DealDetailsPage() {
         ),
     [deal?.activities],
   );
+  const focusItems = useMemo(
+    () =>
+      [
+        ...planned,
+        ...(deal?.activities || []).filter(
+          (activity) =>
+            activity.type === "note" &&
+            !attachmentKind(activity) &&
+            activity.customFields?.pinned === true,
+        ),
+      ].sort((left, right) => {
+        const leftDate = left.dueAt || left.createdAt;
+        const rightDate = right.dueAt || right.createdAt;
+        return new Date(leftDate).getTime() - new Date(rightDate).getTime();
+      }),
+    [deal?.activities, planned],
+  );
   const history = useMemo(() => {
-    const items = [...(deal?.activities || [])].sort(
-      (left, right) =>
-        new Date(right.createdAt).getTime() -
-        new Date(left.createdAt).getTime(),
-    );
+    const items = (deal?.activities || [])
+      .filter((item) => item.type !== "planned" || Boolean(item.completedAt))
+      .sort(
+        (left, right) =>
+          new Date(right.createdAt).getTime() -
+          new Date(left.createdAt).getTime(),
+      );
     if (historyFilter === "notes") {
-      return items.filter((item) => item.type === "note");
+      return items.filter(
+        (item) => item.type === "note" && !attachmentKind(item),
+      );
     }
     if (historyFilter === "activities") {
       return items.filter((item) => item.type !== "note");
     }
+    if (historyFilter === "files")
+      return items.filter((item) => attachmentKind(item) === "file");
+    if (historyFilter === "documents")
+      return items.filter((item) => attachmentKind(item) === "document");
     return items;
   }, [historyFilter, deal?.activities]);
 
@@ -169,15 +223,14 @@ export function DealDetailsPage() {
 
   const saveActivity = async (draft: LeadActivityDraft) => {
     if (!deal) return;
-    const category =
+    const category: "call" | "meeting" | "todo" =
       draft.kind === "call"
         ? "call"
         : draft.kind === "meeting"
           ? "meeting"
           : "todo";
     try {
-      const created = await addActivity.mutateAsync({
-        id: deal.id,
+      const payload = {
         content: draft.title,
         category,
         dueAt: draft.startAt.toISOString(),
@@ -196,18 +249,70 @@ export function DealDetailsPage() {
           availability: draft.availability,
           endAt: draft.endAt.toISOString(),
         },
-      });
-      if (draft.markDone) {
+      };
+      const saved = editingActivity
+        ? (await updateActivity.mutateAsync({
+            id: deal.id,
+            activityId: editingActivity.id,
+            payload,
+          }),
+          editingActivity)
+        : await addActivity.mutateAsync({ id: deal.id, ...payload });
+      if (draft.markDone && !saved.completedAt) {
         await completeActivity.mutateAsync({
           id: deal.id,
-          activityId: created.id,
+          activityId: saved.id,
         });
       }
       setActivityComposerOpen(false);
-      toast.success("Activity saved");
+      setEditingActivity(null);
+      toast.success(editingActivity ? "Activity updated" : "Activity saved");
     } catch (error: unknown) {
       toast.error(
         error instanceof Error ? error.message : "Failed to save activity",
+      );
+    }
+  };
+
+  const saveFileDescription = async () => {
+    if (!deal || !fileDescriptionTarget) return;
+    try {
+      await updateActivity.mutateAsync({
+        id: deal.id,
+        activityId: fileDescriptionTarget.id,
+        payload: {
+          customFields: {
+            ...fileDescriptionTarget.customFields,
+            description: fileDescription.trim(),
+          },
+        },
+      });
+      setFileDescriptionTarget(null);
+      toast.success("File description updated");
+    } catch (error: unknown) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to update file description",
+      );
+    }
+  };
+
+  const toggleNotePin = async (activity: DealActivity) => {
+    if (!deal) return;
+    const pinned = activity.customFields?.pinned !== true;
+    try {
+      await updateActivity.mutateAsync({
+        id: deal.id,
+        activityId: activity.id,
+        payload: {
+          customFields: { ...activity.customFields, pinned },
+        },
+      });
+      toast.success(pinned ? "Note pinned to focus" : "Note unpinned");
+    } catch (error: unknown) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to update note",
       );
     }
   };
@@ -464,18 +569,30 @@ export function DealDetailsPage() {
             tab={tab}
             onTabChange={(nextTab) => {
               setTab(nextTab);
-              if (nextTab === "activity") setActivityComposerOpen(true);
+              if (nextTab === "activity") {
+                setEditingActivity(null);
+                setActivityComposerOpen(true);
+              }
             }}
             flushContent
           >
             {tab === "activity" ? (
               activityComposerOpen ? (
                 <LeadActivityComposer
+                  key={editingActivity?.id || "new-activity"}
+                  activity={editingActivity || undefined}
                   activities={deal.activities}
                   contactName={deal.contact?.name}
                   companyName={organizationName}
-                  saving={addActivity.isPending || completeActivity.isPending}
-                  onCancel={() => setActivityComposerOpen(false)}
+                  saving={
+                    addActivity.isPending ||
+                    updateActivity.isPending ||
+                    completeActivity.isPending
+                  }
+                  onCancel={() => {
+                    setActivityComposerOpen(false);
+                    setEditingActivity(null);
+                  }}
                   onSave={saveActivity}
                 />
               ) : (
@@ -523,9 +640,13 @@ export function DealDetailsPage() {
               <div className="p-5">
                 <EmailComposer contact={linkedContact} />
               </div>
-            ) : tab === "files" && linkedContact ? (
+            ) : tab === "files" ? (
               <div className="p-5">
-                <ContactFileWorkspace contact={linkedContact} />
+                <DealFileWorkspace deal={deal} />
+              </div>
+            ) : tab === "documents" ? (
+              <div className="p-5">
+                <DealFileWorkspace deal={deal} documentMode />
               </div>
             ) : tab === "call" ? (
               <ChannelAction
@@ -563,57 +684,140 @@ export function DealDetailsPage() {
               expanded={expanded}
               onExpandedChange={setExpanded}
             />
-            {planned.length ? (
+            {focusItems.length ? (
               <div className="mt-4 space-y-3">
-                {(expanded ? planned : planned.slice(0, 3)).map((activity) => {
-                  const Icon = activityIcon(activity);
-                  const overdue = Boolean(
-                    activity.dueAt &&
-                    new Date(activity.dueAt).getTime() < currentTime,
-                  );
-                  return (
-                    <div key={activity.id} className="flex items-start gap-3">
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border bg-background">
-                        <Icon className="h-4 w-4 text-muted-foreground" />
-                      </span>
-                      <div className="min-w-0 flex-1 rounded-lg border bg-background p-3 shadow-sm">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="truncate font-semibold">
-                              {activity.content}
-                            </p>
-                            <p
-                              className={`mt-1 text-xs ${overdue ? "text-red-600" : "text-emerald-600"}`}
-                            >
-                              {activity.dueAt
-                                ? new Date(activity.dueAt).toLocaleString()
-                                : "No due date"}
-                              {deal.contact?.name
-                                ? ` · ${deal.contact.name}`
-                                : ""}
-                              {organizationName !== "Not linked"
-                                ? ` · ${organizationName}`
-                                : ""}
-                            </p>
+                {(expanded ? focusItems : focusItems.slice(0, 3)).map(
+                  (activity) => {
+                    const Icon = activityIcon(activity);
+                    const isPinnedNote = activity.type === "note";
+                    const overdue = Boolean(
+                      activity.dueAt &&
+                      new Date(activity.dueAt).getTime() < currentTime,
+                    );
+                    return (
+                      <div key={activity.id} className="flex items-start gap-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border bg-background">
+                          <Icon className="h-4 w-4 text-muted-foreground" />
+                        </span>
+                        <div className="min-w-0 flex-1 rounded-lg border bg-background p-3 shadow-sm">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate font-semibold">
+                                {activity.content}
+                              </p>
+                              <p
+                                className={`mt-1 text-xs ${overdue ? "text-red-600" : "text-emerald-600"}`}
+                              >
+                                {activity.dueAt
+                                  ? new Date(activity.dueAt).toLocaleString()
+                                  : "No due date"}
+                                {deal.contact?.name
+                                  ? ` · ${deal.contact.name}`
+                                  : ""}
+                                {organizationName !== "Not linked"
+                                  ? ` · ${organizationName}`
+                                  : ""}
+                              </p>
+                            </div>
+                            <div className="relative shrink-0">
+                              <Button
+                                size="icon-sm"
+                                variant="ghost"
+                                onClick={() =>
+                                  setOpenFocusMenuId((current) =>
+                                    current === activity.id
+                                      ? null
+                                      : activity.id,
+                                  )
+                                }
+                                aria-label={`More actions for ${activity.content}`}
+                                aria-haspopup="menu"
+                                aria-expanded={openFocusMenuId === activity.id}
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                              {openFocusMenuId === activity.id && (
+                                <div
+                                  role="menu"
+                                  className="absolute right-0 top-9 z-50 w-44 rounded-lg border border-border bg-popover p-1.5 text-popover-foreground shadow-xl"
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOpenFocusMenuId(null);
+                                      if (isPinnedNote) {
+                                        setEditingNoteId(activity.id);
+                                        setNote(activity.content);
+                                        setTab("notes");
+                                      } else {
+                                        setEditingActivity(activity);
+                                        setTab("activity");
+                                        setActivityComposerOpen(true);
+                                      }
+                                    }}
+                                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-muted"
+                                  >
+                                    <Pencil className="h-4 w-4" /> Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={
+                                      isPinnedNote
+                                        ? updateActivity.isPending
+                                        : completeActivity.isPending
+                                    }
+                                    onClick={() => {
+                                      setOpenFocusMenuId(null);
+                                      if (isPinnedNote) {
+                                        void toggleNotePin(activity);
+                                      } else {
+                                        void completeActivity
+                                          .mutateAsync({
+                                            id: deal.id,
+                                            activityId: activity.id,
+                                          })
+                                          .then(() =>
+                                            toast.success(
+                                              "Activity marked as done",
+                                            ),
+                                          )
+                                          .catch((error: unknown) =>
+                                            toast.error(
+                                              error instanceof Error
+                                                ? error.message
+                                                : "Failed to complete activity",
+                                            ),
+                                          );
+                                      }
+                                    }}
+                                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50"
+                                  >
+                                    {isPinnedNote ? (
+                                      <Pin className="h-4 w-4" />
+                                    ) : (
+                                      <Check className="h-4 w-4" />
+                                    )}
+                                    {isPinnedNote ? "Unpin" : "Mark as done"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOpenFocusMenuId(null);
+                                      setDeleteActivityTarget(activity);
+                                    }}
+                                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10"
+                                  >
+                                    <Trash2 className="h-4 w-4" /> Delete
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           </div>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={completeActivity.isPending}
-                            onClick={() =>
-                              void completeActivity.mutateAsync({
-                                id: deal.id,
-                                activityId: activity.id,
-                              })
-                            }
-                          >
-                            <Check className="mr-1.5 h-4 w-4" /> Done
-                          </Button>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  },
+                )}
               </div>
             ) : (
               <ActivityWorkspaceEmpty
@@ -640,7 +844,21 @@ export function DealDetailsPage() {
                     id: "notes",
                     label: "Notes",
                     count: deal.activities.filter(
-                      (item) => item.type === "note",
+                      (item) => item.type === "note" && !attachmentKind(item),
+                    ).length,
+                  },
+                  {
+                    id: "files",
+                    label: "Files",
+                    count: deal.activities.filter(
+                      (item) => attachmentKind(item) === "file",
+                    ).length,
+                  },
+                  {
+                    id: "documents",
+                    label: "Documents",
+                    count: deal.activities.filter(
+                      (item) => attachmentKind(item) === "document",
                     ).length,
                   },
                 ]}
@@ -651,6 +869,14 @@ export function DealDetailsPage() {
                 <div className="relative space-y-0">
                   {history.map((activity) => {
                     const Icon = activityIcon(activity);
+                    const fileKind = attachmentKind(activity);
+                    const fileKey = attachmentValue(activity, "fileKey");
+                    const fileName =
+                      attachmentValue(activity, "fileName") || activity.content;
+                    const fileDescription = attachmentValue(
+                      activity,
+                      "description",
+                    );
                     return (
                       <div
                         key={activity.id}
@@ -660,29 +886,99 @@ export function DealDetailsPage() {
                           <Icon className="h-4 w-4 text-muted-foreground" />
                         </span>
                         <div
-                          className={`min-w-0 flex-1 rounded-lg border px-4 py-3 shadow-sm ${activity.type === "note" ? "border-amber-200 bg-amber-50/80 dark:border-amber-900/50 dark:bg-amber-950/20" : "bg-background"}`}
+                          className={`min-w-0 flex-1 rounded-lg border px-4 py-3 shadow-sm ${activity.type === "note" && !fileKind ? "border-amber-200 bg-amber-50/80 dark:border-amber-900/50 dark:bg-amber-950/20" : "bg-background"}`}
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                              <p className="whitespace-pre-wrap text-sm font-medium">
-                                {activity.content}
-                              </p>
+                              {fileKind && fileKey ? (
+                                <a
+                                  href={storageApi.getProxyFileUrl(fileKey)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="block truncate text-sm font-semibold text-primary hover:underline"
+                                >
+                                  {fileName}
+                                </a>
+                              ) : (
+                                <p className="whitespace-pre-wrap text-sm font-medium">
+                                  {activity.content}
+                                </p>
+                              )}
                               <p className="mt-1 text-xs text-muted-foreground">
                                 {new Date(activity.createdAt).toLocaleString()}{" "}
                                 · {ownerName}
                               </p>
+                              {fileDescription && (
+                                <p className="mt-2 text-sm text-foreground">
+                                  {fileDescription}
+                                </p>
+                              )}
                             </div>
                             <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-                              {activity.type === "note" && (
+                              {fileKind && fileKey ? (
+                                <>
+                                  <Button
+                                    size="icon-xs"
+                                    variant="ghost"
+                                    onClick={() => {
+                                      setFileDescriptionTarget(activity);
+                                      setFileDescription(fileDescription);
+                                    }}
+                                    aria-label="Edit file description"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button
+                                    asChild
+                                    size="icon-xs"
+                                    variant="ghost"
+                                  >
+                                    <a
+                                      href={storageApi.getProxyFileUrl(fileKey)}
+                                      download={fileName}
+                                      aria-label={`Download ${fileName}`}
+                                    >
+                                      <Download className="h-3.5 w-3.5" />
+                                    </a>
+                                  </Button>
+                                </>
+                              ) : activity.type === "note" ? (
+                                <>
+                                  <Button
+                                    size="icon-xs"
+                                    variant="ghost"
+                                    onClick={() => void toggleNotePin(activity)}
+                                    aria-label={
+                                      activity.customFields?.pinned === true
+                                        ? "Unpin note"
+                                        : "Pin note to focus"
+                                    }
+                                  >
+                                    <Pin className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button
+                                    size="icon-xs"
+                                    variant="ghost"
+                                    onClick={() => {
+                                      setEditingNoteId(activity.id);
+                                      setNote(activity.content);
+                                      setTab("notes");
+                                    }}
+                                    aria-label="Edit note"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
+                                </>
+                              ) : (
                                 <Button
                                   size="icon-xs"
                                   variant="ghost"
                                   onClick={() => {
-                                    setEditingNoteId(activity.id);
-                                    setNote(activity.content);
-                                    setTab("notes");
+                                    setEditingActivity(activity);
+                                    setTab("activity");
+                                    setActivityComposerOpen(true);
                                   }}
-                                  aria-label="Edit note"
+                                  aria-label="Edit activity"
                                 >
                                   <Pencil className="h-3.5 w-3.5" />
                                 </Button>
@@ -750,11 +1046,24 @@ export function DealDetailsPage() {
         onClose={() => setDeleteActivityTarget(null)}
         onConfirm={() => {
           if (!deleteActivityTarget) return;
+          const fileKey = attachmentValue(deleteActivityTarget, "fileKey");
           void deleteActivity
             .mutateAsync({ id: deal.id, activityId: deleteActivityTarget.id })
-            .then(() => {
+            .then(async () => {
+              if (fileKey) {
+                try {
+                  await storageApi.deleteStorageFile(fileKey);
+                } catch {
+                  // The deal no longer references the file; storage cleanup can
+                  // be retried independently without restoring stale metadata.
+                }
+              }
               setDeleteActivityTarget(null);
-              toast.success("Activity deleted");
+              toast.success(
+                attachmentKind(deleteActivityTarget)
+                  ? "File deleted"
+                  : "Activity deleted",
+              );
             })
             .catch((error: unknown) => {
               toast.error(
@@ -764,10 +1073,62 @@ export function DealDetailsPage() {
               );
             });
         }}
-        title="Delete activity"
-        description="This activity will be permanently removed."
+        title={
+          deleteActivityTarget && attachmentKind(deleteActivityTarget)
+            ? "Delete file"
+            : "Delete activity"
+        }
+        description="This item will be permanently removed."
         isDeleting={deleteActivity.isPending}
       />
+      <Dialog
+        open={Boolean(fileDescriptionTarget)}
+        onOpenChange={(open) => {
+          if (!open) setFileDescriptionTarget(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add file description</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="truncate text-sm font-medium">
+              {fileDescriptionTarget
+                ? attachmentValue(fileDescriptionTarget, "fileName") ||
+                  fileDescriptionTarget.content
+                : ""}
+            </p>
+            <Textarea
+              autoFocus
+              value={fileDescription}
+              onChange={(event) => setFileDescription(event.target.value)}
+              rows={5}
+              maxLength={20000}
+              placeholder="Add a description…"
+            />
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setFileDescriptionTarget(null)}
+                disabled={updateActivity.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={() => void saveFileDescription()}
+                disabled={updateActivity.isPending}
+              >
+                {updateActivity.isPending && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Save
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
